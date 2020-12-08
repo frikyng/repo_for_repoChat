@@ -29,6 +29,8 @@ function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, d
     ncores          = (feature('numcores') * double(~(demo == 2)));
     tp              = [cellfun(@(x) size(x, 1), all_traces_per_rec), inf];
     parfor (rec = 1:numel(all_traces_per_rec), ncores)
+    %for rec = 1:numel(all_traces_per_rec)
+       
     %[1,17,78]
     %demo = 2;
     %for rec = 1:numel(all_traces_per_rec)
@@ -51,9 +53,9 @@ function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, d
                 if rec > 1
                     peak_times_in_record = locs - sum(tp(1:rec-1));
                 else
-                     peak_times_in_record = locs;
+                    peak_times_in_record = locs;
                 end
-                peak_times_in_record = peak_times_in_record(peak_times_in_record > 0 & peak_times_in_record < tp(rec+1));
+                peak_times_in_record = peak_times_in_record(peak_times_in_record > 0 & peak_times_in_record < (tp(rec)+1));
                 ideal_scal_f{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
             end
         end
