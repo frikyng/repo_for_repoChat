@@ -13,10 +13,12 @@ classdef arboral_scan_meta_analysis < handle
         event_fitting
         crosscorr      % Data relate to correlation study between all_traces
         dimensionality % Data related to dimensionality analysis of all_traces
-        demo      = 0; %
-        filter_win = 0;
-        filter_type = 'gaussian';
-        current_expe = '';
+        external_variables
+        demo            = 0; %
+        filter_win      = 0;
+        filter_type     = 'gaussian';
+        current_expe    = '';
+        need_update     = [];
     end
     
     methods
@@ -48,9 +50,10 @@ classdef arboral_scan_meta_analysis < handle
             obj.event_fitting       = cell(size(obj.expe_list));
             obj.crosscorr           = cell(size(obj.expe_list));
             obj.dimensionality      = cell(size(obj.expe_list));
-            
+            obj.external_variables  = cell(size(obj.expe_list));
+            obj.need_update         = true(size(obj.expe_list));            
         end
-        
+
         function data_folders_per_exp = filter_expe_subset(obj, filter)
             %% QQ UNTESTED AND UNFINISHED
             if nargin < 2 || isempty(filter)
@@ -94,6 +97,8 @@ classdef arboral_scan_meta_analysis < handle
             obj.event_fitting{expe}     = [];
             obj.crosscorr{expe}         = [];
             obj.dimensionality{expe}    = [];
+            obj.external_variables{expe}  = [];
+
             obj.general_info{expe}.original_path = path;
             obj.general_info{expe}.short_path = path(1).name(:,1:end-9);
             
@@ -102,7 +107,10 @@ classdef arboral_scan_meta_analysis < handle
             obj.current_expe = expe;
         end
         
-        function cleanup_expe(obj)
+        function cleanup_expe(obj, deep_cleanup, updated_path)
+            if nargin < 2 || isempty(deep_cleanup)
+                deep_cleanup = false; source = '';
+            end
             %% Remove empty location and sort by expe name
             to_keep = find(~cellfun(@isempty, obj.general_info));
             
@@ -113,9 +121,13 @@ classdef arboral_scan_meta_analysis < handle
             obj.event_fitting = obj.event_fitting(to_keep);
             obj.crosscorr = obj.crosscorr(to_keep);
             obj.dimensionality = obj.dimensionality(to_keep);
+            obj.expe_list = obj.expe_list(to_keep);
+            obj.need_update = obj.need_update(to_keep);
+            obj.external_variables  = obj.external_variables(to_keep);
             
             [~,order] = sort(cellfun(@(x) x.short_path, obj.general_info, 'UniformOutput', false));
             
+            obj.expe_list = obj.expe_list(order);
             obj.general_info = obj.general_info(order);
             obj.extracted_traces = obj.extracted_traces(order);
             obj.binned_data = obj.binned_data(order);
@@ -123,7 +135,42 @@ classdef arboral_scan_meta_analysis < handle
             obj.event_fitting = obj.event_fitting(order);
             obj.crosscorr = obj.crosscorr(order);
             obj.dimensionality = obj.dimensionality(order);
+            obj.need_update = obj.need_update(order);
+            obj.external_variables  = obj.external_variables(order);
+            
+            if strcmp(deep_cleanup, 'extracted') && isfolder(obj.source_folder)
+                source = obj.source_folder;
+                if nargin > 2 && ~isempty(updated_path)
+                    source = updated_path;
+                end
+            elseif strcmp(deep_cleanup, 'original') && isfolder(obj.source_folder) && ~isempty(updated_path)
+                source = obj.source_folder;
+            elseif deep_cleanup
+                source = '';
+                warning('deep_cleanup must be "original", or "extracetd". If the extracted path changed or if you want to use the original data for cleaning, indicate a valid path in "updated_path" input')
+            end
+            
+            if ~isempty(source)
+                for exp = 1:numel(obj.expe_list)
+                    if strcmp(deep_cleanup, 'original') 
+                    	to_remove = cellfun(@(x) ~isdir(x), obj.general_info{exp}.sources);
+                    elseif strcmp(deep_cleanup, 'extracted') 
+                        to_remove = cellfun(@(x) ~isdir(x), arrayfun(@(y) [y.folder,'\',y.name], obj.general_info{exp}.original_path, 'UniformOutput', false))';
+                    end
+                    if any(to_remove)
+                        obj.need_update(exp) = true;
+                        
+                        %% Remove unnecessary path
+                        all_names = {obj.general_info{exp}.original_path(to_remove).name};
+                        to_remove_too = find(cellfun(@(x) any(strcmp(x, all_names)), {obj.rec_list{1}.name}));
+                        obj.rec_list{1}(to_remove_too) = [];obj.rec_list{2}(to_remove_too) = [];
+                        obj.general_info{exp}.sources = obj.general_info{exp}.sources(~to_remove);
+                        obj.general_info{exp}.original_path = obj.general_info{exp}.original_path(~to_remove); 
+                    end                    
+                end
+            end
         end
+        
         
         function load_extracted_data(obj, expe, tracing_source)
             if nargin < 2 || isempty(expe)
@@ -199,10 +246,48 @@ classdef arboral_scan_meta_analysis < handle
             obj.timescale{expe}.global_timescale = cumsum(horzcat(global_timescale{:}));
         end
         
+        function failed = update_external_metrics(obj, expe)
+            if nargin < 2 || isempty(expe)
+                expe = 1:numel(obj.expe_list);
+            end
+            
+            failed = {};
+%             for el = 1:numel(obj.general_info)
+%                 current_sources = obj.general_info{el}.sources;
+%                 current_external_variables = {};
+%                 for rec = 1:numel(current_sources)
+%                     fprintf([current_sources{rec}, '\n']);
+%                     current_external_variables{rec} = [];                 
+%                 end  
+%                 obj.external_variables{el} = current_external_variables;
+%             end        
+%             
+            failed = {};
+            for el = expe
+                current_sources = obj.general_info{el}.sources;
+                current_external_variables = {};
+                for rec = 1:numel(current_sources)
+                    fprintf([current_sources{rec}, '\n']);
+                    try
+                    parameters = analysis_params('source',current_sources{rec},'data_type','raw');
+                    [parameters, ~, ~, ~] = load_generic_scan(parameters);
+                    parameters.external_var = structfun(@(x) struct('time',x.time(:),'data',x.speed(:)), parameters.external_var,'UniformOutput', false);
+                    current_external_variables{rec} = parameters.external_var;
+                    catch err
+                        current_external_variables{rec} = [];
+                        failed{end + 1} = [{err}, current_sources{rec}];
+                    end                    
+                end  
+                obj.external_variables{el} = current_external_variables;
+            end            
+        end
+        
         
         function [bins, metrics, bin_legend] = prepare_binning(obj, condition, expe)
             if nargin < 3 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             %% Define current binning rule. See arboreal_scan.get_ROI_groups for more info    
@@ -223,6 +308,8 @@ classdef arboral_scan_meta_analysis < handle
         function rescale_traces(obj, expe) 
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             [best_scal_f, best_offset]          = scale_every_recordings(obj.extracted_traces{expe}, obj.demo);
@@ -233,6 +320,8 @@ classdef arboral_scan_meta_analysis < handle
         function rescaled_traces = get_rescaled_traces(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             all_traces_per_rec = obj.extracted_traces{expe};
@@ -256,6 +345,8 @@ classdef arboral_scan_meta_analysis < handle
         function set_median_traces(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             %obj.extracted_traces{expe}           = vertcat(obj.extracted_traces{expe}{:}); %% QQ set as a get method
@@ -276,6 +367,8 @@ classdef arboral_scan_meta_analysis < handle
         function similarity_plot(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             win = ceil(1./median(diff(obj.timescale{expe}.global_timescale)));
@@ -299,9 +392,17 @@ classdef arboral_scan_meta_analysis < handle
             linkaxes([ax1,ax2, ax3],'x')
         end
         
+        function expe = identify(obj, filter)
+            expe = find(cellfun(@(x) contains(x, filter), obj.expe_list));
+            fprintf(['Required experiment is # ', num2str(expe),'\n'])
+            
+        end
+        
         function norm_cumsum = plot_events_distribution(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             peaks = obj.event_fitting{expe}.post_correction_peaks;
@@ -342,6 +443,8 @@ classdef arboral_scan_meta_analysis < handle
         function assess_variability(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             %sr = nanmedian(diff(obj.timescale{expe}.global_timescale));
@@ -377,6 +480,8 @@ classdef arboral_scan_meta_analysis < handle
         function plot_cc(obj, expe)  
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             cc = obj.crosscorr{expe};
@@ -398,6 +503,8 @@ classdef arboral_scan_meta_analysis < handle
             end
             if nargin < 3 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             rescaled_traces     = obj.get_rescaled_traces(expe);
@@ -463,12 +570,16 @@ classdef arboral_scan_meta_analysis < handle
             mask_name       = obj.general_info{expe}.arboreal_scan.analysis_params.mask_value;
             %f_handle        = @(x) load_several_experiments(x, data_folders);
             f_handle        = @(x) plot_ROI(x);
-            f               = plot_summary_tree(tree_info.path, values, locations, '', tree_info.soma_location, '', tree_info.excluded_branches, tree_info.pia_soma,1018, f_handle); set(gcf,'Color','w');
+            path = tree_info.path;
+            path = strrep(path,'D:/V1_Curated_Data/' ,'Y:\general\Analysis\Antoine_and_Tommy\V1_Curated_Data\');
+            f               = plot_summary_tree(path, values, locations, '', tree_info.soma_location, '', tree_info.excluded_branches, tree_info.pia_soma,1018, f_handle); set(gcf,'Color','w');
         end
 
         function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, expe)  
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             %% Identify valid set of traces
@@ -502,16 +613,18 @@ classdef arboral_scan_meta_analysis < handle
         end
         
         function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, expe)
-            if nargin < 2 || isempty(comp)
-                comp = 1;
-            end
             if nargin < 3 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
+            end
+            if nargin < 2 || isempty(comp) || ~comp
+                [tree, soma_location, tree_values, values] = obj.plot_strongest_comp_tree(expe);
+                return
             end
             
-             % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
+            % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
 
-            
             %% Reload loadings
             LoadingsPM = obj.dimensionality{expe}.LoadingsPM;
             Valid_ROIs = obj.dimensionality{expe}.all_ROIs(obj.dimensionality{expe}.valid_trace_idx);
@@ -542,18 +655,20 @@ classdef arboral_scan_meta_analysis < handle
         function [tree, soma_location, tree_values, values] = plot_strongest_comp_tree(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             [~, loc]    = max(obj.dimensionality{expe}.LoadingsPM(:,1:5)');
-            v           = NaN(size(loc));
+            values      = NaN(size(loc));
             Valid_ROIs  = obj.dimensionality{expe}.all_ROIs(obj.dimensionality{expe}.valid_trace_idx);
             for ROI = 1:numel(Valid_ROIs)
                 roi     = obj.dimensionality{expe}.all_ROIs(Valid_ROIs(ROI));
-                v(roi)  = loc(ROI);
+                values(roi)  = loc(ROI);
             end
-            f                       = obj.plot_value_tree(expe, v, Valid_ROIs);   title('Location of strongest component') 
+            f                       = obj.plot_value_tree(expe, values, Valid_ROIs);   title('Location of strongest component') 
             pause(1)
-            f                       = obj.plot_value_tree(expe, v, Valid_ROIs);   title('Location of strongest component') 
+            f                       = obj.plot_value_tree(expe, values, Valid_ROIs);   title('Location of strongest component') 
             
             %% Map dimension weights on the tree
             tree                    = obj.general_info{expe}.arboreal_scan.trees;
@@ -567,6 +682,8 @@ classdef arboral_scan_meta_analysis < handle
             end
             if nargin < 3 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
 
 
@@ -602,6 +719,8 @@ classdef arboral_scan_meta_analysis < handle
         function plot_weight_map(obj, expe)
             if nargin < 2 || isempty(expe)
                 expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
             end
             
             %% Recover traces
