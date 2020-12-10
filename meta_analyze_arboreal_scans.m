@@ -22,19 +22,26 @@ condition   = {'distance', 100};
 % source_folder = 'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER\Ribbon Scan paper\code for paper\test7\meta\';
 % export_folder = 'C:\Users\vanto\Desktop\new_meta_june_2020_v12';
 
-setting_file_path = SETTINGS_FILE%'D:\Curated Data\settings.txt';
-source_folder = [EXPORT_PATH, '\meta']%'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER\Ribbon Scan paper\code for paper\26-10-2020\meta\';
-export_folder = [pwd, '\new_meta_nov_2020'];
 
-export_folder = parse_paths(export_folder);
-if isfile([export_folder, 'summary.mat'])
+
+if isvarname('results') && isa(results, 'arboral_scan_meta_analysis')
+    
+elseif isfile([export_folder, 'summary.mat'])
     %% Resume analysis
     load([export_folder, 'summary.mat']);
 else
     %% Start new analysis
     results                 = arboral_scan_meta_analysis(source_folder, export_folder);
+    setting_file_path = SETTINGS_FILE%'D:\Curated Data\settings.txt';
+    source_folder = [EXPORT_PATH, '\meta']%'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER\Ribbon Scan paper\code for paper\26-10-2020\meta\';
+    export_folder = [pwd, '\new_meta_nov_2020'];
+    export_folder = parse_paths(export_folder);
 end
 data_folders_per_exp    = results.filter_expe_subset();
+
+
+
+data_folders_per_exp = data_folders_per_exp(results.need_update)
 
 failed_analysis         = {};
 failed_factoran         = {};
@@ -42,13 +49,15 @@ whitebg('w')
 
 %% Now, do the analysis expe-by-expe
 for expe = 1:numel(data_folders_per_exp) % review expe 23 for fitting warning, saturated peak scaling and one group having an overestimated baseline
+    original_expe_idx = expe; % for the saving part 
+    
     %% Close existing figures
     close all
     fprintf(['Processing experiment #',num2str(expe),'\n'])
     
     %try
     %% Prepare fields some useful information
-    expe = results.add_experiment(data_folders_per_exp{expe});
+    expe = results.add_experiment(data_folders_per_exp{original_expe_idx});
         
     results.filter_win = [0, 100];
     
@@ -103,7 +112,7 @@ for expe = 1:numel(data_folders_per_exp) % review expe 23 for fitting warning, s
 
     %% Plot a tree correlation metric     
     %ROIs_list  = unique([all_ROI_ids_per_bin{:}]);
-    %[fixed_tree, soma_location, ROIs_list, listing, batch_params] = rebuild_tree(data_folders_per_exp{expe}(1), setting_file_path, true);
+    %[fixed_tree, soma_location, ROIs_list, listing, batch_params] = rebuild_tree(data_folders_per_exp{original_expe_idx}(1), setting_file_path, true);
     
     %% Assign value of group to these ROIs
     results.plot_corr_tree(); arrangefigures([1,2]);
@@ -123,11 +132,14 @@ for expe = 1:numel(data_folders_per_exp) % review expe 23 for fitting warning, s
     results.plot_strongest_comp_tree();
 
     arrangefigures([1,2]);
+    
+    %% Optionally, if external variables need an update
+    %results.update_external_metrics(60)
 
     %% Save figure
     if save_data
         p = get(groot,'DefaultFigurePosition');
-        folder = [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/'];
+        folder = [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/'];
         if isfolder(folder)
             rmdir(folder,'s');
         end
@@ -136,18 +148,18 @@ for expe = 1:numel(data_folders_per_exp) % review expe 23 for fitting warning, s
             f = figure(fig_idx);
             set(f, 'Position', p)
             try
-                saveas(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.pdf']);
-                saveas(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.png']);
-                savefig(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.fig']);
+                saveas(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.pdf']);
+                saveas(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.png']);
+                savefig(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.fig']);
             catch % for figures with subplots
                 try
-                    saveas(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.pdf']);
-                    saveas(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.png']);
-                    savefig(f, [results.export_folder, '/',data_folders_per_exp{expe}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{expe}(1).name(1:end-9),'.fig']);
+                    saveas(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.pdf']);
+                    saveas(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.png']);
+                    savefig(f, [results.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.fig']);
                 end
             end
         end
-        name = parse_paths([folder,'/',f.Tag,data_folders_per_exp{expe}(1).name(1:end-9),'.mat']);
+        name = parse_paths([folder,'/',f.Tag,data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.mat']);
         batch_params = results.general_info{expe}.arboreal_scan.batch_params;
         
         %% Save every time in case of failure.
@@ -157,7 +169,7 @@ for expe = 1:numel(data_folders_per_exp) % review expe 23 for fitting warning, s
     end
 
     %catch
-    %   failed{expe} = data_folders_per_exp{expe}; 
+    %   failed{expe} = data_folders_per_exp{original_expe_idx}; 
 	%end
     close all
 end
