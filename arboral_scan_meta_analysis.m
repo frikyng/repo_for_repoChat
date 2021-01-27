@@ -19,10 +19,15 @@ classdef arboral_scan_meta_analysis < handle
         filter_type     = 'gaussian';
         current_expe    = '';
         need_update     = [];
+        rendering       = false;
     end
     
     methods
         function obj = arboral_scan_meta_analysis(source_folder, export_folder)
+            if nargin < 2 || isempty(export_folder)
+                export_folder = [export_folder, '/meta/'];
+            end
+            
             %% Fix paths
             obj.source_folder       = parse_paths(source_folder);
             obj.export_folder       = parse_paths(export_folder);
@@ -33,14 +38,13 @@ classdef arboral_scan_meta_analysis < handle
             end
 
             %% Get all analysed data folder in the source folder, for the type specified
-            all_recordings          = dir([obj.source_folder,'/*-*-*_exp_*/*-*-*_exp_*_*-*-*']);
+            all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
             all_recordings          = all_recordings([all_recordings(:).isdir]);
-            all_recordings          = all_recordings(3:end); % remove '.' and '..'
+            all_recordings          = all_recordings(~(arrayfun(@(x) strcmp(x.name, '.'), all_recordings) | arrayfun(@(x) strcmp(x.name, '..'), all_recordings)));
             names                   = vertcat(all_recordings.name);
             names                   = names(:,1:end-9);
             names                   = cellstr(names);
-            [experiments_available, ~, idx2] = unique(names(cellfun('isclass', names, 'char')));           
-            obj.expe_list           = experiments_available';
+            [~, ~, idx2] = unique(names(cellfun('isclass', names, 'char')));  
             obj.rec_list            = {all_recordings, idx2};
             
             obj.general_info        = cell(size(obj.expe_list));
@@ -52,6 +56,14 @@ classdef arboral_scan_meta_analysis < handle
             obj.dimensionality      = cell(size(obj.expe_list));
             obj.external_variables  = cell(size(obj.expe_list));
             obj.need_update         = true(size(obj.expe_list));            
+        end
+        
+        function expe_list = get.expe_list(obj)
+            names                   = vertcat(obj.rec_list{1}.name);
+            names                   = names(:,1:end-9);
+            names                   = cellstr(names);
+            [experiments_available, ~, idx2] = unique(names(cellfun('isclass', names, 'char')));           
+            expe_list               = experiments_available';
         end
 
         function data_folders_per_exp = filter_expe_subset(obj, filter)
@@ -80,7 +92,7 @@ classdef arboral_scan_meta_analysis < handle
             %% Identify if the experiment is already here to avoid duplicate
             expe = [];
             for el = 1:numel(obj.general_info)
-                if isstruct(obj.general_info{el}) && any(strcmp(obj.general_info{el}.short_path, path(1).name(:,1:end-9)))
+                if isstruct(obj.general_info{el}) && isfield(obj.general_info{el}, 'short_path') && any(strcmp(obj.general_info{el}.short_path, path(1).name(:,1:end-9)))
                     expe = el;
                     break
                 end                    
@@ -97,14 +109,108 @@ classdef arboral_scan_meta_analysis < handle
             obj.event_fitting{expe}     = [];
             obj.crosscorr{expe}         = [];
             obj.dimensionality{expe}    = [];
-            obj.external_variables{expe}  = [];
+            obj.external_variables{expe}= [];
+            %obj.expe_list{expe}         = [];
 
             obj.general_info{expe}.original_path = path;
             obj.general_info{expe}.short_path = path(1).name(:,1:end-9);
             
-            obj.cleanup_expe();
+            try
+                obj.cleanup_expe();
+            catch
+                    obj.cleanup_expe();
+            end
             expe = find(cellfun(@(x) contains(x.short_path, path(1).name(:,1:end-9)), obj.general_info));
             obj.current_expe = expe;
+        end
+        
+        function process(obj, expe, data_folders_per_exp, condition, filter_win, rendering)
+            if nargin < 5 || isempty(filter_win)
+                filter_win = [100,0];                
+            end            
+            if nargin >= 6 && ~isempty(rendering)
+                obj.rendering = rendering;
+            end
+            demo = 0
+            save_data = false
+            
+            obj.filter_win = filter_win;
+            original_expe_idx = expe; % for the saving part 
+            fprintf(['Processing experiment #',num2str(expe),'\n'])
+            
+            %% Prepare fields some useful information
+            expe = obj.add_experiment(data_folders_per_exp{original_expe_idx}); 
+
+            %% Load and concatenate traces for the selected experiment
+            obj.load_extracted_data(expe);   % this also sets the current expe #
+% 
+%             %% Check for consistent number of ROIs
+%             quality_control(1, obj.extracted_traces{expe})
+%             %quality_control(2, cell2mat(all_sr))
+
+            %% Prepare binning of ROIs based on specific grouping condition
+            [bins, metrics, bin_legend] = obj.prepare_binning(condition);
+
+            %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
+            obj.rescale_traces();
+
+            %% Create median trace per bins
+            obj.set_median_traces()
+
+            %% Get summary covariance plots
+            obj.similarity_plot();            
+
+            %% Correct for decay to avoid overstimating peak amplitude
+            if isempty(obj.event_fitting{expe})
+                obj.event_fitting{expe} = detect_and_fit_events(obj.binned_data{expe}.median_traces, obj.timescale{expe}.global_timescale, demo, obj.binned_data{expe}.bin_legend);arrangefigures([1,2]);
+            end
+
+            %% Detect and display peak histogram distribution (mean and individual groups)
+            obj.plot_events_distribution();
+
+            %% Study bAP heterogeneity
+            obj.assess_variability()
+
+            %% Check how correlated are the peaks between different parts of the tree
+            if isempty(obj.crosscorr{expe})
+                obj.crosscorr{expe} = corrcoef([nanmean(obj.event_fitting{expe}.post_correction_peaks, 2), obj.event_fitting{expe}.post_correction_peaks]);
+            end
+            obj.plot_cc(); 
+
+            %% Plot a tree correlation metric     
+            %ROIs_list  = unique([all_ROI_ids_per_bin{:}]);
+            %[fixed_tree, soma_location, ROIs_list, listing, batch_params] = rebuild_tree(data_folders_per_exp{original_expe_idx}(1), setting_file_path, true);
+
+            %% Assign value of group to these ROIs
+            obj.plot_corr_tree(); 
+
+            cross_validate = false;
+            obj.get_dimensionality(cross_validate);
+
+            %% Plot weight-tree for each component
+            for comp = 1:5
+                obj.plot_dim_tree(comp);
+            end
+
+            %% Plot a map of tree weights by ROI number for each component
+            obj.plot_weight_map();
+
+            %% Plot strongest componenet per ROI
+            obj.plot_strongest_comp_tree();
+
+            %% Optionally, if external variables need an update
+            %obj.update_external_metrics(60)
+
+            %% Save figure
+            if save_data
+                obj.save_figures()
+            end
+
+            %catch
+            %   failed{expe} = data_folders_per_exp{original_expe_idx}; 
+            %end
+            %close all
+            figure(999);plot(obj.binned_data{expe}.median_traces - nanmean(obj.binned_data{expe}.median_traces,2));set(0,'DefaultAxesColorOrder',magma(size(obj.binned_data{expe}.median_traces,2)))
         end
         
         function cleanup_expe(obj, deep_cleanup, updated_path)
@@ -312,9 +418,14 @@ classdef arboral_scan_meta_analysis < handle
                 obj.current_expe = expe;
             end
             
+            
             [best_scal_f, best_offset]          = scale_every_recordings(obj.extracted_traces{expe}, obj.demo);
             obj.general_info{expe}.scaling      = best_scal_f;
             obj.general_info{expe}.offset       = best_offset;
+            if obj.rendering
+                figure();plot(nanmedian(obj.get_rescaled_traces(),2));
+                arrangefigures([1,2]);
+            end
         end
         
         function rescaled_traces = get_rescaled_traces(obj, expe)
@@ -362,6 +473,15 @@ classdef arboral_scan_meta_analysis < handle
             end    
             
             obj.binned_data{expe}.median_traces = cell2mat(all_traces_per_bin);%cellfun(@(x) cell2mat(x) ,all_traces_per_bin, 'UniformOutput', false); 
+            
+            if obj.rendering
+                %% Plot the mean trace for each bin  
+                figure(1001);cla();
+                plot(obj.timescale{expe}.global_timescale, obj.binned_data{expe}.median_traces); hold on;
+                legend(obj.binned_data{expe}.bin_legend); hold on;
+                title('mean scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
+                arrangefigures([1,2]); 
+            end
         end
     
         function similarity_plot(obj, expe)
@@ -383,13 +503,16 @@ classdef arboral_scan_meta_analysis < handle
             out = nanmax(precision(:)) / 10;
             precision(precision > out) = NaN;
 
-            f = figure(1006);clf();title('Similarity plot');hold on;set(gcf,'Color','w');hold on;
-            f.Tag = 'Similarity plot'; %for figure saving
-            ax1 = subplot(3,1,1); hold on;plot(obj.binned_data{expe}.median_traces);title('Cell Signal');ylim([-50,range(obj.binned_data{expe}.median_traces(:))]);
-            ax2 = subplot(3,1,2); hold on;plot(corr_results,'Color',[0.9,0.9,0.9]);
-            hold on;plot(nanmean(corr_results, 2),'r');title('pairwise temporal correlation');ylim([-1.1,1.1]);plot([0,size(corr_results, 1)],[-1,-1],'k--');plot([0,size(corr_results, 1)],[1,1],'k--')
-            ax3 = subplot(3,1,3); hold on;plot(precision);title('Precision (1/Var)');set(ax3, 'YScale', 'log');plot([0,size(precision, 1)],[1,1],'k--')
-            linkaxes([ax1,ax2, ax3],'x')
+            if obj.rendering
+                f = figure(1006);clf();title('Similarity plot');hold on;set(gcf,'Color','w');hold on;
+                f.Tag = 'Similarity plot'; %for figure saving
+                ax1 = subplot(3,1,1); hold on;plot(obj.binned_data{expe}.median_traces);title('Cell Signal');ylim([-50,range(obj.binned_data{expe}.median_traces(:))]);
+                ax2 = subplot(3,1,2); hold on;plot(corr_results,'Color',[0.9,0.9,0.9]);
+                hold on;plot(nanmean(corr_results, 2),'r');title('pairwise temporal correlation');ylim([-1.1,1.1]);plot([0,size(corr_results, 1)],[-1,-1],'k--');plot([0,size(corr_results, 1)],[1,1],'k--')
+                ax3 = subplot(3,1,3); hold on;plot(precision);title('Precision (1/Var)');set(ax3, 'YScale', 'log');plot([0,size(precision, 1)],[1,1],'k--')
+                linkaxes([ax1,ax2, ax3],'x')
+                arrangefigures([1,2]); 
+            end
         end
         
         function expe = identify(obj, filter)
@@ -487,14 +610,17 @@ classdef arboral_scan_meta_analysis < handle
             cc = obj.crosscorr{expe};
             bin_legend = obj.binned_data{expe}.bin_legend;
             
-            figure(1008);cla();imagesc(cc); hold on;set(gcf,'Color','w');
-            caxis([0,1]); hold on;
-            xticks([1:size(cc, 1)])
-            yticks([1:size(cc, 1)])
-            colorbar; hold on;
-            plot([1.5,1.5],[0.5,size(cc, 1)+0.5],'k-');xticklabels(['whole cell',bin_legend]);xtickangle(45);
-            plot([0.5,size(cc, 1)+0.5],[1.5,1.5],'k-');yticklabels(['whole cell',bin_legend]);
-            title('peak amplitude correlation per subgroup');
+            if obj.rendering
+                figure(1008);cla();imagesc(cc); hold on;set(gcf,'Color','w');
+                caxis([0,1]); hold on;
+                xticks([1:size(cc, 1)])
+                yticks([1:size(cc, 1)])
+                colorbar; hold on;
+                plot([1.5,1.5],[0.5,size(cc, 1)+0.5],'k-');xticklabels(['whole cell',bin_legend]);xtickangle(45);
+                plot([0.5,size(cc, 1)+0.5],[1.5,1.5],'k-');yticklabels(['whole cell',bin_legend]);
+                title('peak amplitude correlation per subgroup');
+                arrangefigures([1,2]); 
+            end
         end
         
         function get_dimensionality(obj, cross_validate, expe)
@@ -562,8 +688,12 @@ classdef arboral_scan_meta_analysis < handle
             obj.dimensionality{expe}.valid_trace_idx    = valid_trace_idx;  % additional filter for recordings with many NaNs
         end
         
-        function f = plot_value_tree(obj, expe, values, locations, tree)
-            tree_info       = obj.general_info{expe}.arboreal_scan.tree_info(1);
+        function f = plot_value_tree(obj, expe, values, locations, ~)
+            %% e.g.
+            % values = max(meta_analysis_result.extracted_traces{1}{1});
+            % meta_analysis_result.plot_value_tree(expe,values 1:numel(values));
+
+            tree_info       = obj.general_info{expe}.arboreal_scan.tree_info;
             global all_traces data_folders mask_name
             all_traces      = obj.get_rescaled_traces(expe);
             data_folders    = obj.general_info{expe}.sources;
@@ -572,7 +702,7 @@ classdef arboral_scan_meta_analysis < handle
             f_handle        = @(x) plot_ROI(x);
             path = tree_info.path;
             path = strrep(path,'D:/V1_Curated_Data/' ,'Y:\general\Analysis\Antoine_and_Tommy\V1_Curated_Data\');
-            f               = plot_summary_tree(path, values, locations, '', tree_info.soma_location, '', tree_info.excluded_branches, tree_info.pia_soma,1018, f_handle); set(gcf,'Color','w');
+            f               = plot_summary_tree(path, values, locations, '', tree_info.soma_location, '', tree_info.excluded_branches, tree_info.pia_soma,1018, f_handle); set(gcf,'Color','w');arrangefigures([1,2]);
         end
 
         function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, expe)  
@@ -607,7 +737,7 @@ classdef arboral_scan_meta_analysis < handle
             f                       = obj.plot_value_tree(expe, mean_bin_cc, ROIs_list);caxis([0,1]);title('Correlation with most proximal segment');
             
             %% Prepare output
-            tree                    = obj.general_info{expe}.arboreal_scan.trees;
+            tree                    = obj.general_info{expe}.arboreal_scan.original_tree;
             soma_location           = obj.general_info{expe}.arboreal_scan.soma_location;
             tree_values             = {f.XData; f.YData; f.ZData; f.CData};
         end
@@ -647,7 +777,7 @@ classdef arboral_scan_meta_analysis < handle
             
             %% Map dimension weights on the tree
             f                       = obj.plot_value_tree(expe, values, Valid_ROIs);title(titl);            
-            tree                    = obj.general_info{expe}.arboreal_scan.trees;
+            tree                    = obj.general_info{expe}.arboreal_scan.original_tree;
             soma_location           = obj.general_info{expe}.arboreal_scan.soma_location;
             tree_values             = {f.XData; f.YData; f.ZData; f.CData};
         end
@@ -666,14 +796,13 @@ classdef arboral_scan_meta_analysis < handle
                 roi     = obj.dimensionality{expe}.all_ROIs(Valid_ROIs(ROI));
                 values(roi)  = loc(ROI);
             end
-            f                       = obj.plot_value_tree(expe, values, Valid_ROIs);   title('Location of strongest component') 
-            pause(1)
-            f                       = obj.plot_value_tree(expe, values, Valid_ROIs);   title('Location of strongest component') 
+            f                       = obj.plot_value_tree(expe, values, Valid_ROIs);   title('Location of strongest component')             
             
             %% Map dimension weights on the tree
-            tree                    = obj.general_info{expe}.arboreal_scan.trees;
+            tree                    = obj.general_info{expe}.arboreal_scan.original_tree;
             soma_location           = obj.general_info{expe}.arboreal_scan.soma_location;
             tree_values             = {f.XData; f.YData; f.ZData; f.CData};
+            arrangefigures([1,2]);
         end
         
         function [tree, soma_location, tree_values, values] = plot_dist_tree(obj, bin, expe)   
@@ -688,10 +817,10 @@ classdef arboral_scan_meta_analysis < handle
 
 
             %% Build tree values per bin
-            %tree = obj.general_info{expe}.arboreal_scan.trees{1};
+            %tree = obj.general_info{expe}.arboreal_scan.original_tree{1};
             tree                    = skeleton_to_tree(obj.general_info{expe}.arboreal_scan.analysis_params.trees{1}); % entire skeleton as tree, no xcludion
             [~, info]               = get_branch_id_from_ROI(tree, 0, 0);            
-            morpho                  = obj.general_info{expe}.arboreal_scan.tree_info(1);
+            morpho                  = obj.general_info{expe}.arboreal_scan.tree_info;
             tree                    = fix_tree(tree{1}, morpho.primary_dendrites, morpho.manual_reconnections, morpho.excluded_branches, morpho.pia_soma, true);
             info                    = info(~ismember(info(:,1),morpho.excluded_branches'),:); % QQ INVERSIONS NOT HANDELD
             ROIs_list               = info(:, 2);
@@ -711,7 +840,7 @@ classdef arboral_scan_meta_analysis < handle
             f                       = obj.plot_value_tree(expe, values, ROIs_list);title('Distance from soma');
             
             %% Prepare output
-            tree                    = obj.general_info{expe}.arboreal_scan.trees;
+            tree                    = obj.general_info{expe}.arboreal_scan.original_tree;
             soma_location           = obj.general_info{expe}.arboreal_scan.soma_location;
             tree_values             = {f.XData; f.YData; f.ZData; f.CData}; 
         end    
@@ -828,6 +957,43 @@ classdef arboral_scan_meta_analysis < handle
             ylim([0, y_offset + y_max_in_row]);
             xlim([0,max_fig_w]); hold on;set(gca, 'Ydir', 'reverse');colorbar                                                       
         end   
+        
+        function save_figures(obj, expe)
+            if nargin < 2 || isempty(expe)
+                expe = obj.current_expe;
+            else
+                obj.current_expe = expe;
+            end
+
+            p = get(groot,'DefaultFigurePosition');
+            folder = [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/'];
+            if isfolder(folder)
+                rmdir(folder,'s');
+            end
+            mkdir(folder);
+            for fig_idx = [1001:1021, 1081, 1082, (10020+1):(10020+size(obj.event_fitting{expe}.events, 1)), (20020+1):(20020+5)]
+                f = figure(fig_idx);
+                set(f, 'Position', p)
+                try
+                    saveas(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.pdf']);
+                    saveas(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.png']);
+                    savefig(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Children(end).Title.String,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.fig']);
+                catch % for figures with subplots
+                    try
+                        saveas(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.pdf']);
+                        saveas(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.png']);
+                        savefig(f, [obj.export_folder, '/',data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'/',f.Tag,' ', data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.fig']);
+                    end
+                end
+            end
+            name = parse_paths([folder,'/',f.Tag,data_folders_per_exp{original_expe_idx}(1).name(1:end-9),'.mat']);
+            batch_params = obj.general_info{expe}.arboreal_scan.batch_params;
+
+            %% Save every time in case of failure.
+            save(parse_paths([obj.export_folder, 'summary.mat']), 'obj','-v7.3')
+            %save(name, 'obj.binned_data{expe}.median_traces','all_fits', 'all_pks', 'peak_times','all_pks','peak_times','trial_timescale','global_timescale','bin_legend','batch_params','-v7.3');   
+            %save(name, 'all_traces_per_bin','all_traces_per_bin','all_traces_concat','all_fits', 'all_pks', 'peak_times','cc','all_pks','peak_times','trial_timescale','global_timescale','bin_legend','batch_params','ROIs_list','dimensionality','-v7.3');   
+        end
         
         function extracted_traces = get.extracted_traces(obj)
             extracted_traces = obj.extracted_traces;
