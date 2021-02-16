@@ -5,8 +5,6 @@ classdef arboral_scan_dataset < handle
         source_folder
         experiments
         
-        
-        
         export_folder
         expe_list      % List of experiments analyzed
         rec_list
@@ -35,6 +33,13 @@ classdef arboral_scan_dataset < handle
             fold = fold([fold.isdir]);            
             for idx = 1:numel(fold)
                 files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
+                if numel(files) == 0
+                    warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
+                    expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+                    expe.save(true);
+                    files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
+                end
+                
                 for el = 1:numel(files)
                     m = matfile([files(el).folder,'/',files(el).name]);
                     if isprop(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')

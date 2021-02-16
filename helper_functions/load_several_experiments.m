@@ -38,24 +38,24 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
         fprintf('Please wait while loading all the recordings for the selected ROI\n')
         [~, header] = import_ROIs(p, 'data_folder', data_folders{1}, 'repeats', 1);
         parfor f_idx = 1:numel(data_folders)
-            f = data_folders{f_idx};
-            info = get_recordings_info(f);
-            h = load_header(f);
-            info = merge_params_obj(info, h); % this update some values for import ROI
-            current_data      = [];
-            current_duration  = 0;
+            f                   = data_folders{f_idx};
+            info                = get_recordings_info(f);
+            h                   = load_header(f);
+            info                = merge_params_obj(info, h); % this update some values for import ROI
+            current_data        = [];
+            current_duration    = 0;
             for trial = info.repeats
                     %[results, header] = import_ROIs(p, 'data_folder', f{1}, 'repeats', trial);
-                    results = [];
+                    results     = [];
                 for roi = ROIs % if multiple ROIs from a branch
-                    fname = dir([info.data_folder '/RibbonScan_ROI_',sprintf('%04d',roi),'_repeat_',sprintf('%04d',trial),'*.mat']); %load list of all the files (excluded concatenation and averages)
-                    fname = parse_paths([fname.folder,'/',fname.name]);
-                    results = cat(1, results, import_ROI(fname, merge_params_obj(p, info)));                
+                    fname       = dir([info.data_folder '/RibbonScan_ROI_',sprintf('%04d',roi),'_repeat_',sprintf('%04d',trial),'*.mat']); %load list of all the files (excluded concatenation and averages)
+                    fname       = parse_paths([fname.folder,'/',fname.name]);
+                    results     = cat(1, results, import_ROI(fname, merge_params_obj(p, info)));                
                         %[results, header] = import_ROIs(p, 'data_folder', f{1}, 'repeats', trial);
                         %[temp, ~, ~, params] = load_experiment(p, 'data_folder', f{1});
                 end
-                current_data = cat(4, current_data, results);
-                current_duration = current_duration + info.trial_duration;        
+                current_data    = cat(4, current_data, results);
+                current_duration= current_duration + info.estimated_trial_duration;        
             end
             if iscell(current_data)
                 current_data = current_data{1}

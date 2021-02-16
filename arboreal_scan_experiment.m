@@ -20,6 +20,8 @@ classdef arboreal_scan_experiment < handle
         crosscorr
         dimensionality
         external_variables
+        
+        default_handle
     end
     
     methods
@@ -58,12 +60,10 @@ classdef arboreal_scan_experiment < handle
         end
         
         function extracted_traces = get.extracted_traces(obj)
-            extracted_traces = cellfun(@(x) x.data, obj.arboreal_scans, 'UniformOutput', false);         
+            extracted_traces = cellfun(@(x) x.data, obj.arboreal_scans, 'UniformOutput', false);  
+            extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);             
         end
-        
-%         function general_info = get.general_info(obj)
-%             general_info = {};            
-%         end
+
         function timescale = get.timescale(obj)
             %% Prepare timescale for each recording and concatenated timescale
             timescale = {};
@@ -88,7 +88,7 @@ classdef arboreal_scan_experiment < handle
         
         
         function prepare_binning(obj, condition)
-            if isempty(obj.current_segmentation) || (~strcmp(obj.current_segmentation.condition{1}, condition{1}) || obj.current_segmentation.condition{2} ~= condition{2})
+            if isempty(obj.current_segmentation) || isempty(obj.binned_data) || isempty(obj.current_segmentation.condition) || (~strcmp(obj.current_segmentation.condition{1}, condition{1}) || obj.current_segmentation.condition{2} ~= condition{2})
             	obj.current_segmentation = {};
                 obj.current_segmentation.condition = condition;
             elseif strcmp(obj.current_segmentation.condition{1}, condition{1}) && obj.current_segmentation.condition{2} == condition{2}
@@ -102,8 +102,9 @@ classdef arboreal_scan_experiment < handle
         end
         
         function set.current_segmentation(obj, current_segmentation)
-            obj.current_segmentation = current_segmentation;
-            if isempty(current_segmentation) % detect reset
+            obj.current_segmentation    = current_segmentation;            
+            caller                      = dbstack('-completenames'); 
+            if isempty(current_segmentation) && ~contains([caller.name],'MatFile') % detect reset
                 warning('segmentation conditions were changed - this will reset all extracted fields relying on it')
                 %% Clear dependant analyses
                 %             obj.crosscorr{expe}                 = [];
@@ -276,16 +277,28 @@ classdef arboreal_scan_experiment < handle
             end
         end
         
+        function f_handle = get.default_handle(obj)
+            f_handle                = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false));
+        end
+        
+        function crosscorr = get.crosscorr(obj)
+            if isempty(obj.event_fitting)
+                %error_box('Events were not extracted. Returning CC of traces', 1)
+                mask        = ~isnan(sum(obj.binned_data.median_traces,2))    ; 
+                crosscorr   = corrcoef([nanmean(obj.binned_data.median_traces(mask,:), 2), obj.binned_data.median_traces(mask,:)]);
+            else
+                crosscorr   = corrcoef([nanmean(obj.event_fitting.post_correction_peaks, 2), obj.event_fitting.post_correction_peaks]);
+            end
+            
+        end
+        
         function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj) 
             
             %% Identify valid set of traces
-            valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % QQ not sure when we have full NaN series, but we can not denoise them with wdenoise
-            if valid_gp(1) == 1
-                valid_gp = valid_gp(2:end);
-            end
+            valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
             
             %% Reload CC
-            cc              = obj.crosscorr(2:end,2:end);
+            cc                  = obj.crosscorr(2:end,2:end);
             
             %% Build tree values per bin
             mean_bin_cc     = [];
@@ -300,7 +313,7 @@ classdef arboreal_scan_experiment < handle
             end
 
             %% Map CC values on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, '', 'Correlation with most proximal segment');
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment');
             caxis([0,1]);
             col = colorbar; col.Label.String = 'Correlation coeff of peaks amplitude with soma';
         end
@@ -313,7 +326,7 @@ classdef arboreal_scan_experiment < handle
             rescaled_traces     = obj.get_rescaled_traces();
             all_ROIs            = 1:size(rescaled_traces, 2);
             normal_n_NaN        = median(sum(isnan(rescaled_traces))) * 4;
-            valid_trace_idx     = sum(isnan(rescaled_traces)) <= normal_n_NaN;
+            valid_trace_idx     = sum(isnan(rescaled_traces)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
             rescaled_traces     = fillmissing(rescaled_traces(:, valid_trace_idx),'spline'); % removed funny traces
             %valid_ROIs          = all_ROIs(valid_trace_idx);
 
@@ -394,7 +407,7 @@ classdef arboreal_scan_experiment < handle
             end
             
             %% Map dimension weights on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, '', titl); 
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl); 
         end
         
         function plot_weight_map(obj)
@@ -416,7 +429,7 @@ classdef arboreal_scan_experiment < handle
             w3 = LoadingsPM(:,3)/sum(LoadingsPM(:,3));
             w4 = LoadingsPM(:,4)/sum(LoadingsPM(:,4));
             w5 = LoadingsPM(:,5)/sum(LoadingsPM(:,5));
-            figure(1021);cla();
+            figure(1021);clf();
             for w = {w1, w2, w3, w4, w5}
                 hold on; plot(nanmean(rescaled_traces'.* w{1}, 1));
             end
@@ -441,11 +454,11 @@ classdef arboreal_scan_experiment < handle
             ROIs_list               = obj.ref.indices.ROIs_list;
             
             %% Get distance of each segment from soma
-            fixed_tree              = obj.ref.simplified_tree{1};
-            values                  = Pvec_tree(fixed_tree); % distance from soma of each ROIs for non-excluded branches    
+            fixed_tree              = obj.ref.simplified_tree_filtered;
+            values                  = Pvec_tree(fixed_tree{1}); % distance from soma of each ROIs for non-excluded branches    
             
             %% Map dimension weights on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, '', '', 'Distance from soma'); 
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, ROIs_list, '', 'Distance from soma', fixed_tree); 
         end 
         
 
@@ -454,17 +467,16 @@ classdef arboreal_scan_experiment < handle
                 n_dim = size(obj.dimensionality.LoadingsPM, 2);
             end
             
-            [~, loc]    = max(obj.dimensionality.LoadingsPM(:,1:n_dim)');
-            values      = NaN(size(loc));
-            Valid_ROIs  = obj.dimensionality.all_ROIs(obj.dimensionality.valid_trace_idx);
+            [~, loc]    = nanmax(obj.dimensionality.LoadingsPM(:,1:n_dim),[],2);            
+            Valid_ROIs  = find(obj.dimensionality.valid_trace_idx);
+            values      = NaN(size(Valid_ROIs));
             for ROI = 1:numel(Valid_ROIs)
-                roi     = obj.dimensionality.all_ROIs(Valid_ROIs(ROI));
-                values(roi)  = loc(ROI);
+                values(ROI)     = loc(ROI);
             end       
             values = values(~isnan(values));
             
             %% Map dimension weights on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, '', 'Location of strongest component');       
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component');       
         end
         
         function save_figures(obj)
@@ -506,14 +518,13 @@ classdef arboreal_scan_experiment < handle
                 condition = {'distance',100};                
             end  
             if nargin < 3 || isempty(filter_win)
-                filter_win = [100,0];                
+                filter_win = [0,0];                
             end            
             if nargin >= 4 && ~isempty(rendering)
                 obj.rendering = rendering;
             end
-            demo = 0
-            save_data = false            
-            obj.filter_win = filter_win;
+            save_data       = false;            
+            obj.filter_win  = filter_win;
 
             %% Load and concatenate traces for the selected experiment
             %obj.load_extracted_data();   % this also sets the current expe #
@@ -536,7 +547,7 @@ classdef arboreal_scan_experiment < handle
 
             %% Correct for decay to avoid overstimating peak amplitude
             if isempty(obj.event_fitting)
-                obj.event_fitting = detect_and_fit_events(obj.binned_data.median_traces, obj.timescale.global_timescale, demo, obj.binned_data.bin_legend);arrangefigures([1,2]);
+                obj.event_fitting = detect_and_fit_events(obj.binned_data.median_traces, obj.timescale.global_timescale, obj.demo, obj.binned_data.bin_legend);arrangefigures([1,2]);
             end
 
             %% Detect and display peak histogram distribution (mean and individual groups)
@@ -574,17 +585,14 @@ classdef arboreal_scan_experiment < handle
 
             %% Optionally, if external variables need an update
             %obj.update_external_metrics(60)
+            
+            figure(999);plot(obj.binned_data.median_traces - nanmean(obj.binned_data.median_traces,2));%set(0,'DefaultAxesColorOrder',magma(size(obj.binned_data.median_traces,2)))
 
             %% Save figure
             if save_data
                 obj.save_figures()
             end
-
-            %catch
-            %   failed{expe} = data_folders_per_exp{original_expe_idx}; 
-            %end
             %close all
-            figure(999);plot(obj.binned_data.median_traces - nanmean(obj.binned_data.median_traces,2));set(0,'DefaultAxesColorOrder',magma(size(obj.binned_data.median_traces,2)))
         end
         
         function save(obj, auto)
@@ -599,20 +607,5 @@ classdef arboreal_scan_experiment < handle
                 save([obj.source_folder, name],'obj','-v7.3')
             end
         end
-    end    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    end
 end
