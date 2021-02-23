@@ -235,7 +235,7 @@ classdef arboral_scan_dataset < handle
 %             
 %         end
 
-        function mean_cc(obj)            
+        function mean_cc(obj)  % if that's the overall mean, we can keep it          
             CCs = {};
             for expe = 1:numel(obj.experiments)
                 CCs{expe} = obj.experiments(expe).crosscorr;                
@@ -245,7 +245,7 @@ classdef arboral_scan_dataset < handle
             
             CCs = cat(3, CCs{:});
             CCs = nanmean(CCs, 3);
-            figure(1008);cla();imagesc(CCs); hold on;set(gcf,'Color','w');
+            figure(10080);cla();imagesc(CCs); hold on;set(gcf,'Color','w');
             caxis([0,1]); hold on;
             xticks([1:size(CCs, 1)])
             yticks([1:size(CCs, 1)])
@@ -286,7 +286,7 @@ classdef arboral_scan_dataset < handle
             L23 = 100 * double(~strcmp(proj_axis, 'xy'));
             L5a = 444 * double(~strcmp(proj_axis, 'xy'));
             L5b = 644 * double(~strcmp(proj_axis, 'xy'));       
-            figure(); axis equal;set(gcf,'Color','w');hold on;
+            figure(); axis equal;set(gcf,'Color','w');hold on; % FF
             x_offset = 0; y_offset = 0; max_fig_w = 5000; y_max_in_row = 0;
             for expe = 1:numel(all_values)
                 if ~isempty(all_values{expe})

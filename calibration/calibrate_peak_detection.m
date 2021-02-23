@@ -63,7 +63,7 @@ for expe = 1:numel(data_folders_per_exp)
     all_concat          = all_concat - bsl;
     
     %% Plot the mean trace for each bin  
-    figure(1001);cla();plot(global_timescale, all_concat); hold on;legend(bin_legend); hold on;title('mean scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
+    figure(10010);cla();plot(global_timescale, all_concat); hold on;legend(bin_legend); hold on;title('mean scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
     
     %% Get summary covariance plots
     similarity_plot
