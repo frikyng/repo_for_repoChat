@@ -32,10 +32,10 @@ function [all_peak_values, correction] = correct_traces(all_data, events, fits, 
     figure(1005);cla();plot(timescale, nanmedian(all_data, 2),'k'); hold on; title('median fit');set(gcf,'Color','w');xlabel('frames')
     all_mean_event_decays = cell(1,size(fits, 1));
     for peak = 1:size(fits, 1)
-        events              = fits(peak, :);
+        events              = fits(peak, valid_gp);
         R                   = min(cellfun(@(x) nanmin(x(:,1)), events)):max(cellfun(@(x) nanmax(x(:,1)), events));
         mean_event_decay    = NaN(size(fits, 2), numel(R));
-        for gp = 1:size(fits, 2)
+        for gp = valid_gp
             mean_event_decay(gp, fits{peak, gp}(:,1) - R(1) + 1) =  fits{peak, gp}(:,2);
         end
         all_mean_event_decays{peak} = [R', nanmean(mean_event_decay)'];
