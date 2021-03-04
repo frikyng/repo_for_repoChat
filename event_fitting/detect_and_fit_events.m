@@ -12,10 +12,7 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     refit                   = true
     gcamp_tau               = 0.2
     fit_data.fast_fit       = true
-    
-    
-    
-        rendering = 1;
+    rendering = 1;
     
 %% qq bring fit constraints up here
 %     
@@ -32,14 +29,33 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
         resampling = 1;
     end
     fit_data.resampling_factor      = resampling;
+    
+    
+    %% Filter signal (won't work if signal is already upsampled)
+    global_median       = nanmedian(all_data, 2);
+    [denoised, missing] = wavelet_denoise(global_median);    
+    bsl                 = global_median(~missing) - denoised(~missing);
+    %thr                 = rms(bsl) * thr_factor;    
+    %figure(25);cla();envelope(bsl,20,'peak');
+    [a, ~] = envelope(bsl,20,'peak');
+    peak_thr = rms(a)*peak_thr;    
+    %thr = (prctile(a-b,99) - prctile(a-b,1))*peak_thr;
+    fprintf('PLEASE REVIEW THRESHOLDING CRITERIA BEFORE FINAL ANALYSIS\n') 
+    denoised(missing)   = NaN; % restore NaNs
 
     if resampling > 1
-        global_timescale    = interpolate_to(global_timescale, numel(global_timescale) * resampling);  
-        all_data            = interpolate_to(all_data, numel(global_timescale), 'cubic')';   
+        global_timescale    = interpolate_to(global_timescale, numel(global_timescale) * resampling); 
+        denoised            = interpolate_to(denoised        , numel(global_timescale));
+        try
+            all_data            = interpolate_to(all_data, numel(global_timescale), 'cubic')'; % failed with 2019-11-06_exp_1  
+        catch
+            all_data            = interpolate_to(all_data, numel(global_timescale))';                
+        end
     end
-    
+
     %% Find peaks using wavelet denoising on median trace
-    [pk_val, peak_loc, peak_times, widths, denoised_data] = detect_events(nanmedian(all_data, 2), global_timescale', peak_thr, resampling);
+    [pk_val, peak_loc, peak_times, widths] = detect_events(denoised', global_timescale', peak_thr);
+
     fit_data.peak_times             = peak_times{1}';
     fit_data.peak_pos               = peak_loc{1}';
 
@@ -121,7 +137,7 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     end
     
     %% Correct the traces before downsampling
-    [all_peak_values, correction]   = correct_traces(all_data, events, fit_data.window, all_peak_values, fit_data.peak_pos, global_timescale);
+    %[all_peak_values, correction]   = correct_traces(all_data, events, fit_data.window, all_peak_values, fit_data.peak_pos, global_timescale);
     fit_data.post_correction_peaks  = all_peak_values;
 
     %% Revert the effect of resampling (so the timepoints match the real trace)

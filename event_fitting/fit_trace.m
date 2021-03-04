@@ -90,24 +90,27 @@ function [x_fit, y_fit, p, pre_peak_delay, x_used, y_used] = fit_trace(t_ax, tra
         x = [x; extra_w(:,1)];
         y = [y; extra_w(:,2)];
         w(end+1:end+size(extra_w, 1)) = numel(w);
-        robust = 'Bisquare';
+        %robust = 'Bisquare';
     else
-        robust = 'Off';
+        %robust = 'Off';
     end
     
     %% Adjust contraints for t0 and x0 (decay baseline)
     t0 = x(1);
     x0 = 0; 
     peak = nanmax(y)*4; % need to be more than peak, because we fit the decay part only, so y at x0 is higher than peak
+    if peak < 0
+        return
+    end
     robust = 'Off';
     
     %% Now fit from scratch or use params and scale (if there are enough points)
-    if strcmp(fit_type, 'exp2') && (numel(x) < 4 && numel(x) >= 2)
-        fit_type = 'exp1';
-        w1 = fit_params(2)/(fit_params(2)+fit_params(4));
-        fit_params = [fit_params(1), fit_params(2)+fit_params(4), fit_params(3)*w1 +fit_params(5)*(1-w1)];
-    end
     if (strcmp(fit_type, 'exp1') || numel(x) < 4) && numel(x) >= 2
+        if strcmp(fit_type, 'exp2') && ~isempty(fit_params)
+            w1 = fit_params(2)/(fit_params(2)+fit_params(4));
+            fit_params = [fit_params(1), fit_params(2)+fit_params(4), fit_params(3)*w1 +fit_params(5)*(1-w1)];
+        end
+        
         if isempty(fit_params) % free robust fit
             f = fit((x-t0), y,  'exp1'                      ,...
                                 'Lower'     ,[0,-Inf]       ,...
@@ -129,14 +132,14 @@ function [x_fit, y_fit, p, pre_peak_delay, x_used, y_used] = fit_trace(t_ax, tra
                                 'StartPoint',fit_params(2:3)   ,...
                                 'Robust'    ,robust);
         end
-
-        p = [x0, f.a, f.b*-1];
-%     elseif strcmp(fit_type, 'exp1') && numel(x) >= 2  && ~any(isnan(fit_params)) % minimal fit
-%         f = fit((x-t0),y,'exp1','Lower',[0,-Inf],'Upper',[max(0, peak),-1e-3],'Weights',w,'StartPoint',fit_params(2:3));% ,'Robust','Bisquare'
-%         p = [x0, f.a, f.b*-1, 0, 0];
+        
+        if strcmp(fit_type, 'exp1')
+            p = [x0, f.a, f.b*-1];
+        elseif strcmp(fit_type, 'exp2')
+            p = [x0, f.a, f.b*-1, 0, 0];
+        end
     elseif strcmp(fit_type, 'exp2') && numel(x) >= 2
         MIN_TAU = 0.01;
-        %robust    = 'Bisquare'
         if isempty(fit_params) % free robust fit
             f = fit((x-t0), y , 'exp2'                              ,...
                                 'Lower'     ,[0,-Inf,0,-Inf]        ,...
@@ -156,14 +159,16 @@ function [x_fit, y_fit, p, pre_peak_delay, x_used, y_used] = fit_trace(t_ax, tra
                 fit_params_high     = [peak ,-fit_params(3),-fit_params(5)];
                 fit_params(4)       = [];                
             end
-            
+            try
             f = fit((x-t0),y   , func                             ,...
                                 'Lower'     ,single(fit_params_low)         ,...
                                 'Upper'     ,single(fit_params_high)        ,...
                                 'Weights'   ,w                      ,...
                                 'StartPoint',fit_params(2:end)      ,...
                                 'Robust'    ,robust                 );
-                            
+            catch
+                1
+            end
             if forced_tau 
                 temp = {};
                 temp.a = f.a*R;
@@ -180,9 +185,6 @@ function [x_fit, y_fit, p, pre_peak_delay, x_used, y_used] = fit_trace(t_ax, tra
         else
             p = [x0, f.a, f.b*-1, f.c, f.d*-1];
         end 
-%     elseif strcmp(fit_type, 'exp2') && numel(x) >= 2  && ~any(isnan(fit_params)) % minimal fit
-%         f = fit((x-t0),y,'exp1','Lower',[0,-Inf],'Upper',[max(0, peak),-1e-3],'Weights',w,'StartPoint',fit_params(2:3));% ,'Robust','Bisquare'
-%         p = [x0, f.a, f.b*-1, 0, 0];
     else
         return
     end
@@ -195,11 +197,9 @@ function [x_fit, y_fit, p, pre_peak_delay, x_used, y_used] = fit_trace(t_ax, tra
         y_fit = p(1)+p(2)*exp(-((x_fit - t0)*p(3)));
     end
     
-    
     if rendering
         plot(x_fit, y_fit, 'k--');
     end
-
     % hold on;plot(x_fit, y_fit)
     % hold on;plot(p(2)*exp(-((x_fit - t0)*p(3))), 'k'); hold on; plot(p(4)*exp(-((x_fit - t0)*p(5))),'r'); % to plot tau 1 and tau 2
 end

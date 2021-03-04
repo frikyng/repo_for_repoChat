@@ -49,71 +49,59 @@ function [p, x_fit, y_fit, bkp, detected_peak] = fit_decay(trace, pre_peak_delay
     %% Now fit trace
     [x_fit, y_fit, p, detected_peak] = fit_trace(t_ax, trace, pre_peak_delay, jitter_win, fit_params, nanmax(peak), '', rendering, peak_av_width, fit_type, forced_tau && ~forced_tau == -1);
     
-    if isempty(x_fit)
+    %% Now return results or re-fit
+    colortype = 'b-';
+    if isempty(x_fit) % If no data, return empty fit axes and NaN array for parameters
         x_fit = [];
         y_fit = [];
         p     = default_p(fit_type);
         bkp   = p;
-    elseif ~forced_tau || forced_tau ==-1
-        colortype = 'b-';
-
+    elseif forced_tau == 0 || forced_tau ==-1 % If free fit or fast fit
         %% Check quality.
-        [failed, error_estimate, anchor_point] = quality_check(trace, x_fit, y_fit, other_peaks);
+        [failed, error_estimate, anchor_point] = quality_check(trace, x_fit, y_fit, other_peaks); 
         
+        %% Failed case 4 is ignored
         if any(ismember(failed, 4))
             failed = 0;
             colortype = 'm';
         end
-        
-        
-        %% For the quick correction mode
+
+        %% For the quick fit mode
         if forced_tau == -1
+            %% If failed fit, refit with forced tau
             if any(failed)
-                [x_fit, y_fit, p, detected_peak] = fit_trace(t_ax, trace, pre_peak_delay, jitter_win, fit_params, nanmax(peak), '', rendering, peak_av_width, fit_type, true);
                 colortype = 'k-';
-                bkp   = p;
-                if (x_fit(1) - pre_peak_delay) > jitter_win(2)
-                    corr = x_fit(1) - (detected_peak) - 4; %4pt is arbitrary - we need to find the delay between peak and decay
-                    x_fit = x_fit - corr;
-                    colortype = 'r-';
-                end
-                if rendering
-                    plot(x_fit,y_fit, colortype, 'LineWidth',2);
-                end
-                return
-            else
-                bkp   = p;
-                if (x_fit(1) - pre_peak_delay) > jitter_win(2)
-                    corr = x_fit(1) - (detected_peak) - 4; %4pt is arbitrary - we need to find the delay between peak and decay
-                    x_fit = x_fit - corr;
-                    colortype = 'r-';
-                end
-                if rendering
-                    plot(x_fit,y_fit, colortype, 'LineWidth',2);
-                end 
-                return
+                [x_fit, y_fit, p, detected_peak] = fit_trace(t_ax, trace, pre_peak_delay, jitter_win, fit_params, nanmax(peak), '', rendering, peak_av_width, fit_type, true);
             end
-        else
             
-        
-            bkp         = [];
-            %% Show issue if any
-            if rendering && any(failed)
-                %% Show bad fit
-                recover = plot(x_fit, y_fit, 'k--'); hold on; 
-                if numel(error_estimate) > 1
-                    hold on;scatter(x_fit, error_estimate, 'kx');
-                end
+            %% If vent decay ended too far from the peak, shift it
+            if (x_fit(1) - pre_peak_delay) > jitter_win(2)
+                corr = x_fit(1) - (detected_peak) - 4; % 4pt is arbitrary - we need to find the delay between peak and decay
+                x_fit = x_fit - corr;
+                colortype = 'r-';
             end
+            
+            %% Plot result if required
+            bkp   = p;
+            plot_fit(rendering, x_fit, y_fit, colortype);
+            return
+        else
+            bkp         = [];            
+%             %% Show issue if any
+%             if rendering && any(failed)
+%                 %% Show bad fit
+%                 recover = plot(x_fit, y_fit, 'k--'); hold on; 
+%                 if numel(error_estimate) > 1
+%                     hold on;scatter(x_fit, error_estimate, 'kx');
+%                 end
+%             end
 
             %% If slope is too shallow, add weights
-            if any(ismember(failed,3))             
+            if any(ismember(failed,3))       
+                colortype = 'g-';
                 [x_fit, y_fit, p, detected_peak] = fit_trace(t_ax, trace, pre_peak_delay, jitter_win, fit_params, nanmax(peak), x_fit(~isnan(error_estimate)), rendering, peak_av_width, fit_type, forced_tau);
-                if rendering
-                    recover.XData = x_fit;
-                    recover.YData = y_fit;
-                    colortype = 'g-';
-                end
+                
+                plot_fit(rendering,x_fit,y_fit, colortype);
 
                 if isempty(x_fit)
                     p       = default_p(fit_type);
@@ -123,19 +111,12 @@ function [p, x_fit, y_fit, bkp, detected_peak] = fit_decay(trace, pre_peak_delay
 
                 %% Now, rechecking
                 [failed, error_estimate, anchor_point] = quality_check(trace, x_fit, y_fit, other_peaks);
-                if rendering
-                    plot(x_fit,y_fit,colortype, 'LineWidth',2);
-                end
             end
 
             %% If we did cut through the peak, we'll fit the first clean decay that follows, and then shift the trace (if there are enough points for a fit).
             if any(ismember(failed,2)) && ((pre_peak_delay + anchor_point) < (t_ax(end) - 10))
                 colortype = 'r-';
-
-                x_off = (x_fit(1)-detected_peak);
-                if ~x_off
-                    x_off = 1;
-                end
+                %x_off = namnmax((x_fit(1)-detected_peak), 1); %x_off should be at least 1
 
                 range   = 5:-1:-anchor_point; % qq why 5
                 err     = NaN(size(range));
@@ -161,31 +142,31 @@ function [p, x_fit, y_fit, bkp, detected_peak] = fit_decay(trace, pre_peak_delay
                 plot(x_fit,y_fit,'r--', 'LineWidth',3);
             end
 
-            [failed, error_estimate, anchor_point] = quality_check(trace, x_fit, y_fit, other_peaks);
-
-            %% Check if we ended fitting the correct stuff
-            if ~isempty(bkp)
-                p = bkp;
-            end
-
-            if rendering
-                plot(x_fit,y_fit,colortype, 'LineWidth',2);
-            end
+            %% Final quality check?
+            %[failed, error_estimate, anchor_point] = quality_check(trace, x_fit, y_fit, other_peaks);
+            %
+            %             %% Check if we ended fitting the correct stuff
+            %             if ~isempty(bkp)
+            %                 p = bkp;
+            %             end
         end
     else
-        colortype = 'b-';
         if (x_fit(1) - pre_peak_delay) > jitter_win(2)
             corr = x_fit(1) - (detected_peak) - 4; %4pt is arbitrary - we need to find the delay between peak and decay
             x_fit = x_fit - corr;
             colortype = 'r-';
         end
         bkp         = [];
-        if rendering
-            plot(x_fit,y_fit,colortype, 'LineWidth',2);
-        end
     end
+    
+    plot_fit(rendering,x_fit,y_fit, colortype)
 end
 
+function plot_fit(rendering,x_fit,y_fit, colortype)
+    if rendering
+        plot(x_fit,y_fit, colortype, 'LineWidth',2);
+    end 
+end
 
 function p = default_p(fit_type)
     if strcmp(fit_type, 'exp2')
