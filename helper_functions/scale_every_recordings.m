@@ -1,4 +1,4 @@
-function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, demo)
+function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_every_recordings(all_traces_per_rec, demo)
     if nargin < 2 || isempty(demo)
         demo = 0;
     end
@@ -7,15 +7,14 @@ function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, d
     options                 = optimset;
     
     %% For each recording, get the best scaling factor per bin matching the cell-wide median
-    ideal_scal_f            = {};
-    ideal_offset            = {};
+    best_ind_scal            = {};
+    best_ind_offset            = {};
        
     %% Autoestimate peak detection level
     all_traces_concat       = vertcat(all_traces_per_rec{:});
     representative_trace    = nanmedian(all_traces_concat, 2)';
     
     %% Filter signal
-    missing                 = isnan(representative_trace);
     representative_trace    = fillmissing(representative_trace,'linear');
     denoised                = wdenoise(double(representative_trace));
     
@@ -46,18 +45,18 @@ function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, d
         representative_trace    = func1(all_traces_in_rec, 2);
         figure(123);cla();plot(representative_trace)
 
-        ideal_scal_f{rec}    = [];
-        ideal_offset{rec}    = [];
+        best_ind_scal{rec}    = [];
+        best_ind_offset{rec}    = [];
         for trace_idx =  1:size(all_traces_in_rec, 2) 
             if all(isnan(all_traces_in_rec(:,trace_idx)))
-                ideal_offset{rec}(trace_idx) = NaN;
-                ideal_scal_f{rec}(trace_idx) = NaN;
+                best_ind_offset{rec}(trace_idx) = NaN;
+                best_ind_scal{rec}(trace_idx) = NaN;
             else
                 subset_for_demo = trace_idx; % can change that to a fixed index to display only one trace
                 
                 %% Adjust offset so both traces baselines are at 0            
-                ideal_offset{rec}(trace_idx)   = fminbnd(@(f) find_traces_offset_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo == 2 && trace_idx == subset_for_demo), 0.01, 99.99, options); % find best percentile to normalize traces
-                [~ ,offset_median, current_trace] = find_traces_offset_func(ideal_offset{rec}(trace_idx), representative_trace, all_traces_in_rec(:,trace_idx)); % apply value
+                best_ind_offset{rec}(trace_idx)   = fminbnd(@(f) find_traces_offset_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo == 2 && trace_idx == subset_for_demo), 0.01, 99.99, options); % find best percentile to normalize traces
+                [~ ,offset_median, current_trace] = find_traces_offset_func(best_ind_offset{rec}(trace_idx), representative_trace, all_traces_in_rec(:,trace_idx)); % apply value
 
                 %% Get the best scaling factor between the 2 curves
                 if rec > 1
@@ -66,40 +65,14 @@ function [best_isf, best_ioffset] = scale_every_recordings(all_traces_per_rec, d
                     peak_times_in_record = locs;
                 end
                 peak_times_in_record = peak_times_in_record(peak_times_in_record > 0 & peak_times_in_record < (tp(rec)+1));
-                ideal_scal_f{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
+                best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
             end
         end
     end
     clear data_f_idx % just to remove parfor warning
 
     %% All recordings, compute the best scaling factor per bin matching the overall median
-    best_isf        = func1(vertcat(ideal_scal_f{:}), 1);
+    global_scal        = func1(vertcat(best_ind_scal{:}), 1);
     %best_ioffset    = func1(vertcat(ideal_offset{:}), [], 1);
-    best_ioffset    = func1(vertcat(ideal_offset{:}), 1);
-
-    n_gp = numel(ideal_scal_f{1});
-    n_rec = numel(ideal_scal_f);
-    figure(1012);clf();hold on;
-    col = mat2cell(viridis(n_gp), ones(1,n_gp), 3);
-    p = plot(1:n_rec, vertcat(ideal_scal_f{:}),'o-');set(gcf,'Color','w');
-    arrayfun(@(x, y) set(x, 'Color', y{1}), p, col);
-    set(gca, 'YScale', 'log')
-    %legend(bin_legend);
-    xticks(1:n_rec)
-    xlim([0.8,n_rec+0.2])
-    ylabel('Scaling Factor');
-    xlabel('Recording #');
-    title('Scaling factor per ROI, per trial');
-
-    figure(1013);clf();hold on;set(gcf,'Color','w');
-    xlim([1,n_gp]);hold on;
-    title('global scaling factor and offset per ROI');
-    xlabel('ROI');
-    plot(best_isf,'ko-'); hold on;ylabel('Consensus Scaling Factor');    
-    yyaxis right;plot(best_ioffset,'ro-');ylabel('Consensus Baseline Percentile'); 
-    ax = gca;
-    ax.YAxis(1).Color = 'r';
-    ax.YAxis(2).Color = 'k';
-    
-    %all_traces_concat_scaled = vertcat(all_traces_per_rec{:});
+    global_offset    = func1(vertcat(best_ind_offset{:}), 1);
 end

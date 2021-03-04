@@ -66,7 +66,7 @@ for expe = 1:numel(data_folders_per_exp)
     figure(10010);cla();plot(global_timescale, all_concat); hold on;legend(bin_legend); hold on;title('mean scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
     
     %% Get summary covariance plots
-    similarity_plot
+    compute_similarity
     
     detect_events(nanmedian(all_concat, 2), global_timescale);
 
