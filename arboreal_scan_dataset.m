@@ -1,31 +1,13 @@
-classdef arboral_scan_dataset < handle
+classdef arboreal_scan_dataset < handle
     %% This class handles meta analysis or arboreal scans
     % see meta_analyze_arboreal_scans for examples
     properties
         source_folder
         experiments
-        
-        export_folder
-        expe_list      % List of experiments analyzed
-        rec_list
-        general_info   % 
-        extracted_traces
-        binned_data
-        timescale
-        event_fitting
-        crosscorr      % Data relate to correlation study between all_traces
-        dimensionality % Data related to dimensionality analysis of all_traces
-        external_variables
-        demo            = 0; %
-        filter_win      = 0;
-        filter_type     = 'gaussian';
-        current_expe    = '';
-        need_update     = [];
-        rendering       = false;
     end
     
     methods
-        function obj = arboral_scan_dataset(source_folder)
+        function obj = arboreal_scan_dataset(source_folder)
             obj.source_folder = source_folder;
             
             %% Find arboreal_scan_experiments
@@ -229,31 +211,70 @@ classdef arboral_scan_dataset < handle
 %         end
 % 
 %         
-%         function expe = identify(obj, filter)
-%             expe = find(cellfun(@(x) contains(x, filter), obj.expe_list));
-%             fprintf(['Required experiment is # ', num2str(expe),'\n'])
-%             
-%         end
+        function expe = identify(obj, filter)
+            expe = find(arrayfun(@(x) contains(x.ref.data_folder, filter), obj.experiments));
+            fprintf(['Required experiment is # ', num2str(expe),'\n'])            
+        end
 
-        function mean_cc(obj)  % if that's the overall mean, we can keep it          
-            CCs = {};
-            for expe = 1:numel(obj.experiments)
-                CCs{expe} = obj.experiments(expe).crosscorr;                
+        function CCs = mean_cc(obj, depth_range)  % if that's the overall mean, we can keep it   
+            if nargin < 2 || isempty(depth_range)
+                min_depth   = -inf;
+                max_depth   = inf;
+            else
+                min_depth   = depth_range(1);
+                max_depth   = depth_range(2);
             end
             
-            [~, biggest] = max(cellfun(@numel, CCs));
+            %% Get CCs
+            CCs_ori = {};
+            for expe = 1:numel(obj.experiments)
+                obj.experiments(expe).cc_mode = 'raw_no_peaks';
+                CCs_ori{expe} = obj.experiments(expe).crosscorr;                
+            end            
             
-            CCs = cat(3, CCs{:});
-            CCs = nanmean(CCs, 3);
-            figure(10080);cla();imagesc(CCs); hold on;set(gcf,'Color','w');
-            caxis([0,1]); hold on;
-            xticks([1:size(CCs, 1)])
-            yticks([1:size(CCs, 1)])
-            colorbar; hold on;
-            plot([1.5,1.5],[0.5,size(CCs, 1)+0.5],'k-');xticklabels(['whole cell',obj.experiments(biggest).binned_data.bin_legend]);xtickangle(45);
-            plot([0.5,size(obj.crosscorr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['whole cell',obj.experiments(biggest).binned_data.bin_legend]);
-            title('peak amplitude correlation per subgroup');
-            arrangefigures([1,2]); 
+            %% Filter CCs
+            subset          = find(arrayfun(@(x) x.ref.soma_location(3) > min_depth, obj.experiments) & arrayfun(@(x) x.ref.soma_location(3) < max_depth, obj.experiments));
+            CCs_ori         = CCs_ori(subset);
+            
+            %% Make sure there is no empty matrix
+            CCs_ori = CCs_ori(~cellfun(@isempty, CCs_ori));
+
+            
+            
+            
+            
+            %% Full cell only
+           % CCs_ori = CCs_ori(~cellfun(@(x) any(isnan(x(:))), CCs_ori));
+            
+%             %% Big cell only
+            % CCs_ori = CCs_ori(cellfun(@(x) any(isnan(x(:))), CCs_ori));
+            
+            %% Create output matrix and insert values
+            if ~isempty(CCs_ori)
+                [~, biggest]    = max(cellfun(@numel, CCs_ori)); 
+                biggest_idx     = subset(biggest); % use real index
+                CCs             = repmat({NaN(size(CCs_ori{biggest}))},1,numel(CCs_ori));
+                for expe = 1:numel(CCs)
+                    new = CCs_ori{expe};
+                    CCs{expe}(1:size(new, 1),1:size(new, 2)) = new;
+                end
+                CCs = nanmean(cat(3, CCs{:}), 3);
+
+                %% Plot result
+                figure(10080);clf();imagesc(CCs); hold on;
+                set(gcf,'Color','w');axis image;title('peak amplitude correlation per subgroup');caxis([0,1]); hold on;
+                colorbar; hold on;
+                plot([1.5,1.5],[0.5,size(CCs, 1)+0.5],'k-');plot([0.5,size(CCs, 1)+0.5],[1.5,1.5],'k-');
+                xticks(1:size(CCs, 1));xticklabels(['whole cell',obj.experiments(biggest_idx).binned_data.bin_legend]);xtickangle(45); 
+                yticks(1:size(CCs, 1));yticklabels(['whole cell',obj.experiments(biggest_idx).binned_data.bin_legend]);  
+
+                test = CCs; test(test == 1) = NaN;
+                figure(10081);cla();bar(nanmean(test))
+                nanmean(test(:,1))
+                arrangefigures([1,2]); 
+            else
+                CCs = [];
+            end
         end
 
         function plot_gallery(obj, mode, range, proj_axis)
@@ -269,6 +290,7 @@ classdef arboral_scan_dataset < handle
             
             %% Now generate the figures
             [all_trees,  all_soma, all_values]  = deal({});
+            %range(2) = []
             for expe = range
                 if strcmp(mode, 'corr')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_corr_tree();
@@ -319,10 +341,10 @@ classdef arboral_scan_dataset < handle
                     Y = shifted_z_coor+y_offset;
                     Z = all_values{expe}{req_z};
                     S = all_values{expe}{4};
-                    HP = surface('XData'    ,[X,X],...
-                                 'YData'    ,[Y,Y],...
-                                 'ZData'    ,[Z,Z],...
-                                 'CData'    ,[S,S],...
+                    HP = surface('XData'    ,[X;X],...
+                                 'YData'    ,[Y;Y],...
+                                 'ZData'    ,[Z;Z],...
+                                 'CData'    ,[S;S],...
                                  'facecol'  ,'no',...
                                  'edgecol'  ,'interp',...
                                  'linew'    ,1); hold on;
@@ -334,6 +356,55 @@ classdef arboral_scan_dataset < handle
             ylim([0, y_offset + y_max_in_row]);
             xlim([0,max_fig_w]); hold on;set(gca, 'Ydir', 'reverse');colorbar                                                       
         end   
+        
+        function plot_group_correlation_data(obj, filter)
+                    % Plot Group pearson  
+
+        %     if ~isempty(filter)
+        %         filter = cellfun(@(x) size(x, 2), [results.cumsum]) < 9;
+        %         results = structfun(@(x) x(filter), results, 'UniformOutput', false);
+        %     end       
+        %             
+      
+        
+        
+            [biggest_gp,idx]      = max(cellfun(@(x) size(x,2) ,{obj.experiments.crosscorr}));
+            CCs             = {obj.experiments.crosscorr};
+            valid           = ~cellfun(@isempty, {obj.experiments.crosscorr}) & ~cellfun(@(x) any(isnan(x(:))), CCs);
+            
+            CCs             = CCs(valid);
+            %obj.cumsum      = obj.cumsum(~cellfun(@isempty, obj.cumsum));
+            peaks           = {obj.experiments.event_fitting};
+            peaks           = peaks(valid);
+            peaks           = cellfun(@(x) x.post_correction_peaks, peaks, 'UniformOutput', false);
+            
+             all_cc = cellfun(@(x) [x(1:size(x,1),1:size(x,2)), NaN(size(x,1),biggest_gp-size(x,2))], CCs, 'UniformOutput', false);
+             all_cc = cellfun(@(x) [x(1:size(x,1),1:size(x,2)); NaN(biggest_gp-size(x,1),size(x,2))], all_cc, 'UniformOutput', false);
+             all_cc = cat(3,all_cc{:});  
+             
+%             figure();imagesc(nanmean(all_cc,3));axis equal;colorbar
+%             figure();imagesc(sum(~isnan(all_cc),3));axis equal;colorbar
+
+
+            first_gp_cc = cellfun(@(x) x(2,:), CCs, 'UniformOutput', false);
+            first_gp_cc = cellfun(@(x) [x(1,1:size(x,2)), NaN(1,biggest_gp-size(x,2))], first_gp_cc, 'UniformOutput', false);
+            first_gp_cc = vertcat(first_gp_cc{:});
+            figure();bar(nanmean(first_gp_cc));hold on; errorbar(nanmean(first_gp_cc), nanstd(first_gp_cc)./sqrt(sum(~isnan(first_gp_cc))), 'k') ;
+            xticklabels(['whole cell',obj.experiments(idx).binned_data.bin_legend]);xtickangle(45);
+            
+            
+            % Std per event (need behaviour) 
+            %test = cellfun(@(x) nanstd(x'), results.peaks, 'UniformOutput', false); % std per event
+
+            % Variability per group (from mean)
+            test = cellfun(@(x) nanvar(x)./nanmean(x), peaks, 'UniformOutput', false); % variance from mean, per subgroup
+            test = cellfun(@(x) [x(1,1:size(x,2)), NaN(1,biggest_gp-size(x,2))], test, 'UniformOutput', false);
+            test = vertcat(test{:});
+            figure();bar(nanmean(test));hold on; errorbar(nanmean(test), nanstd(test)./sqrt(sum(~isnan(test))), 'k') 
+            xticklabels(['whole cell',obj.experiments(idx).binned_data.bin_legend]);xtickangle(45);
+        end
+
+        
 
 %         function extracted_traces = get.extracted_traces(obj)
 %             extracted_traces = obj.extracted_traces;
