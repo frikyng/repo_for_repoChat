@@ -1,4 +1,4 @@
-function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_every_recordings(all_traces_per_rec, demo)
+function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_every_recordings(all_traces_per_rec, demo, locs)
     if nargin < 2 || isempty(demo)
         demo = 0;
     end
@@ -7,29 +7,30 @@ function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_ev
     options                 = optimset;
     
     %% For each recording, get the best scaling factor per bin matching the cell-wide median
-    best_ind_scal            = {};
-    best_ind_offset            = {};
-       
-    %% Autoestimate peak detection level
+    best_ind_scal           = {};
+    best_ind_offset         = {};
     all_traces_concat       = vertcat(all_traces_per_rec{:});
-    representative_trace    = nanmedian(all_traces_concat, 2)';
-    
-    %% Filter signal
-    representative_trace    = fillmissing(representative_trace,'linear');
-    denoised                = wdenoise(double(representative_trace));
-    
-    noise                   = representative_trace - denoised;
-    
-    %% For threshold debugging
-%         figure(25);cla();plot(representative_trace)
-%         hold on;plot(denoised,'r')
-%         hold on;plot(noise,'b')
-%         hold on; envelope(noise,50,'rms');
-    
-    [top_noise, ~]          = envelope(noise,50,'rms'); % used to be 20, 'peak'
-    initial_thr             = mean(top_noise)*5;    
-    %initial_thr             = (prctile(top_noise-bottom_noise,99) - prctile(top_noise-bottom_noise,1))*5;
-    [pks, locs]             = findpeaks(wavelet_denoise(representative_trace')', 'MinPeakProminence', initial_thr);
+    denoised    = nanmedian(all_traces_concat, 2)';
+    if nargin < 3 && ~isempty(locs)
+        %% Autoestimate peak detection level
+
+        %% Filter signal
+        representative_trace    = fillmissing(representative_trace,'linear');
+        denoised                = wdenoise(double(representative_trace));
+
+        noise                   = representative_trace - denoised;
+
+        %% For threshold debugging
+    %         figure(25);cla();plot(representative_trace)
+    %         hold on;plot(denoised,'r')
+    %         hold on;plot(noise,'b')
+    %         hold on; envelope(noise,50,'rms');
+
+        [top_noise, ~]          = envelope(noise,50,'rms'); % used to be 20, 'peak'
+        initial_thr             = mean(top_noise)*5;    
+        %initial_thr             = (prctile(top_noise-bottom_noise,99) - prctile(top_noise-bottom_noise,1))*5;
+        [pks, locs]             = findpeaks(wavelet_denoise(representative_trace')', 'MinPeakProminence', initial_thr);
+    end
     
     pk_range                = arrayfun(@(x) (x-20):(x+20), locs', 'uni', false);
     pk_range                = unique([horzcat(pk_range{:})]);
@@ -66,6 +67,8 @@ function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_ev
                 end
                 peak_times_in_record = peak_times_in_record(peak_times_in_record > 0 & peak_times_in_record < (tp(rec)+1));
                 best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
+                
+                %figure(123);cla();plot(offset_median);hold on; plot(current_trace/best_ind_scal{rec}(trace_idx))
             end
         end
     end

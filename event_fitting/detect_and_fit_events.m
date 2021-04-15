@@ -1,10 +1,10 @@
-function fit_data = detect_and_fit_events(all_data, global_timescale, rendering, group_labels, peak_thr)
+function fit_data = detect_and_fit_events(all_data, global_timescale, rendering, group_labels, peak_pos)
     if nargin < 3 || isempty(rendering)
         rendering = true;
     end
-    if nargin < 5 || isempty(peak_thr)
-        peak_thr = 1
-    end
+%     if nargin < 5 || isempty(peak_thr)
+%         peak_thr = 1;
+%     end
     
     fit_data                = {};
     fit_data.events         = {};
@@ -14,11 +14,8 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     fit_data.fast_fit       = true
     rendering = 1;
     
-%% qq bring fit constraints up here
-%     
-       %all_data        = all_data(1:300,:);
-     %  global_timescale = global_timescale(1:300);
-    all_data        = all_data - prctile(nanmean(all_data'),1);
+
+    all_data                = all_data - prctile(nanmean(all_data'),1);
     
     %% Fitting adjustements with low SR can be a bit funny when cells are bursting, but upsampling data a bit does the job
     if (nanmedian(diff(global_timescale))/2) < gcamp_tau
@@ -31,21 +28,26 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     fit_data.resampling_factor      = resampling;
     
     
-    %% Filter signal (won't work if signal is already upsampled)
-    global_median       = nanmedian(all_data, 2);
-    [denoised, missing] = wavelet_denoise(global_median);    
-    bsl                 = global_median(~missing) - denoised(~missing);
-    %thr                 = rms(bsl) * thr_factor;    
-    %figure(25);cla();envelope(bsl,20,'peak');
-    [a, ~] = envelope(bsl,20,'peak');
-    peak_thr = rms(a)*peak_thr;    
-    %thr = (prctile(a-b,99) - prctile(a-b,1))*peak_thr;
-    fprintf('PLEASE REVIEW THRESHOLDING CRITERIA BEFORE FINAL ANALYSIS\n') 
-    denoised(missing)   = NaN; % restore NaNs
+%     %% Filter signal (won't work if signal is already upsampled)
+%     if nargin < 5 || isempty(peak_thr)
+%         peak_thr = 1;
+%    
+%         global_median       = nanmedian(all_data, 2);
+%         [denoised, missing] = wavelet_denoise(global_median);    
+%         bsl                 = global_median(~missing) - denoised(~missing);
+%         %thr                 = rms(bsl) * thr_factor;    
+%         %figure(25);cla();envelope(bsl,20,'peak');
+%         [a, ~] = envelope(bsl,20,'peak');
+%         peak_thr = rms(a)*peak_thr;    
+%         %thr = (prctile(a-b,99) - prctile(a-b,1))*peak_thr;
+%         fprintf('PLEASE REVIEW THRESHOLDING CRITERIA BEFORE FINAL ANALYSIS\n') 
+%         denoised(missing)   = NaN; % restore NaNs
+%     end
 
     if resampling > 1
         global_timescale    = interpolate_to(global_timescale, numel(global_timescale) * resampling); 
-        denoised            = interpolate_to(denoised        , numel(global_timescale));
+        peak_pos            = round(peak_pos * resampling);
+%         denoised            = interpolate_to(denoised        , numel(global_timescale));
         try
             all_data            = interpolate_to(all_data, numel(global_timescale), 'cubic')'; % failed with 2019-11-06_exp_1  
         catch
@@ -54,20 +56,26 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     end
 
     %% Find peaks using wavelet denoising on median trace
-    [pk_val, peak_loc, peak_times, widths] = detect_events(denoised', global_timescale', peak_thr);
+%     [pk_val, peak_loc, peak_times, widths] = detect_events(denoised', global_timescale', peak_thr);
+%     fit_data.peak_times             = peak_times{1}';
+%     fit_data.peak_pos               = peak_loc{1}';
+    fit_data.peak_times = global_timescale(peak_pos);
+    fit_data.peak_pos   = peak_pos;
+    pk_val              = nanmedian(all_data(peak_pos, :), 2)';
+    peak_av_width       = ceil(1/nanmedian(diff(global_timescale))); % 1s
+%peak_times
 
-    fit_data.peak_times             = peak_times{1}';
-    fit_data.peak_pos               = peak_loc{1}';
+    %[pk_val, peak_loc, peak_times, widths] = detect_events(denoised', global_timescale', peak_thr);
 
     %% Use peak width to help with fitting
-    peak_av_width   = nanmedian([widths{:}]); % that's the average peak width at half height, in points (median is in case there are a few trials with avery different sr
+    %peak_av_width   = nanmedian([widths{:}]); % that's the average peak width at half height, in points (median is in case there are a few trials with avery different sr
     
     % Based on it, we define a reasonable fitting window
     pre_peak_delay  = round(peak_av_width * 3);
     post_peak_delay = round(peak_av_width * 15);
 
     %% We'll do the fitting on denoised data
-    [all_data, missing] = wavelet_denoise(all_data);
+    [all_data, ~] = wavelet_denoise(all_data);
 
     %% Extract all events
     if isempty(fit_data.peak_pos)
@@ -106,7 +114,7 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     
     [all_peak_values, fit_data] = fit_all_events(events, all_data, fit_data.peak_pos, pre_peak_delay, fit_data, rendering, guesses, peak_av_width, 'exp2', forced_tau, jitter_win);
 
-    %% Make some figures about fit propeties
+    %% Make some figures about fit properties
     fits_free = 1/permute(cat(3, fit_data.events{:}),[1,3,2]); % gp, event, parameter
     figure(1014);clf();plot(fits_free(:,:,3)) ; hold on; plot(nanmedian(fits_free(:,:,3),2), 'k', 'LineWidth',2); title('median tau 1 per group'); xlabel('Groups');xticklabels(group_labels);xtickangle(45);set(gcf,'Color','w');
     figure(1015);clf();plot(fits_free(:,:,3)'); hold on; plot(nanmedian(fits_free(:,:,3),1), 'k', 'LineWidth',2); title('median tau 1 per event'); xlabel('Events');set(gcf,'Color','w');
