@@ -64,14 +64,14 @@ classdef arboreal_scan_plotting < handle
                 all_weights         = {}; weighted_averages   = [];
                 for w = weights_to_show
                     all_weights{w}          = obj.dimensionality.LoadingsPM(:,w)/sum(obj.dimensionality.LoadingsPM(:,w));
-                    weighted_averages(w, :) = nanmean(rescaled_traces'.* all_weights{w}, 1);
+                    weighted_averages(w, obj.dimensionality.mask) = nanmean(rescaled_traces(:,obj.dimensionality.mask)'.* all_weights{w}, 1);
                 end
             end
-            figure(1024);cla();plot(obj.t, obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
+            figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
             figure(1017);cla();imagesc(obj.dimensionality.LoadingsPM(:,weights_to_show)); colorbar;set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('component');ylabel('ROI');
             figure(1021);clf();
             for w = weights_to_show
-                hold on; plot(obj.t, weighted_averages(w, :));
+                hold on; plot(obj.t(obj.dimensionality.mask), weighted_averages(w, obj.dimensionality.mask));
             end
             legend();set(gcf,'Color','w');
             title('Weighted signal average per component')

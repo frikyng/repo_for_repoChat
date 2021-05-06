@@ -6,8 +6,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         arboreal_scans
         ref % first extracted arboreal scan, for conveniency
         t % handl to obj.t
+        batch_params    = {};
 
-        demo = 0;
+        demo            = 0;
         
         filter_win      = 0;
         filter_type     = 'gaussian';
@@ -127,6 +128,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             ref = obj.arboreal_scans{1};
         end
         
+        function batch_params = get.batch_params(obj)
+            batch_params = obj.ref.batch_params;
+        end
+        
         function f_handle = get.default_handle(obj)
             use_mask = false;
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
@@ -135,11 +140,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         %% ##############################
         
         function behaviours = get.behaviours(obj)
-            behaviours = obj.behaviours();
-            behaviours.types            = fieldnames(obj.ref.analysis_params.external_var);  
+            behaviours = obj.behaviours();            
             behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
             behaviours.valid_mc_log     = cellfun(@(x) ~isempty(x.analysis_params.external_var.MC.time), obj.arboreal_scans);
-            behaviours.valid_behaviours = cell2mat(cellfun(@(y) structfun(@(x) ~isempty(x.time), y.analysis_params.external_var), obj.arboreal_scans, 'UniformOutput', false));
+            [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x.analysis_params.external_var)), obj.arboreal_scans));
+            behaviours.types            = fieldnames(obj.arboreal_scans{Max_var_loc}.analysis_params.external_var)';  
+            behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
+            for beh = 1:Max_var
+                behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y.analysis_params.external_var, behaviours.types{beh}), obj.arboreal_scans)';
+            end
         end
         
         function [raw_beh, downsampd_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering)
@@ -150,31 +159,44 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 rendering = false;
             end
             
-            raw_beh                     = cellfun(@(x) x.analysis_params.external_var.(type), obj.arboreal_scans, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
             downsampd_beh               = {};
             concat_downsamp_beh.time    = [];
             concat_downsamp_beh.value   = [];
-            for rec = 1:numel(raw_beh)
-                downsampd_beh{rec}.time     = interpolate_to(raw_beh{rec}.time, obj.timescale.tp(rec));
-                downsampd_beh{rec}.value    = interpolate_to(raw_beh{rec}.speed, obj.timescale.tp(rec));
-                if isempty(downsampd_beh{rec}.time)
-                    downsampd_beh{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
-                    downsampd_beh{rec}.value = NaN(1,obj.timescale.tp(rec));
-                end
-                concat_downsamp_beh.time = [concat_downsamp_beh.time, downsampd_beh{rec}.time + obj.timescale.t_start_nogap(rec)];
-                concat_downsamp_beh.value = [concat_downsamp_beh.value, downsampd_beh{rec}.value];
-            end 
+            temp = {};
+            type                        = obj.behaviours.types(contains(obj.behaviours.types, type));
+            for beh = 1:numel(type)
+                raw_beh                     = cellfun(@(x) x.analysis_params.external_var.(type{beh}), obj.arboreal_scans, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
+                temp.time  = [];
+                temp.value = [];
+                for rec = 1:numel(raw_beh)
+                    downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{rec}.time, obj.timescale.tp(rec));
+                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{rec}.speed, obj.timescale.tp(rec));
+                    if isempty(downsampd_beh{beh}{rec}.time)
+                        downsampd_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
+                        downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
+                    end
+                    temp.time = [temp.time, downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
+                    temp.value = [temp.value, downsampd_beh{beh}{rec}.value];
+                end 
+                
+                concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
+                concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
+
+            end
             
             if rendering
                 figure(1026);cla();
-                for rec = 1:numel(raw_beh)
-                    if ~isempty(downsampd_beh{rec}.time)
-                        plot(downsampd_beh{rec}.time + obj.timescale.t_start_nogap(rec), downsampd_beh{rec}.value);hold on;
+                for beh = 1:numel(type)
+                    subplot(numel(type),1,beh)
+                    for rec = 1:numel(raw_beh)
+                        if ~isempty(downsampd_beh{beh}{rec}.time)
+                            plot(downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec), downsampd_beh{beh}{rec}.value);hold on;
+                        end
                     end
                 end
             end   
             
-            function out = cellerror_empty(S,varargin)
+            function out = cellerror_empty(~,varargin)
                 out = {};
                 out.time = [];
                 out.speed = [];
@@ -605,20 +627,23 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         end
         
         %% ###################
-        function get_dimensionality(obj, cross_validate, n_factors)
+        function get_dimensionality(obj, cross_validate, n_factors, mask)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
-            end            
+            end
+            if ~isfield(obj.dimensionality, 'n_factors')
+                obj.dimensionality.n_factors = 5 % temp fix until we regenerate all recordings
+            end
+            
             if nargin >= 3 && ~isempty(n_factors) && (isempty(obj.dimensionality) || n_factors ~= obj.dimensionality.n_factors) % if you change the value
                 obj.dimensionality           = {};
                 obj.dimensionality.n_factors = n_factors;
             end
-            
-            if ~isfield(obj.dimensionality, 'n_factors')
-                obj.dimensionality.n_factors = 5 % temp fix until we regenerate all recordings
-            end
+            if nargin < 4 || isempty(mask)
+                mask                  = true(size(obj.timescale.global_timescale));
+            end  
 
-            rescaled_traces     = obj.rescaled_traces();
+            rescaled_traces     = obj.rescaled_traces(mask, :);
             all_ROIs            = 1:size(rescaled_traces, 2);
             normal_n_NaN        = median(sum(isnan(rescaled_traces))) * 4;
             valid_trace_idx     = sum(isnan(rescaled_traces)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
@@ -626,13 +651,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
             %% Get single or multiple factor estimate
             if ~cross_validate
-                %[LoadingsPM, specVarPM, T, stats, F] = factoran(double(rescaled_traces), 5);
-                [LoadingsPM, specVarPM, T, stats, F] = factoran(double(rescaled_traces), obj.dimensionality.n_factors,'rotate','varimax');
-                
-                
-                
-%                 [LoadingsPM, specVarPM, T, stats, F] = factoran(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)', 5,'rotate','promax');
-                
+                [LoadingsPM, specVarPM, T, stats, F] = factoran(double(rescaled_traces), obj.dimensionality.n_factors,'rotate','quartimax'); % varimax
+
+                %% NNMF
+%                 [F,LoadingsPM, D] = nnmf(double(rescaled_traces),5);
+%                 LoadingsPM = LoadingsPM';
+%                 T = [];
+%                 stats = {};
+%                 specVarPM = [];
+
+
+                                %% PCA?
 %                 [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',10);                
 %                 [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)','NumComponents',10)
 %                T = []
@@ -651,7 +680,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.dimensionality.F                  = F;                % components
                 obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
                 obj.dimensionality.valid_trace_idx    = valid_trace_idx;  % additional filter for recordings with many NaNs
-
+                obj.dimensionality.mask               = mask;
 
                 %% Plot weight-tree for each component
                 for comp = 1:obj.dimensionality.n_factors
@@ -661,7 +690,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 %% Plot a map of tree weights by ROI number for each component
                 obj.get_weight_map();
 
-                %% Plot strongest componenet per ROI
+                %% Plot strongest component per ROI
                 obj.plot_strongest_comp_tree(); 
             else
                 %% Cross validation (thanks Harsha)
@@ -711,11 +740,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
         end
         
-        function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp)
+        function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle)
             if nargin < 2 || isempty(comp) || ~comp
                 [tree, soma_location, tree_values, values] = obj.plot_strongest_comp_tree();
                 return
             end
+            if nargin < 3 || isempty(fig_handle)
+                fig_handle = 10200 + comp; % fig number or fig hande
+            end
+            
             
             % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
 
@@ -740,7 +773,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
             
             %% Map dimension weights on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  10200 + comp); 
+            if obj.rendering || ishandle(fig_handle)
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle);
+            end
         end
         
         function weighted_averages = get_weight_map(obj, weigths_to_show)
@@ -761,7 +796,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             weighted_averages   = [];
             for w = weigths_to_show
                 L                       = LoadingsPM(:,w);
-                L(L<0.2) = 0;
+                %L(L<0.2) = 0;
                 all_weights{w}          = L/sum(LoadingsPM(:,w));                
                 weighted_averages(w, :) = nanmean(rescaled_traces'.* all_weights{w}, 1);
             end
@@ -785,7 +820,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             values = values(~isnan(values));
             
             %% Map dimension weights on the tree
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',10200, 'regular');       
+            if obj.rendering
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',10200, 'regular');  
+            end
         end
         
         %% #############################################

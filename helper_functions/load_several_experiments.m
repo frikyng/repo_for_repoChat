@@ -28,6 +28,12 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
 
 %     p.mask_method = 'none'
 %     p.mask_value = '';
+
+    br = get_branch_id_from_ROI(data_folders{1}, 0, ROIs);
+    ROIs = get_branch_id_from_ROI(data_folders{1}, br, 0);
+    p.ROIs = ROIs;
+
+
     if numel(data_folders) == 1
         p.rendering_mode = 'mosaic';
         p.rendering = true;
