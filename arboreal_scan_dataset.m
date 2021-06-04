@@ -72,18 +72,18 @@ classdef arboreal_scan_dataset < handle
 %         function expe = add_experiment(obj, path)  
 %             %% Identify if the experiment is already here to avoid duplicate
 %             expe = [];
-%             for el = 1:numel(obj.general_info)
-%                 if isstruct(obj.general_info{el}) && isfield(obj.general_info{el}, 'short_path') && any(strcmp(obj.general_info{el}.short_path, path(1).name(:,1:end-9)))
+%             for el = 1:numel(obj.rescaling_info)
+%                 if isstruct(obj.rescaling_info{el}) && isfield(obj.rescaling_info{el}, 'short_path') && any(strcmp(obj.rescaling_info{el}.short_path, path(1).name(:,1:end-9)))
 %                     expe = el;
 %                     break
 %                 end                    
 %             end
 %             if isempty(expe)
-%                 expe = numel(obj.general_info) + 1;
+%                 expe = numel(obj.rescaling_info) + 1;
 %             end
 %             
 %             %% Prepare the fields for the indicated experiment
-%             obj.general_info{expe}      = [];
+%             obj.rescaling_info{expe}      = [];
 %             obj.extracted_traces{expe}  = [];
 %             obj.binned_data{expe}       = [];
 %             obj.timescale{expe}         = [];
@@ -93,15 +93,15 @@ classdef arboreal_scan_dataset < handle
 %             obj.external_variables{expe}= [];
 %             %obj.expe_list{expe}         = [];
 % 
-%             obj.general_info{expe}.original_path = path;
-%             obj.general_info{expe}.short_path = path(1).name(:,1:end-9);
+%             obj.rescaling_info{expe}.original_path = path;
+%             obj.rescaling_info{expe}.short_path = path(1).name(:,1:end-9);
 %             
 %             try
 %                 obj.cleanup_expe();
 %             catch
 %                 obj.cleanup_expe();
 %             end
-%             expe = find(cellfun(@(x) contains(x.short_path, path(1).name(:,1:end-9)), obj.general_info));
+%             expe = find(cellfun(@(x) contains(x.short_path, path(1).name(:,1:end-9)), obj.rescaling_info));
 %             obj.current_expe = expe;
 %         end
 %         
@@ -112,9 +112,9 @@ classdef arboreal_scan_dataset < handle
 %                 deep_cleanup = false; source = '';
 %             end
 %             %% Remove empty location and sort by expe name
-%             to_keep = find(~cellfun(@isempty, obj.general_info));
+%             to_keep = find(~cellfun(@isempty, obj.rescaling_info));
 %             
-%             obj.general_info = obj.general_info(to_keep);
+%             obj.rescaling_info = obj.rescaling_info(to_keep);
 %             obj.extracted_traces = obj.extracted_traces(to_keep);
 %             obj.binned_data = obj.binned_data(to_keep);
 %             obj.timescale = obj.timescale(to_keep);
@@ -125,10 +125,10 @@ classdef arboreal_scan_dataset < handle
 %             obj.need_update = obj.need_update(to_keep);
 %             obj.external_variables  = obj.external_variables(to_keep);
 %             
-%             [~,order] = sort(cellfun(@(x) x.short_path, obj.general_info, 'UniformOutput', false));
+%             [~,order] = sort(cellfun(@(x) x.short_path, obj.rescaling_info, 'UniformOutput', false));
 %             
 %             obj.expe_list = obj.expe_list(order);
-%             obj.general_info = obj.general_info(order);
+%             obj.rescaling_info = obj.rescaling_info(order);
 %             obj.extracted_traces = obj.extracted_traces(order);
 %             obj.binned_data = obj.binned_data(order);
 %             obj.timescale = obj.timescale(order);
@@ -153,19 +153,19 @@ classdef arboreal_scan_dataset < handle
 %             if ~isempty(source)
 %                 for exp = 1:numel(obj.expe_list)
 %                     if strcmp(deep_cleanup, 'original') 
-%                     	to_remove = cellfun(@(x) ~isdir(x), obj.general_info{exp}.sources);
+%                     	to_remove = cellfun(@(x) ~isdir(x), obj.rescaling_info{exp}.sources);
 %                     elseif strcmp(deep_cleanup, 'extracted') 
-%                         to_remove = cellfun(@(x) ~isdir(x), arrayfun(@(y) [y.folder,'\',y.name], obj.general_info{exp}.original_path, 'UniformOutput', false))';
+%                         to_remove = cellfun(@(x) ~isdir(x), arrayfun(@(y) [y.folder,'\',y.name], obj.rescaling_info{exp}.original_path, 'UniformOutput', false))';
 %                     end
 %                     if any(to_remove)
 %                         obj.need_update(exp) = true;
 %                         
 %                         %% Remove unnecessary path
-%                         all_names = {obj.general_info{exp}.original_path(to_remove).name};
+%                         all_names = {obj.rescaling_info{exp}.original_path(to_remove).name};
 %                         to_remove_too = find(cellfun(@(x) any(strcmp(x, all_names)), {obj.rec_list{1}.name}));
 %                         obj.rec_list{1}(to_remove_too) = [];obj.rec_list{2}(to_remove_too) = [];
-%                         obj.general_info{exp}.sources = obj.general_info{exp}.sources(~to_remove);
-%                         obj.general_info{exp}.original_path = obj.general_info{exp}.original_path(~to_remove); 
+%                         obj.rescaling_info{exp}.sources = obj.rescaling_info{exp}.sources(~to_remove);
+%                         obj.rescaling_info{exp}.original_path = obj.rescaling_info{exp}.original_path(~to_remove); 
 %                     end                    
 %                 end
 %             end
@@ -180,8 +180,8 @@ classdef arboreal_scan_dataset < handle
 %             end
 %             
 %             failed = {};
-% %             for el = 1:numel(obj.general_info)
-% %                 current_sources = obj.general_info{el}.sources;
+% %             for el = 1:numel(obj.rescaling_info)
+% %                 current_sources = obj.rescaling_info{el}.sources;
 % %                 current_external_variables = {};
 % %                 for rec = 1:numel(current_sources)
 % %                     fprintf([current_sources{rec}, '\n']);
@@ -192,7 +192,7 @@ classdef arboreal_scan_dataset < handle
 % %             
 %             failed = {};
 %             for el = expe
-%                 current_sources = obj.general_info{el}.sources;
+%                 current_sources = obj.rescaling_info{el}.sources;
 %                 current_external_variables = {};
 %                 for rec = 1:numel(current_sources)
 %                     fprintf([current_sources{rec}, '\n']);

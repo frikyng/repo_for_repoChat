@@ -6,11 +6,11 @@ classdef arboreal_scan_plotting < handle
     
     methods
         function plot_rescaling_info(obj)
-            n_gp = numel(obj.general_info.individual_scaling{1});
-            n_rec = numel(obj.general_info.individual_scaling);
+            n_gp = numel(obj.rescaling_info.individual_scaling{1});
+            n_rec = numel(obj.rescaling_info.individual_scaling);
             figure(1012);clf();hold on;
             col = mat2cell(viridis(n_gp), ones(1,n_gp), 3);
-            p = plot(1:n_rec, vertcat(obj.general_info.individual_scaling{:}),'o-');set(gcf,'Color','w');
+            p = plot(1:n_rec, vertcat(obj.rescaling_info.individual_scaling{:}),'o-');set(gcf,'Color','w');
             arrayfun(@(x, y) set(x, 'Color', y{1}), p, col);
             set(gca, 'YScale', 'log');
             %legend(bin_legend);
@@ -24,20 +24,24 @@ classdef arboreal_scan_plotting < handle
             xlim([1,n_gp]);hold on;
             title('global scaling factor and offset per ROI');
             xlabel('ROI');
-            plot(obj.general_info.scaling,'ko-'); hold on;ylabel('Consensus Scaling Factor');    
-            yyaxis right;plot(obj.general_info.offset,'ro-');ylabel('Consensus Baseline Percentile'); 
+            plot(obj.rescaling_info.scaling,'ko-'); hold on;ylabel('Consensus Scaling Factor');    
+            yyaxis right;plot(obj.rescaling_info.offset,'ro-');ylabel('Consensus Baseline Percentile'); 
             ax = gca;
             ax.YAxis(1).Color = 'r';
             ax.YAxis(2).Color = 'k';
         end
 
-        function plot_median_traces(obj)
+        function plot_median_traces(obj, smoothing)
+            if nargin < 2 || isempty(smoothing)
+                smoothing = [0,0];
+            end
             %% Plot the mean trace for each bin  
             figure(1001);cla();
-            plot(obj.t, obj.binned_data.median_traces); hold on;
+            traces = smoothdata(obj.binned_data.median_traces, 'gaussian',smoothing);
+            plot(obj.t, traces); hold on;
             legend(obj.binned_data.bin_legend); hold on;
             title('median scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
-            figure(1023);plot(obj.binned_data.median_traces - nanmean(obj.binned_data.median_traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
+            figure(1023);plot(traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
@@ -64,7 +68,7 @@ classdef arboreal_scan_plotting < handle
                 all_weights         = {}; weighted_averages   = [];
                 for w = weights_to_show
                     all_weights{w}          = obj.dimensionality.LoadingsPM(:,w)/sum(obj.dimensionality.LoadingsPM(:,w));
-                    weighted_averages(w, obj.dimensionality.mask) = nanmean(rescaled_traces(:,obj.dimensionality.mask)'.* all_weights{w}, 1);
+                    weighted_averages(w, obj.dimensionality.mask) = nanmean(rescaled_traces(obj.dimensionality.mask,:)'.* all_weights{w}, 1);
                 end
             end
             figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
