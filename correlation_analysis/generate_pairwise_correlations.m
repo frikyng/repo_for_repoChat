@@ -4,6 +4,12 @@ function [corr_results, comb] = generate_pairwise_correlations(data_in, window_s
     end
     comb                        = nchoosek(1:size(data_in,2),2);
     corr_results                = cell(1,size(comb,1));
+    
+%     ignore = diff(smoothdata(data_in,'gaussian',[20,0])) < nanmax(nanmin(diff(smoothdata(data_in,'gaussian',[20,0])))/20);
+%     ignore = [ignore; false(1,size(ignore, 2))];
+%     data_in(ignore) = NaN;
+% %     
+    
     parfor pair = 1:size(comb,1)
     %for pair = 1:size(comb,1)
         %corr_results{pair}      = movcov(data_in(:,comb(pair, 1)),data_in(:,comb(pair, 2)),[window_size, 0]);
