@@ -10,7 +10,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         need_update
 
+        extraction_method = 'median';
         extracted_traces
+        extracted_traces_conc
         n_ROIs          = [];
         
         
@@ -25,8 +27,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         
         
-
         rescaled_traces
+        detrend = 1;
         rescaling_info
         current_segmentation;
         binned_data
@@ -104,10 +106,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end            
         end
 
-        function extracted_traces = get.extracted_traces(obj)
+        function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.data, obj.arboreal_scans, 'UniformOutput', false);  
             extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);             
         end
+        
+        function extracted_traces_conc = get.extracted_traces_conc(obj) % checked
+            extracted_traces_conc = vertcat(obj.extracted_traces{:});
+            if obj.detrend
+                extracted_traces_conc = detrend(extracted_traces_conc);
+            end
+        end
+        
 
         function timescale = get.timescale(obj)
             %% Prepare timescale for each recording and concatenated timescale
@@ -130,19 +140,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             timescale.t_start_real  = [];  % to do            
         end
         
-        function t = get.t(obj)
+        function t = get.t(obj) % checked
             t = obj.timescale.global_timescale;
         end
         
-        function ref = get.ref(obj)            
+        function ref = get.ref(obj)  % checked           
             ref = obj.arboreal_scans{1};
         end
         
-        function batch_params = get.batch_params(obj)
+        function batch_params = get.batch_params(obj) % checked
             batch_params = obj.ref.batch_params;
         end
         
-        function n_ROIs = get.n_ROIs(obj)
+        function n_ROIs = get.n_ROIs(obj) % checked
             n_ROIs = size(obj.extracted_traces{1}, 2);
         end
         
@@ -155,7 +165,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         function external_variables = get.external_variables(obj)
             if ~all(cellfun(@(x) ~isempty(x.analysis_params.external_var.encoder.time), obj.arboreal_scans))
-                1
+                'FIXME'
             end
             external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
@@ -374,8 +384,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             all_traces_per_rec = obj.extracted_traces;
             
             if isempty(obj.rescaling_info)
-                fprintf('TRACES WERE NEVER SCALED - PLEASE WAIT WHILE RESCALING, THIS CAN TAKE SOME TIME\n')
-                obj.rescale_traces();
+                fprintf('TRACES WERE NEVER RESCALED - CALL obj.rescale_traces() first.\n')                
             end
             
             %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
@@ -885,25 +894,28 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         %% #############################################
 
         function update_all_signals(obj, new_method)
-            %% Update raw signals changing the compression procedure
-            if ~any(strcmp(new_method, {'max', 'mean', 'median','min'}))
-                error('Only max, mean and median method are supported')
+            if nargin < 2 || isempty(new_method)
+                new_method = obj.extraction_method;
+            elseif ~any(strcmp(new_method, {'max', 'mean', 'median','min'}))
+                error('Only max, min, mean and median method are supported')
             else
-                for rec = 1:numel(obj.arboreal_scans)                    
-                    obj.arboreal_scans{rec}.extraction_method = new_method;
-                    if isempty(obj.arboreal_scans{rec}.analysis_params.data)
-                        temp = load(obj.extracted_data_paths{rec});
-                        obj.arboreal_scans{rec}.analysis_params.data = temp.obj.analysis_params.data;
-                        clear temp;
-                    end
-                        
-                    obj.arboreal_scans{rec}.update_segment_signals();
-                    obj.arboreal_scans{rec}.analysis_params.data = [];
-                    obj.need_update(rec)                    = true;
-                    % qq need to handle need pdate and clear exisitng data
-                end
-                error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEP THIS CHANGE FOR NEXT RELOADING')
+                obj.extraction_method = new_method;
             end
+            
+            %% Update raw signals changing the compression procedure
+            for rec = 1:numel(obj.arboreal_scans)                    
+                obj.arboreal_scans{rec}.extraction_method = new_method;
+                if isempty(obj.arboreal_scans{rec}.analysis_params.data)
+                    temp = load(obj.extracted_data_paths{rec});
+                    obj.arboreal_scans{rec}.analysis_params.data = temp.obj.analysis_params.data;
+                    clear temp;
+                end
+
+                obj.arboreal_scans{rec}.update_segment_signals(new_method);
+                obj.arboreal_scans{rec}.analysis_params.data = [];
+                obj.need_update(rec)                    = true;
+            end
+            error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
         end
         
         function detect_events(obj, idx_filter, corr_window, cutoff)
@@ -913,39 +925,39 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 idx_filter = obj.ref.indices.somatic_ROIs;
             end
             if nargin < 3 || isempty(corr_window)
-                corr_window = 4;
+                corr_window = obj.get_ideal_corr_window();             
             end
             if nargin < 4 || isempty(cutoff)
                 cutoff = 0.1;
-            end
+            end            
 
             %% Get pairwise correlations
-            raw_traces              = vertcat(obj.extracted_traces{:});
-            [corr_results, comb]    = generate_pairwise_correlations(raw_traces(:, idx_filter), corr_window); 
+            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
+            [corr_results, comb]    = generate_pairwise_correlations(raw_traces, corr_window); 
+            
+            %% Scale correlation to have max corr at 1 (so that if some ROIs do not elong to the cell ,they get removed)
             mean_corr               = fillmissing(nanmean(corr_results,2),'nearest');
             mean_corr               = smoothdata(mean_corr,'movmean',corr_window*2);
-            
-            %% Scale correlation to have max corr at 1.
-            mean_corr               = mean_corr / nanmax(mean_corr(10:end));
+            mean_corr               = mean_corr / nanmax(mean_corr(corr_window:end));
             mean_corr(mean_corr > 1) = 1;  
             
             %% Get global/local epochs using correlation
             obj.event               = {};
+            obj.event.corr_window   = corr_window;
             [obj.event.globality_index, obj.event.t_corr]    = findpeaks(mean_corr, 'MinPeakHeight', cutoff);
             
             %% Fill gaps between peaks
-            mean_trace = movmean(nanmean(raw_traces,2),20);
-            for idx = 1:(numel(obj.event.t_corr)-1)
-                pt = obj.event.t_corr(idx);
-                while pt < obj.event.t_corr(idx+1) && pt < numel(mean_trace) && mean_trace(pt) >= mean_trace(obj.event.t_corr(idx))
-                    mean_corr(pt) = mean_corr(obj.event.t_corr(idx));
-                    pt = pt+1;
-                end
-            end
+%             mean_trace = movmean(nanmean(raw_traces,2),20);
+%             for idx = 1:(numel(obj.event.t_corr)-1)
+%                 pt = obj.event.t_corr(idx);
+%                 while pt < obj.event.t_corr(idx+1) && pt < numel(mean_trace) && mean_trace(pt) >= mean_trace(obj.event.t_corr(idx))
+%                     mean_corr(pt) = mean_corr(obj.event.t_corr(idx));
+%                     pt = pt+1;
+%                 end
+%             end
             obj.event               = {};
             [obj.event.globality_index, obj.event.t_corr]    = findpeaks(smoothdata(mean_corr,'gaussian',20), 'MinPeakHeight', cutoff);
-            max_corr = max(obj.event.globality_index);
-            obj.event.is_global = obj.event.globality_index > (max_corr/2);%% QQ CHECK WHY WE HAVE BOTH THIS AND  mean_corr               = mean_corr / nanmax(mean_corr(10:end));
+            obj.event.is_global = obj.event.globality_index > 0.5;%(max_corr/2);%% QQ CHECK WHY WE HAVE BOTH THIS AND  mean_corr               = mean_corr / nanmax(mean_corr(10:end));
             
             %% Rescale traces roughly
             raw_traces              = raw_traces - prctile(raw_traces, 10);
@@ -953,16 +965,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             tmp                     = tmp(obj.event.t_corr(obj.event.is_global), :); %scaling on big events only
             scaled_mean             = raw_traces ./ nanmedian(tmp);
 
-            %% Get individual peaks for each epoch
+            %% Get individual peaks for each epoch based on correlation
             peak                    = [];
             scaled_mean = nanmean(scaled_mean,2);
             for ev = 1:numel(obj.event.t_corr)
-                t                       = obj.event.t_corr(ev);
-                start                   = find(mean_corr(1:t) < cutoff, 1, 'last');
+                corr_t                  = obj.event.t_corr(ev);
+                start                   = find(mean_corr(1:corr_t) < cutoff, 1, 'last');
                 if isempty(start)
                     start = 1;
                 end
-                stop = (find(mean_corr(t:end) < cutoff, 1, 'first')+t);
+                stop = (find(mean_corr(corr_t:end) < cutoff, 1, 'first')+corr_t);
                 if isempty(stop) || stop > numel(mean_corr)
                     stop = numel(mean_corr);
                 end
@@ -972,6 +984,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 peak(ev)                = nanmax(scaled_mean(local_range));
             end
             
+            %% Get individual peaks for each epoch, based on signal. Min peak promience is based on the events detected above
             for ev = 1:numel(obj.event.t_corr)              
                 local_range = obj.event.t_win{ev};
                 if numel(local_range) > 2
@@ -979,50 +992,92 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 else
                     pk = [];
                 end
-                if isempty(pk) % heppend when range is < 3 pts or no peak is found
+                if isempty(pk) % happen when range is < 3 pts or no peak was found
                     [pk, pkloc] = nanmax(nanmean(scaled_mean(local_range,:),2));    
                 end
                 obj.event.t_peak{ev} = pkloc+local_range(1)-1;
                 obj.event.peak_v{ev} = pk;
             end
 
-            
+            %% Idntify events that are of similar amplitude, but not correlated
+            [obj.event.lowcorr_peak_v, obj.event.lowcorr_t_peak] = findpeaks(nanmean(scaled_mean,2),'MinPeakProminence',nanmin(abs(peak)));
+            all_peak_t = vertcat(obj.event.t_peak{:});
+            already_detected = ismembertol(obj.event.lowcorr_t_peak, all_peak_t, 3, 'DataScale', 1);
+            obj.event.lowcorr_peak_v = obj.event.lowcorr_peak_v(~already_detected);
+            obj.event.lowcorr_t_peak = obj.event.lowcorr_t_peak(~already_detected);
+            %figure();plot(scaled_mean); hold on;scatter(obj.event.lowcorr_t_peak, obj.event.lowcorr_peak_v,'ko','filled');hold on; scatter(vertcat(obj.event.t_peak{:}), vertcat(obj.event.peak_v{:}),'ro','filled')
             
             if obj.rendering
                 figure(1030);clf();
                 plot(obj.t, mean_corr, 'Color',[0.8,0.8,0.8]); hold on;
                 plot(obj.t, scaled_mean); hold on;
+                scatter(obj.t(obj.event.lowcorr_t_peak), obj.event.lowcorr_peak_v, 'MarkerEdgeColor','k','MarkerFaceColor','none','Marker','x');  
                 scatter(obj.t([obj.event.t_win{obj.event.is_global}]), zeros(1,numel([obj.event.t_win{obj.event.is_global}])), 'k', 'filled');
                 scatter(obj.t([obj.event.t_win{~obj.event.is_global}]), zeros(1,numel([obj.event.t_win{~obj.event.is_global}])), 'r', 'filled');
                 col  = obj.event.t_peak;
                 for ev = 1:numel(col)
                     col{ev}(:) = obj.event.globality_index(ev);
-                end
-                
+                end                
                 scatter(obj.t(obj.event.t_corr), mean_corr(obj.event.t_corr), 'kv', 'filled');
-
-                scatter(obj.t(vertcat(obj.event.t_peak{:})), scaled_mean(vertcat(obj.event.t_peak{:})), [],vertcat(col{:}), 'filled');
-                
-                %scatter(obj.t(vertcat(obj.event.t_peak{:})), temp_trace(vertcat(obj.event.t_peak{:})), 'r', 'filled');
-                %scatter(obj.t(vertcat(obj.event.t_peak{obj.event.is_global})), temp_trace(vertcat(obj.event.t_peak{obj.event.is_global})), 'g', 'filled');
-                legend({'correlation','mean trace','Global event','Non-global','High-correlation time'})
+                scatter(obj.t(vertcat(obj.event.t_peak{:})), scaled_mean(vertcat(obj.event.t_peak{:})), [],vertcat(col{:}), 'filled');                              
+                legend({'Correlation','Mean Trace','Uncorrelated Large Event','Global Event','Non-global Event','High-correlation Event time'})
             end
             
+            %% Identify and log poorly correlated ROIs
+            obj.find_bad_ROIs(corr_results, comb, corr_window, idx_filter);           
+        end
+        
+        function corr_window = get_ideal_corr_window(obj)
+            med = nanmedian(obj.binned_data.median_traces,2);
+            med = med(~isnan(med));
+            bsl_guess = rms(med)*2;
+            [~,~,w] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
+            corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])     
+        end
+        
+        function find_bad_ROIs(obj, corr_results, comb, corr_window, ROIs)
+            if nargin < 4                
+                corr_window = obj.get_ideal_corr_window();
+            end
+            if nargin < 5                
+                ROIs = 1:obj.n_ROIs;
+            end  
+            if nargin < 3                
+                [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
+            end  
 
-           %% Show mean correlation with each ROI
+            
+            %% Show mean correlation with each ROI
             n_high_corr = [];
-            for key = 1:obj.n_ROIs
+            max_corr = max(obj.event.globality_index);
+            for key = 1:numel(ROIs)
                 corr_results_sub = corr_results(obj.event.t_corr(obj.event.is_global), comb(:,2) == key | comb(:,1) == key);
                 corr_results_sub = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
                 mean_corr = nanmean(corr_results_sub,2);
-                n_high_corr(key) = sum(mean_corr > max_corr/2);
+                n_high_corr(key) = sum(mean_corr > 0.5);
             end
             obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < 0.2); % below 20% of max correlation
             if obj.rendering
-                figure(124);cla();
-                plot(smoothdata(raw_traces(:, obj.bad_ROI_list)./nanmax(raw_traces(:, obj.bad_ROI_list)),'gaussian',10),'r');hold on;
-                plot(scaled_mean,'k');
-            end            
+                figure(124);clf();title('Bad ROIs (NEVER above 0.2 corr with the rest of the tree)');;hold on;
+                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',10),'r');hold on;
+                plot(nanmedian(obj.extracted_traces_conc,2)/nanmax(nanmedian(obj.extracted_traces_conc,2)),'k');
+            end 
+        end
+        
+        function [corr_results, comb] = get_pairwise_correlations(idx_filter, corr_window)
+            if nargin < 2 || isempty(idx_filter)
+                idx_filter = 1:obj.n_ROIs;
+            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
+                idx_filter = obj.ref.indices.somatic_ROIs;
+            end
+            if nargin < 3 || isempty(corr_window)
+                med = nanmedian(obj.binned_data.median_traces,2);
+                med = med(~isnan(med));
+                bsl_guess = rms(med)*2;
+                [~,~,w,p] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
+                corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])                
+            end
+            [corr_results, comb]    = generate_pairwise_correlations(obj.extracted_traces_conc(:, idx_filter), obj.event.corr_window); % same as in detect_events            
         end
 
 

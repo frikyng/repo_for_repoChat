@@ -1,8 +1,12 @@
-# Analyse a specific recording
+# Analyse a recording (arboreal_scan objects)
+
+This will be the doc for the Arboreal_Scan objects
 
 
 
-# Analyse a specific extracted experiment
+
+
+# Analyse an experiment (arboreal_scan_experiment objects)
 
 Load an `arboreal_scan_experiment` object, that you have previously generated. This object regroups multiple `arboreal_scan` objects that shared the same tree structure. The loaded object is called "obj" by default.
 
@@ -79,7 +83,7 @@ current_segmentation: [1×1 struct]
 
 `obj.n_ROIs` : the number of segments per tree, and therefore the number of traces
 
-`obj.extracted_traces` : the extracted traces originating from each arboreal_scan, using the compression method defined in [XXXXXX]. This a [1 x N_records] cell array, of {T x N_ROI} cells.
+`obj.extracted_traces` : the extracted traces originating from each arboreal_scan, using the compression method defined in [XXXXXX]. This a [1 x N_records] cell array, of {T x N_ROI} cells. `obj.extracted_traces_conc` corresponds to the same traces, concatenated in time.
 
 ## Rescaling
 
@@ -140,13 +144,13 @@ obj.plot_median_traces([20, 0]);    % median with a 20 point asymetrical smoothi
 
 You can detect large transients, and store they time of occurrence in `obj.event`. 
 
-This uses the `obj.detect_events()`. Event detection can be using either a peak_amplitude approach [TODO : TO PUTBACK], or a more reliable approach that looks at correlated signal variations across the tree (either all of it, or a selected region such as the peri somatic area. see `idx_filter` input).
+This uses the `obj.detect_events()`. Event detection can be using either a peak_amplitude approach [TODO : TO PUT BACK], or an approach that looks at correlated signal variations across the tree (either all of it, or a selected region such as the peri somatic area. see `idx_filter` input).
 
 The default uses the following steps:
 
-- Pairwise correlations between each pair of ROI are computed, using a moving correlation window (but see `corr_window` input)
+- Pairwise correlations between each pair of ROI are computed, using a moving correlation window (see `corr_window` input). If no window_side is given, the size is set as the average event width (as found by the native matlab `findpeaks` function, which returns here the width at half prominence of all events that are 2x signal RMS).
 
-- The average of all these Pairwise correlations is created, and indicate how correlated is the signal across the tree. A value of 1 indicates that an event covaried across every ROI of the tree, while a value of 0 suggest completely random variations (e.g. no activity). As some regions may be belongig to other neurons, the maximum may not reach 1. Therefore, the result is renormalized to the maximal values
+- The average of all these Pairwise correlations is created, and indicate how correlated is the signal across the tree. A value of 1 indicates that an event covaried across every ROI of the tree, while a value of 0 suggest completely random variations (e.g. no activity). As some regions may be belonging to other neurons, the maximum may not reach 1. Therefore, the result is renormalized to the maximal values
 
   > These uncorrelated ROIs can be detected and excluded if we consider that they are uncorrelated because belonging to another cell, or are too faint to provide a usable signal. see XXXX
 
@@ -158,6 +162,8 @@ The default uses the following steps:
   - Original "raw" amplitude of the fluorescent signal is stored in `obj.event.peak_v`
   - The lower and upper time range of each event are stored in `obj.event.t_win` (as defined by the onset from/offset to baseline, or by the end/start of another surrounding event) 
 
+If you want to detect somatic events only, you can use `obj.detect_events('soma')` which will only use the ROIs located the closest to the soma (on primary branches). If there is no soma (e.g. L5 cell, then the most proximal segments will be used instead)
+
 
 
 ADD FIGURES
@@ -166,4 +172,11 @@ ADD FIGURES
 
 ### Signal compression
 
-to write, then put the link in the note above in the text
+`arboreal_scan_experiments` have one trace per ROI. This means that each *"2D"* X-Y-T patch is compressed into a single *"0D"* 1-1-T signal array. The compression along the patch axis (that converts a X-Y-T patch into a *"1D"* X-1-T line) happens during the initial signal extraction, and these values are stored in individual `arboreal_scan` objects. This step can not be modified without re-extracting the arboreal_scans. The compression that converts *"1D"* X-1-T lines into *"0D"* 1-1-T array happens when first generating the arboreal_scan_experiment object, through the `obj.update_all_signals()` method (which actually call the `arboreal_scan.update_segment_signals()` method). The default approach takes the median signal, although this can be changed by passing a method parameter `obj.update_all_signals(method)`, with any method in {'min, 'max', median', 'mean'}. The current method is stored in the`obj.extraction_method` field.
+
+> Reloading the data to change the compression method requires to point at the folder containing the `arboreal_scans`. This is done using `obj.extracted_data_paths`. If you moved you data, you'll need to update these paths
+
+> Changing the method requires to reload all the individual `arboreal_scans`. To validate your changes, you need to save the object using `obj.save();`.
+
+ADD IMAGE COMPRESSION
+
