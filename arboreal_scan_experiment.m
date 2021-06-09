@@ -27,6 +27,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         
         demo            = 0;
+        auto_save_analysis = false
+        auto_save_figures = false
         
         filter_win      = 0;
         filter_type     = 'gaussian';
@@ -1132,7 +1134,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if nargin >= 4 && ~isempty(rendering)
                 obj.rendering = rendering;
             end
-            save_data       = false;            
             obj.filter_win  = filter_win;
 
             %% Load and concatenate traces for the selected experiment
@@ -1182,9 +1183,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Optionally, if external variables need an update
             %obj.update_external_metrics(60)
 
-            %% Save figure
-            if save_data
-                obj.save_figures()
+            %% Save figure and/or analysis
+            if obj.auto_save_figures
+                obj.save_figures();  
+            elseif obj.auto_save_analysis
+                obj.save(); 
             end            
         end
         
@@ -1195,7 +1198,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             else
                 save_folder = obj.source_folder;
             end
-            if save_folder
+            if save_folder || obj.auto_save_analysis
                 name = strsplit(obj.source_folder, '/');
                 name = name{end-1};
                 save([obj.source_folder, name],'obj','-v7.3')
@@ -1269,7 +1272,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
 
             %% Save every time in case of failure.
-            obj.save(true);
+            if obj.auto_save_analysis
+                obj.save();
+            end
         end
     end
 end
