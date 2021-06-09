@@ -28,7 +28,10 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
 
 %     p.mask_method = 'none'
 %     p.mask_value = '';
-
+    if ~isdir(data_folders{1})
+        error_box(['You are trying to reload the original data, but the indicated path ( ', data_folders{1}, ' does not exist anymore'],1)
+        return
+    end
     br = get_branch_id_from_ROI(data_folders{1}, 0, ROIs);
     ROIs = get_branch_id_from_ROI(data_folders{1}, br, 0);
     p.ROIs = ROIs;
