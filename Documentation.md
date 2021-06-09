@@ -14,7 +14,57 @@ Load an `arboreal_scan_experiment` object, that you have previously generated. T
 
 ![image-20210604171843850](media/Documentation/image-20210604171843850.png)
 
+## Processing pipeline
 
+Essentially, the analysis process consist in :
+
+- Loading all the relevant arboreal_scan objects that come from the same cell into an arboreal_scan_experiment
+- Rescaling traces so you can compare dim and bright regions
+- Identify Global/Local events
+- Flag problematic/low quality/wrongly selected ROIs so they will be ignored
+- Regroup traces into "bins", i.e. regions that will be processed together (e.g. basolateral vs apical, or bins at some set distance from the soma)
+- Process data by bine or by ROI. Among these processings options you can
+  - Analyse correlation or similarities between regions
+  - Extract events
+  - Do some dimensionality reduction analysis on each region or ROI
+  - Correlate against behaviours
+
+Loading/object building is controlled by the constructor
+
+```matlab
+%% To build the object from extracted arboreal_scans (recommanded)
+obj = arboreal_scan_experiment(source_folder); % where source_folder is a folder containing multiple extracted arboreal_scans 												   % objects (files can be in subfolders) 
+
+%% To build the object from data_folders (TODO)
+
+
+%% To update the object if you added/removed arboreals scans
+obj.update(); % Note that since this will affect the binned traces, all analysis need to be regenerated. All analysis fields will be cleared
+```
+
+Analysis can be handled by `obj.process()`
+
+```matlab
+%% Process the entire tree at once
+obj.process();
+
+%% Process using one of the supported binning method
+obj.process({'depth',100}); % by depth, using bins of 100 um
+
+%% Process without generating figures
+obj.rendering = false;
+obj.process(...);
+```
+
+Save the result
+
+```matlab
+Obj.save
+
+%% If you want to auto-save results, you cal also do the following
+obj.save = true;
+obj.process(...);
+```
 
 ## `arboreal_scan_experiment` general structure
 

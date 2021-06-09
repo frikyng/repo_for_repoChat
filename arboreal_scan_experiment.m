@@ -1,3 +1,9 @@
+%% TO DO : 
+% - improve update system when changing folder. 
+% - enable loading if we just have a folder with arboreal_scans objects
+% - add warning if source folde ris the actual raw experiment
+
+
 classdef arboreal_scan_experiment < handle & arboreal_scan_plotting   
     properties
         source_folder           % The folder where individual arboreal_scans were obtained
@@ -5,6 +11,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         arboreal_scans          % a compressed copy of the individual arboreal_scans
         ref                     % a pointer to the first extracted arboreal scan, for conveniency
         timescale               % time and sampling rate info for the individual recordings
+        global_median_raw       % 
+        global_median_scaled    % 
         t                       % pointer to obj.timescale.global_timescale
         batch_params    = {};   % pointer to obj.ref.batch_params ; the info to rebuild and locate the tree
 
@@ -62,6 +70,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         function extracted_data_paths = list_sources(obj)
             %% List available arboreal scans
             all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
+            if isempty(all_recordings)
+                warning('no extracted arboreal_scans found in this folder');
+                extracted_data_paths = [];
+                return
+            end            
             all_recordings          = all_recordings(~[all_recordings(:).isdir]);
             all_recordings          = all_recordings(~(arrayfun(@(x) strcmp(x.name, '.'), all_recordings) | arrayfun(@(x) strcmp(x.name, '..'), all_recordings)));
             
@@ -69,40 +82,69 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             extracted_data_paths    = cellfun(@(x) parse_paths(x), cellstr(names)', 'UniformOutput', false);
         end
         
-        function update(obj)
-            %% Update arboreal_scan objects. Identify recordings that changed
-            obj.extracted_data_paths = cellfun(@(x) parse_paths(x), obj.extracted_data_paths, 'UniformOutput', false); %temporary
-            new_list = obj.list_sources();
-            old_list_clean = erase(obj.extracted_data_paths, parse_paths(fileparts(fileparts(obj.extracted_data_paths{1}))));
-            new_list_clean = erase(new_list, parse_paths(obj.source_folder));
-            added          = ~ismember(new_list_clean, old_list_clean);
-            deleted        = ~ismember(old_list_clean, new_list_clean);
-            
-            %% Clear deleted trees
-            obj.arboreal_scans(deleted)         = [];
-            obj.need_update(deleted)            = [];
-            obj.extracted_data_paths(deleted)   = [];
-            
-            %% Update required trees first (bc idx are from before the detection of new trees)
-            for el = find(obj.need_update)
-                add_tree(el);
+        function update(obj, bypass)
+            if nargin < 2 || isempty(bypass) || ~bypass
+                quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESS DATA. Continue?','Update?','Yes','No','No');
+            else
+                quest = 'Yes';
             end
             
-            %% Add new trees            
-            for el = new_list(added)
-                obj.extracted_data_paths{end+1} = el{1};
-                add_tree(numel(obj.extracted_data_paths));                
+            if strcmp(quest, 'Yes')
+                obj.extracted_data_paths= list_sources(obj);
+                if isempty(obj.extracted_data_paths)
+                    quest = questdlg('Do you want to try to extract arboreal_scans?','Update?','Yes','No','No');
+                    if strcmp(quest, 'Yes')
+                        meta_batch_process_ribbon_scan(obj.source_folder);
+                        obj.source_folder       = pwd;
+                        obj.update(true);
+                    else
+                        return
+                    end
+                end
+                obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
+                for field = {'arboreal_scans','binned_data', 'rescaling_info','event', 'event_fitting', 'variability','crosscorr', 'dimensionality'}
+                    obj.(field{1}) = {};
+                end
+                
+%                 %% Update arboreal_scan objects. Identify recordings that changed
+%                 obj.extracted_data_paths = cellfun(@(x) parse_paths(x), obj.extracted_data_paths, 'UniformOutput', false); %temporary
+%                 new_list = obj.list_sources();
+%                 old_list_clean = erase(obj.extracted_data_paths, find_common_path(obj.extracted_data_paths));
+%                 new_list_clean = erase(new_list, parse_paths(obj.source_folder));
+%                 added          = ~ismember(new_list_clean, old_list_clean);
+%                 deleted        = ~ismember(old_list_clean, new_list_clean);
+% 
+%                 %% Clear deleted trees
+%                 obj.arboreal_scans(deleted)         = [];
+%                 obj.need_update(deleted)            = [];
+%                 obj.extracted_data_paths(deleted)   = [];
+
+                %% Update required trees first (bc idx are from before the detection of new trees)
+                for el = fliplr(find(obj.need_update))
+                    add_tree(el);
+                end
+% 
+%                 %% Add new trees            
+%                 for el = new_list(added)
+%                     obj.extracted_data_paths{end+1} = el{1};
+%                     add_tree(numel(obj.extracted_data_paths));                
+%                 end
+% 
+%                 %% Sort trees by name
+%                 [obj.extracted_data_paths, new_order] = sort(obj.extracted_data_paths);
+%                 obj.arboreal_scans = obj.arboreal_scans(new_order);
             end
-            
-            %% Sort trees by name
-            [obj.extracted_data_paths, new_order] = sort(obj.extracted_data_paths);
-            obj.arboreal_scans = obj.arboreal_scans(new_order);
 
             function add_tree(pos)
                 obj.arboreal_scans{pos}                         = load(obj.extracted_data_paths{pos});
-                obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
-                obj.arboreal_scans{pos}.analysis_params.data    = []; % clear full data. If you change t you'll need to rextract everything anyway
-                obj.need_update(pos)                            = false;
+                if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
+                    obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
+                    obj.arboreal_scans{pos}.analysis_params.data    = []; % clear full data. If you change t you'll need to rextract everything anyway
+                    obj.need_update(pos)                            = false;
+                else
+                    obj.arboreal_scans(pos) = [];
+                    obj.need_update(pos) = [];
+                end
             end            
         end
 
@@ -161,6 +203,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
         end
         
+        function global_median_raw = get.global_median_raw(obj) % checked
+            global_median_raw = obj.extracted_traces_conc;
+            global_median_raw(:, obj.bad_ROI_list) = [];
+            global_median_raw = nanmedian(global_median_raw, 2);
+        end
+
         %% ##############################
         
         function external_variables = get.external_variables(obj)
@@ -329,13 +377,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.binned_data.metrics = 1;
                 obj.binned_data.bin_legend = {'all ROIs'};
             elseif iscell(condition) && ischar(condition{1})
-                %             if isempty(obj.current_segmentation) || isempty(obj.binned_data) || isempty(obj.binned_data.condition) || (~strcmp(obj.binned_data.condition{1}, condition{1}) || obj.binned_data.condition{2} ~= condition{2})
-                                obj.current_segmentation   = {};
-                                obj.binned_data.condition  = condition;
-                %             elseif strcmp(obj.binned_data.condition{1}, condition{1}) && obj.binned_data.condition{2} == condition{2}
-                %                 return
-                %             e
-
+                obj.binned_data.condition  = condition;
+                
                 %% Define current binning rule. See arboreal_scan.get_ROI_groups for more info % CC and peak extractions are based on this binning    
                 [obj.binned_data.groups, obj.binned_data.metrics, obj.binned_data.bin_legend] = obj.ref.get_ROI_groups(obj.binned_data.condition, obj.demo);                
             elseif iscell(condition) && ismatrix(condition{1})
@@ -346,7 +389,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.binned_data.bin_legend = cellstr(legends(1:3:end,:))';
             end
             obj.need_update(:)            = true; 
-            obj.binned_data.readmap       = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map
+            obj.binned_data.readmap       = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
         end
         
         function set.current_segmentation(obj, current_segmentation)
@@ -1028,10 +1071,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         end
         
         function corr_window = get_ideal_corr_window(obj)
-            med = nanmedian(obj.binned_data.median_traces,2);
+            med = obj.global_median_raw;
             med = med(~isnan(med));
             bsl_guess = rms(med)*2;
-            [~,~,w] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
+            [~,~,w] = findpeaks(obj.global_median_raw,'SortStr','descend','MinPeakProminence',bsl_guess);
             corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])     
         end
         
