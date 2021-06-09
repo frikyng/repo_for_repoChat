@@ -32,12 +32,20 @@ Essentially, the analysis process consist in :
 Loading/object building is controlled by the constructor
 
 ```matlab
+%% Case 1
 %% To build the object from extracted arboreal_scans (recommanded)
 obj = arboreal_scan_experiment(source_folder); % where source_folder is a folder containing multiple extracted arboreal_scans 												   % objects (files can be in subfolders) 
+%% Case 2
+	%% To build the object from data_folders
+obj = arboreal_scan_experiment(source_folder); % In the absence of extracted arboreal_scan, The code will ask you if you want to process the data directly. Note that as for regular arboreal_scan extraction, the folder must follow the standard day/expe/data_folder structure, and there must be a settings.txt file indicating how to reconnect the tree. see arboreal_scan documentation for details
 
-%% To build the object from data_folders (TODO)
+	%% To build the object from data_folders using specific analysis_params
+obj = arboreal_scan_experiment(source_folder, analysis_params('smoothing', 20));
 
+	%% To build the object from data_folders using a custom settings.txt file
+obj = arboreal_scan_experiment(source_folder, '', 'path/to/settings.txt'');
 
+%% Case 3
 %% To update the object if you added/removed arboreals scans
 obj.update(); % Note that since this will affect the binned traces, all analysis need to be regenerated. All analysis fields will be cleared
 ```
@@ -69,36 +77,40 @@ obj.process(...);
 ## `arboreal_scan_experiment` general structure
 
 ```matlab
-       source_folder: 'C:/Users/vanto/Documents/MATLAB/extracted_arboreal_scans/2019-02-25_exp_3/'
-         need_update: [1 1 1 1 1 1 1 1 1 1 1 1 1]
-extracted_data_paths: {1×13 cell}
-      arboreal_scans: {1×13 cell}
-                 ref: [1×1 arboreal_scan]
-                   t: [1×21970 double]
-        batch_params: [1×1 struct]
-              n_ROIs: 59
-                demo: 0
-          filter_win: [5 0]
-         filter_type: 'gaussian'
-        general_info: [1×1 struct]
-            peak_thr: 2
-             cc_mode: 'peaks'
-    extracted_traces: {1×13 cell}
-     rescaled_traces: [21970×59 single]
-current_segmentation: [1×1 struct]
-         binned_data: [1×1 struct]
-           timescale: [1×1 struct]
-               event: [1×1 struct]
-       event_fitting: [1×1 struct]
-         variability: [1×1 struct]
-           crosscorr: [6×6 single]
-      dimensionality: [1×1 struct]
-  external_variables: {1×13 cell}
-         spiketrains: []
-          behaviours: [1×1 struct]
-      default_handle: @(x)load_several_experiments(x,cellfun(@(x)x.data_folder,obj.arboreal_scans,'UniformOutput',false),use_mask)
-        bad_ROI_list: [1×0 double]
-           rendering: 1
+            source_folder: 'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER'
+     extracted_data_paths: {1×3 cell}
+           arboreal_scans: {[1×1 arboreal_scan]  [1×1 arboreal_scan]  [1×1 arboreal_scan]}
+                      ref: [1×1 arboreal_scan]
+                timescale: [1×1 struct]
+        global_median_raw: [1485×1 single]
+     global_median_scaled: []
+                        t: [1×1485 double]
+             batch_params: [1×1 struct]
+              need_update: [1 1 1]
+        extraction_method: 'median'
+         extracted_traces: {[495×107 single]  [495×107 single]  [495×107 single]}
+    extracted_traces_conc: [1485×107 single]
+                   n_ROIs: 107
+                     demo: 0
+               filter_win: [5 0]
+              filter_type: 'gaussian'
+                 peak_thr: 2
+                  cc_mode: 'peaks'
+          rescaled_traces: [1485×107 single]
+                  detrend: 1
+           rescaling_info: [1×1 struct]
+              binned_data: [1×1 struct]
+                    event: [1×1 struct]
+            event_fitting: [1×1 struct]
+              variability: [1×1 struct]
+                crosscorr: 1
+           dimensionality: [1×1 struct]
+       external_variables: {[1×1 struct]  [1×1 struct]  [1×1 struct]}
+              spiketrains: []
+               behaviours: [1×1 struct]
+           default_handle: @(x)load_several_experiments(x,cellfun(@(x)x.data_folder,obj.arboreal_scans,'UniformOutput',false),use_mask)
+             bad_ROI_list: [1 2 3 4 5 20 27 28 31 32 33 34 47 50 72 106 107]
+                rendering: 1
 ```
 
 ## Some general information

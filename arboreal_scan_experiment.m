@@ -18,6 +18,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         need_update
 
+        
         extraction_method = 'median';
         extracted_traces
         extracted_traces_conc
@@ -38,7 +39,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         rescaled_traces
         detrend = 1;
         rescaling_info
-        current_segmentation;
         binned_data
         
         event
@@ -55,7 +55,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
     end
     
     methods
-        function obj = arboreal_scan_experiment(source_folder)
+        function obj = arboreal_scan_experiment(source_folder, varargin)
             %% Fix paths
             obj.source_folder       = parse_paths(source_folder);
 
@@ -64,7 +64,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
             
             %% Load arboreal scans
-            obj.update();
+            obj.update(true, varargin);
         end
         
         function extracted_data_paths = list_sources(obj)
@@ -82,7 +82,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             extracted_data_paths    = cellfun(@(x) parse_paths(x), cellstr(names)', 'UniformOutput', false);
         end
         
-        function update(obj, bypass)
+        function update(obj, bypass, varargin)
             if nargin < 2 || isempty(bypass) || ~bypass
                 quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESS DATA. Continue?','Update?','Yes','No','No');
             else
@@ -92,10 +92,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if strcmp(quest, 'Yes')
                 obj.extracted_data_paths= list_sources(obj);
                 if isempty(obj.extracted_data_paths)
-                    quest = questdlg('Do you want to try to extract arboreal_scans?','Update?','Yes','No','No');
-                    if strcmp(quest, 'Yes')
-                        meta_batch_process_ribbon_scan(obj.source_folder);
-                        obj.source_folder       = pwd;
+                    quest = questdlg('Do you want to try to extract arboreal_scans? If yes, you ned to select the export folder','Extract?','Yes','No','No');
+                    fold = parse_paths(uigetdir(pwd, 'Export folder'));
+                    if strcmp(quest, 'Yes') 
+                        optional_analysis_params = [];optional_settings_path = [];
+                        if nargin > 2 %  when extracting directly
+                            optional_analysis_params = analysis_params(varargin{1}{1});
+                            if numel(varargin{1}) > 1
+                                optional_settings_path = varargin{1}{2};
+                            end
+                        end
+                        
+                        meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params,fold);
+                        obj.source_folder       = fold;
                         obj.update(true);
                     else
                         return
@@ -391,19 +400,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.need_update(:)            = true; 
             obj.binned_data.readmap       = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
         end
-        
-        function set.current_segmentation(obj, current_segmentation)
-            obj.current_segmentation    = current_segmentation;            
-            caller                      = dbstack('-completenames'); 
-            if isempty(current_segmentation) && ~contains([caller.name],'MatFile') % detect reset
-                warning('segmentation conditions were changed - this will reset all extracted fields relying on it')
-                %% Clear dependant analyses
-                %             obj.crosscorr{expe}                 = [];
-                %             obj.event_fitting{expe}             = [];
-                %             obj.rescaling_info{expe}.offset       = zeros(1,size(obj.extracted_traces{expe}{1}, 2)); 
-                %             obj.rescaling_info{expe}.scaling      = ones(1,size(obj.extracted_traces{expe}{1}, 2)); 
-            end
-        end
+
         
         function rescale_traces(obj) 
             traces                        = obj.extracted_traces;
