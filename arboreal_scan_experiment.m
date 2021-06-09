@@ -94,7 +94,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if strcmp(quest, 'Yes')
                 obj.extracted_data_paths= list_sources(obj);
                 if isempty(obj.extracted_data_paths)
-                    quest = questdlg('Do you want to try to extract arboreal_scans? If yes, you ned to select the export folder','Extract?','Yes','No','No');
+                    quest = questdlg('Do you want to try to extract arboreal_scans? If yes, you will be able to select the export folder in the next step','Extract?','Yes','No','No');
                     fold = parse_paths(uigetdir(pwd, 'Export folder'));
                     if strcmp(quest, 'Yes') 
                         optional_analysis_params = [];optional_settings_path = [];
