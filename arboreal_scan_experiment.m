@@ -1198,7 +1198,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             else
                 save_folder = obj.source_folder;
             end
-            if save_folder || obj.auto_save_analysis
+            if any(save_folder) || obj.auto_save_analysis
                 name = strsplit(obj.source_folder, '/');
                 name = name{end-1};
                 save([obj.source_folder, name],'obj','-v7.3')
