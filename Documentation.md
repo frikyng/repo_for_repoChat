@@ -1,6 +1,48 @@
 # Analyse a recording (arboreal_scan objects)
 
+TODO
+
 This will be the doc for the Arboreal_Scan objects
+
+
+
+## Build the arboreal_scan object
+
+```matlab
+data_folder = 'D:\Curated Data\2019-10-03\experiment_5\20-36-43' 
+
+%% Create the arboreal_scan object for data foldr
+a_s = arboreal_scan(data_folder);
+
+%% Prepare tree information. 
+% Option 1, settings.txt is in the TOP_FOLDER
+a_s.prepare_tree();
+% Prepare tree information. Option 2, provide the path to settings.txt
+a_s.prepare_tree('path/to/settings.txt');
+% Prepare tree information. Option 2, provide the batch_params structure
+a_s.prepare_tree(batch_params);
+
+%% Prepare the extraction (concatenation etc...). This uses default values (if you type a_s.prepare_extraction() the default values are printed in an error message)
+a_s.prepare_extraction(data_folder);
+
+%% Save
+a_s.save();
+```
+
+
+
+##  Basic Use
+
+```matlab
+%% Plot ROIs (for advanced use of this method, see dedicated doc)
+a_s.plot_value_tree
+
+%% Plot soma population 
+a_s.plot_population();
+
+%% Plot the distance from soma (use to check that branches are well reconnected)
+a_s.plot_dist_tree
+```
 
 
 
@@ -23,13 +65,15 @@ Essentially, the analysis process consist in :
 - Identify Global/Local events
 - Flag problematic/low quality/wrongly selected ROIs so they will be ignored
 - Regroup traces into "bins", i.e. regions that will be processed together (e.g. basolateral vs apical, or bins at some set distance from the soma)
-- Process data by bine or by ROI. Among these processings options you can
+- Process data by bin or by ROI. Among these processing options you can
   - Analyse correlation or similarities between regions
   - Extract events
   - Do some dimensionality reduction analysis on each region or ROI
   - Correlate against behaviours
 
-Loading/object building is controlled by the constructor
+#### Loading/object building 
+
+This function is typically controlled by the constructor, although you can update the object later if you changed the list of recordings, or if you chaged the extraction method (e.g. new post-hoc MC, different mask...)
 
 ```matlab
 %% Case 1
@@ -50,7 +94,7 @@ obj = arboreal_scan_experiment(source_folder, '', 'path/to/settings.txt'');
 obj.update(); % Note that since this will affect the binned traces, all analysis need to be regenerated. All analysis fields will be cleared
 ```
 
-Analysis can be handled by `obj.process()`
+#### Analysis can be handled by `obj.process()`
 
 ```matlab
 %% Process the entire tree at once
@@ -64,17 +108,25 @@ obj.rendering = false;
 obj.process(...);
 ```
 
-Save the result
+#### Save the result
 
 ```matlab
-Obj.save
+%% To save the object
+obj.save()
 
-%% If you want to auto-save results, you cal also do the following
-obj.save = true;
+%% If you want to auto-save results, you can do the following
+obj.auto_save_analysis = true;
+obj.process(...);
+
+%% To save the figures
+obj.save_figures();
+
+%% or, to auto-save the figures, you can do the following
+obj.auto_save_figures = true;
 obj.process(...);
 ```
 
-## `arboreal_scan_experiment` general structure
+## Object structure
 
 ```matlab
             source_folder: 'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER'
@@ -113,7 +165,7 @@ obj.process(...);
                 rendering: 1
 ```
 
-## Some general information
+## Some general properties
 
 `obj.source_folder` indicates where these individual arboreal_scans recordings were located, and `extracted_data_paths` point at the exact file used for loading these data.
 
@@ -188,7 +240,7 @@ obj.prepare_binning();
 
 The condition is stored in `obj.binned_data.condition`, the bin values are stored in `obj.binned_data.metrics`, the ROIs for each group are in `obj.binned_data.groups` (same order) and the legends displayed on figures are in `obj.binned_data.groups`
 
-## Median Traces
+## Computing Median Traces
 
 `obj.binned_data.global_median` correspond the median trace of all recordings, and somewhat constitute a signal representative of the entire tree. The  median trace is obtained by calling `median_trace = obj.set_median_traces()`. By default, this uses the median of the rescaled traces, although you can use the median of the raw traces instead (`median_trace = obj.set_median_traces(true)`).
 
@@ -202,7 +254,7 @@ obj.plot_median_traces(20); 		% median with a 20 point symetrical smoothing
 obj.plot_median_traces([20, 0]);    % median with a 20 point asymetrical smoothing
 ```
 
-## Event detection
+## Event Detection
 
 You can detect large transients, and store they time of occurrence in `obj.event`. 
 
@@ -232,7 +284,7 @@ ADD FIGURES
 
 
 
-### Signal compression
+### Signal Compression
 
 `arboreal_scan_experiments` have one trace per ROI. This means that each *"2D"* X-Y-T patch is compressed into a single *"0D"* 1-1-T signal array. The compression along the patch axis (that converts a X-Y-T patch into a *"1D"* X-1-T line) happens during the initial signal extraction, and these values are stored in individual `arboreal_scan` objects. This step can not be modified without re-extracting the arboreal_scans. The compression that converts *"1D"* X-1-T lines into *"0D"* 1-1-T array happens when first generating the arboreal_scan_experiment object, through the `obj.update_all_signals()` method (which actually call the `arboreal_scan.update_segment_signals()` method). The default approach takes the median signal, although this can be changed by passing a method parameter `obj.update_all_signals(method)`, with any method in {'min, 'max', median', 'mean'}. The current method is stored in the`obj.extraction_method` field.
 

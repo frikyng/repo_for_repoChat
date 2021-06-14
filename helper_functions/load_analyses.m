@@ -24,9 +24,11 @@ function [extracted_traces, all_original_folders, all_sr, all_infos] = load_anal
 %             end
 
             extracted_traces{data_f_idx}                = extracted_data.data;
+            error_box('the following fieldnames have changed. check and clean before using')
             extracted_data.data                         = [];
-            extracted_data.analysis_params.data         = [];
+            extracted_data.analysis_params.full_data    = [];
             extracted_data.analysis_params.simple_data  = [];
+            
             all_infos{data_f_idx}           = extracted_data;
             all_sr{data_f_idx}              = diff(extracted_data.analysis_params.timescale(1:2));  
         else
