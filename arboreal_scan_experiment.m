@@ -91,12 +91,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 quest = 'Yes';
             end
             
-            if strcmp(quest, 'Yes') 
+            if strcmp(quest, 'Yes')
                 obj.extracted_data_paths= list_sources(obj);
                 if isempty(obj.extracted_data_paths)
                     quest = questdlg('Do you want to try to extract arboreal_scans? If yes, you will be able to select the export folder in the next step','Extract?','Yes','No','No');
-                    fold = parse_paths(uigetdir(pwd, 'Export folder'));
                     if strcmp(quest, 'Yes') 
+                        fold = parse_paths(uigetdir(pwd, 'Export folder'));
                         optional_analysis_params = [];optional_settings_path = [];
                         if ~isempty(varargin{1}) %  when extracting directly
                             optional_analysis_params = analysis_params(varargin{1}{1});
@@ -105,9 +105,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                             end
                         end
                         
-                        meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params,fold);
-                        obj.source_folder       = fold;
-                        obj.update(true);
+                        err = meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params,fold);
+                        if isempty(err{1})
+                            obj.source_folder       = fold;
+                            obj.update(true);
+                        else
+                            error('Error detected during extraction. Check that the settings.txt file is present in the top_folder or manually indicated, and that it contains the correct paths')
+                        end
                     else
                         return
                     end
@@ -150,7 +154,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.arboreal_scans{pos}                         = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
                     obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
-                    obj.arboreal_scans{pos}.analysis_params.data    = []; % clear full data. If you change t you'll need to rextract everything anyway
+                    obj.arboreal_scans{pos}.simple_data    = []; % clear full data. If you change t you'll need to rextract everything anyway
                     obj.need_update(pos)                            = false;
                 else
                     obj.arboreal_scans(pos) = [];
@@ -160,7 +164,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         end
 
         function extracted_traces = get.extracted_traces(obj) % checked
-            extracted_traces = cellfun(@(x) x.data, obj.arboreal_scans, 'UniformOutput', false);  
+            extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);  
             extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);             
         end
         
@@ -230,8 +234,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         end
         
         function behaviours = get.behaviours(obj)
-            behaviours                  = obj.behaviours();  
-            external_var                = obj.external_variables();
+            behaviours                  = obj.behaviours;  
+            external_var                = obj.external_variables;
             behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), external_var);
             behaviours.valid_mc_log     = cellfun(@(x) ~isempty(x.MC.time), external_var);
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), external_var));
@@ -947,14 +951,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Update raw signals changing the compression procedure
             for rec = 1:numel(obj.arboreal_scans)                    
                 obj.arboreal_scans{rec}.extraction_method = new_method;
-                if isempty(obj.arboreal_scans{rec}.analysis_params.data)
+                if isempty(obj.arboreal_scans{rec}.simple_data)
                     temp = load(obj.extracted_data_paths{rec});
-                    obj.arboreal_scans{rec}.analysis_params.data = temp.obj.analysis_params.data;
+                    obj.arboreal_scans{rec}.simple_data = temp.obj.simple_data;
                     clear temp;
                 end
 
                 obj.arboreal_scans{rec}.update_segment_signals(new_method);
-                obj.arboreal_scans{rec}.analysis_params.data = [];
+                obj.arboreal_scans{rec}.simple_data = [];
                 obj.need_update(rec)                    = true;
             end
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')

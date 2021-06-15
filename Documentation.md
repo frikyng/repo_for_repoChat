@@ -29,8 +29,6 @@ a_s.prepare_extraction(data_folder);
 a_s.save();
 ```
 
-
-
 ##  Basic Use
 
 ```matlab
@@ -42,7 +40,137 @@ a_s.plot_population();
 
 %% Plot the distance from soma (use to check that branches are well reconnected)
 a_s.plot_dist_tree
+
+%% Example to plot both the tree and the population
+a_s.plot_dist_tree(); hold on;a_s.plot_population();
 ```
+
+
+
+## Different types of tree
+
+ALSO BELONG TO MAIN DOC
+
+Different tree are generated throughout the acquisition / analysis process. Unless indicated, all these trees use the original Z-stack coordinates (i.e. stack X-Y pixels size and plane spacing for Z- pixel size). They can all be converted in microns using information from the acquisition header. see `rescale_tree() `for the rescaling formula.
+
+### Files
+
+- The original *.swc* file, which is present at the experiment_folder level with its original name. This is the file you traced in Vaa3D initially.
+
+- The original *.marker* file (if you did population imaging). Same as above.
+
+- If you acquired both the tree and the population, the two files are merged into a file named *hybrid_scan.swc*, where the markers are stacked at the end of the file. This file can be found both at the *experiment_folder* level and sometimes at the *data_folder* level. This file is only found at the *data_folder* level if you did a "hybrid" scan (i.e. pop + markers).
+
+- *simplified_neuron.swc*, in the data_folder : a *swc file approximating the computed microscope drives, depending on your segmentation settings. The lines correspond to the central line of each ROI (the skeleton). If you did a Ribbon scan or volumetric imaging, this will still only show one line per patch, and you'll have to rebuild the rest of the drives using the header data and some dedicated methods  [LINK HERE].
+
+- A copy of the original file used for tracing : *structure_reference.bkp*, within the *data_folder*.
+
+  > *simplified_neuron.swc* correspond only to what was really scanned (so, a subset of the scan for partial scans), while the other files contain the entire tree on which the scan is based on.
+
+### Header fields
+
+The header contains additional (or duplicated) fields. tree coordinates are stored in Trees objects, although the matrix corresponding to the .swc file can always be obtained in the `trees{1}.table` field. 
+
+- `header.structure_reference` contains the path of the original file that was used for the segmentation, at the time of acquisition. The folder may have been deleted, however the corresponding .swc file remains available in each data_folder
+
+- `header.partial` will indicate if the entire tree was scanned or just a subset of ROIs. If this is the case, `header.ROIs` or `header.branch_ids` (depending on your selection filter during acquisition) will indicate what was selected. 
+
+- `header.trees` is a Trees object containing 
+
+  - `header.trees{1}` : the tree that was actually acquired. This corresponds to the *simplified_neuron.swc* file, and will match `header.start_pixels` and `header.stop_pixels`
+  - `trees{2:end}` : All simplified branches of the tree, including the ones that were not imaged. You can always rebuild the full simplified tree using `reconsituted_tree = pool_tree(header.trees)`.
+
+- `header.original_trees` is a Trees object  containing 
+
+  - `header.original_trees{1}` : The full source neuron,, even in partial scan mode. This corresponds to the the .bkp file
+  - `original_trees{2:end}` : All simplified branches of the tree, including the ones that were not imaged. You can always rebuild the full simplified tree using `reconsituted_tree = pool_tree(header.trees)`.
+
+- For each ROI (in `header.ROIs`)
+
+  - `header.res_list` : the x-y-z resolution of the ROIs
+
+  - `header.start_pixels` and `header.stop_pixels` : the start and stop location of each line scan, one cell per ROI. The number of lines matches `header.res_list(:,2);`
+
+    > IMPORTANT  NOTE : `header.start_pixels` and `header.stop_pixels` are expressed in cubic voxels. To match them against the original swc tree, you need to scale the Z axis by `header.xy_to_z_scaling`. Additionally, because of some strange Vaa3d flipping issues, X and Y are flipped and the Y axis is mirrored (that is due to a tick box in Vaa3d options) ....
+
+- `header.offset` is an additional offset applied to the entire coordinate system, used to compensate for drifts from te original tracing
+
+  Note that the drives are expressed 
+
+```matlab
+%% Match the files, the header tree and the microscope drives
+h = load_header('some/data/folder')
+
+x_sta = cell2mat(cellfun(@(x) x(1,:), h.start_pixels, 'Uni', false));
+y_sta = cell2mat(cellfun(@(x) x(2,:), h.start_pixels, 'Uni', false));
+z_sta = cell2mat(cellfun(@(x) x(3,:), h.start_pixels, 'Uni', false));
+x_sto = cell2mat(cellfun(@(x) x(1,:), h.stop_pixels, 'Uni', false));
+y_sto = cell2mat(cellfun(@(x) x(2,:), h.stop_pixels, 'Uni', false));
+z_sto = cell2mat(cellfun(@(x) x(3,:), h.stop_pixels, 'Uni', false));
+
+%% Case 1 ; for a full scan (non-partial)
+% Plot the start-stop pixels (after reonversion back into the original swc format, see note above)
+figure();plot3([y_sta;y_sto],512-[x_sta;x_sto],[z_sta;z_sto]/h.xy_to_z_scaling,'k'); hold on;
+%% Add simplified neuron tree
+plot_tree(h.trees{1},'r'); hold on
+%% Add original tree
+plot_tree(h.original_trees{1},'b'); hold on
+
+%% Case 2 : for a partial scan
+h2 = load_header('some/data/folder')
+
+x_sta = cell2mat(cellfun(@(x) x(1,:), h.start_pixels, 'Uni', false));
+y_sta = cell2mat(cellfun(@(x) x(2,:), h.start_pixels, 'Uni', false));
+z_sta = cell2mat(cellfun(@(x) x(3,:), h.start_pixels, 'Uni', false));
+x_sto = cell2mat(cellfun(@(x) x(1,:), h.stop_pixels, 'Uni', false));
+y_sto = cell2mat(cellfun(@(x) x(2,:), h.stop_pixels, 'Uni', false));
+z_sto = cell2mat(cellfun(@(x) x(3,:), h.stop_pixels, 'Uni', false));
+
+% Plot the start-stop pixels (after reconversion back into the original swc format, see note above)
+figure();plot3([y_sta;y_sto],512-[x_sta;x_sto],[z_sta;z_sto]/h2.xy_to_z_scaling,'k'); hold on;
+%% Add simplified neuron tree
+plot_tree(h2.trees{1},'r'); hold on
+%% Add original tree
+plot_tree(h2.original_trees{1},'b'); hold on
+```
+
+
+
+### arboreal_scan properties
+
+The arboreal_scan objects contains, on top of the header information (which can be accessed in `a_s.header`), morphological information about the tree. This includes : proper tree scaling (in microns from the pia), the exclusion of rejected branches, and iformation about how the branches connect to each other.
+
+- `a_s.original_trees{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of the original .swc file. Branches were reconnected according to the batch_params
+- `a_s.original_trees_filtered{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of the original .swc file, minus the branches that were excluded
+- `a_s.original_pop{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of the original .marker file
+- `a_s.simplified_tree{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of *simplified_neuron.swc* file, which is what you actually scanned. Branches were reconnected according to the batch_params
+- `a_s.simplified_tree_filtered{1}`. Same as above, minus excluded branches
+- `a_s.simplified_skeleton` is a version of `a_s.simplified_tree` where very ROI is treated as a separated, independent branch, with it own tart and stop value. This can be more convenient for some analysis, as the ROI segment is located at known point `[(N x 2) -1, N x 2]`
+
+```matlab
+%% Starting from an arboreal_scan object a_s (trace extraction not needed):
+
+figure();
+%% Add original, unscaled tree (in cubic voxels)
+plot_tree(a_s.header.trees{1},'y'); hold on
+
+%% Add original tree, scaled, fixed and offset
+plot_tree(a_s.original_tree{1}, 'r'); hold on
+
+%% Add original tree, scaled, fixed and offset, minus excluded branches
+plot_tree(tree.original_tree_filtered{1}, 'k'); hold on
+
+%% Add original population, scaled and offset
+plot_curved_tree(tree.original_pop{1}); hold on
+
+%% Add simplified tree, scaled, fixed and offset
+plot_tree(tree.simplified_tree{1}, 'm'); hold on
+
+%% Add simplified tree,, scaled, fixed and offset, minus excluded branches
+plot_tree(tree.simplified_tree_filtered{1}, 'b'); hold on
+```
+
+
 
 
 
