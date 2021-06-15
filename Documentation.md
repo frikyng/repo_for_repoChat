@@ -134,8 +134,6 @@ plot_tree(h2.trees{1},'r'); hold on
 plot_tree(h2.original_trees{1},'b'); hold on
 ```
 
-
-
 ### arboreal_scan properties
 
 The arboreal_scan objects contains, on top of the header information (which can be accessed in `a_s.header`), morphological information about the tree. This includes : proper tree scaling (in microns from the pia), the exclusion of rejected branches, and information about how the branches connect to each other.
@@ -172,7 +170,22 @@ plot_tree(a_s.simplified_tree_filtered{1}, 'b'); hold on
 
 
 
+## Extract and save arboreal_scan objects for an entire experiment
 
+To extract all data_folders of an experiment that share the same imaging configuration, simply use 
+
+```matlab
+%% Export arboreal_scans
+source_folder = 'path/to/expe_folder_or_higher_level'
+export_folder = 'some/folder/to/extract/individual/arboreal_scans'
+meta_batch_process_ribbon_scan(source_folder','','',export_folder)
+
+%% Optionally, you may have to indicate the settings.txt file, and you can modulate the default exraction options
+-TO DOCUMENT
+
+%% Later, you can create an arboreal_scan_experiment object using this export folder
+obj = arboreal_scan_experiment([export_folder,'extracted_arboreal_scans\yyyy-mm-dd_exp_N']);
+```
 
 
 

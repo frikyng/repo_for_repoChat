@@ -151,14 +151,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
 
             function add_tree(pos)
-                obj.arboreal_scans{pos}                         = load(obj.extracted_data_paths{pos});
+                obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
                     obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
-                    obj.arboreal_scans{pos}.simple_data    = []; % clear full data. If you change t you'll need to rextract everything anyway
+                    obj.arboreal_scans{pos}.full_data               = []; % clear full data. If you change t you'll need to re-extract everything anyway
                     obj.need_update(pos)                            = false;
                 else
-                    obj.arboreal_scans(pos) = [];
-                    obj.need_update(pos) = [];
+                    obj.arboreal_scans(pos)                         = [];
+                    obj.need_update(pos)                            = [];
                 end
             end            
         end
