@@ -138,7 +138,7 @@ plot_tree(h2.original_trees{1},'b'); hold on
 
 ### arboreal_scan properties
 
-The arboreal_scan objects contains, on top of the header information (which can be accessed in `a_s.header`), morphological information about the tree. This includes : proper tree scaling (in microns from the pia), the exclusion of rejected branches, and iformation about how the branches connect to each other.
+The arboreal_scan objects contains, on top of the header information (which can be accessed in `a_s.header`), morphological information about the tree. This includes : proper tree scaling (in microns from the pia), the exclusion of rejected branches, and information about how the branches connect to each other.
 
 - `a_s.original_trees{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of the original .swc file. Branches were reconnected according to the batch_params
 - `a_s.original_trees_filtered{1}` correspond to the rescaled (in microns) and offset (as a distance from the surface) version of the original .swc file, minus the branches that were excluded
@@ -152,22 +152,22 @@ The arboreal_scan objects contains, on top of the header information (which can 
 
 figure();
 %% Add original, unscaled tree (in cubic voxels)
-plot_tree(a_s.header.trees{1},'y'); hold on
+plot_tree(a_s.header.trees{1},'g'); hold on
 
 %% Add original tree, scaled, fixed and offset
 plot_tree(a_s.original_tree{1}, 'r'); hold on
 
 %% Add original tree, scaled, fixed and offset, minus excluded branches
-plot_tree(tree.original_tree_filtered{1}, 'k'); hold on
+plot_tree(a_s.original_tree_filtered{1}, 'k'); hold on
 
 %% Add original population, scaled and offset
-plot_curved_tree(tree.original_pop{1}); hold on
+plot_curved_tree(a_s.original_pop{1}); hold on
 
 %% Add simplified tree, scaled, fixed and offset
-plot_tree(tree.simplified_tree{1}, 'm'); hold on
+plot_tree(a_s.simplified_tree{1}, 'm'); hold on
 
 %% Add simplified tree,, scaled, fixed and offset, minus excluded branches
-plot_tree(tree.simplified_tree_filtered{1}, 'b'); hold on
+plot_tree(a_s.simplified_tree_filtered{1}, 'b'); hold on
 ```
 
 
