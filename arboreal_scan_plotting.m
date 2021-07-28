@@ -34,14 +34,26 @@ classdef arboreal_scan_plotting < handle
         function plot_median_traces(obj, smoothing)
             if nargin < 2 || isempty(smoothing)
                 smoothing = [0,0];
+            elseif numel(smoothing) == 1
+                smoothing = [smoothing, 0];
             end
             %% Plot the mean trace for each bin  
-            figure(1001);cla();
+            if isempty(obj.binned_data)
+               warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')
+               return 
+            end            
             traces = smoothdata(obj.binned_data.median_traces, 'gaussian',smoothing);
-            plot(obj.t, traces); hold on;
+            figure(1001);cla();plot(obj.t, traces); hold on;
             legend(obj.binned_data.bin_legend); hold on;
-            title('median scaled trace per group');xlabel('time (s)');set(gcf,'Color','w');
-            figure(1023);plot(traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
+            if obj.is_rescaled
+                suffix = ' (rescaled)';
+            else
+                suffix = ' (raw)';
+            end
+            title(['median traces trace per group',suffix]);xlabel('time (s)');set(gcf,'Color','w');
+            if obj.is_rescaled
+                figure(1023);cla();plot(traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
+            end
         end
         
         function plot_similarity(obj)
