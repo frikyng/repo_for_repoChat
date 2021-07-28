@@ -18,13 +18,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         need_update
 
-        
         extraction_method = 'median';
         extracted_traces
         extracted_traces_conc
+        extracted_pop
+        extracted_pop_conc
         n_ROIs          = [];
-        
-        
+
         
         demo            = 0;
         auto_save_analysis = false
@@ -34,10 +34,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         filter_type     = 'gaussian';
 
         peak_thr        = 2;
+        bad_ROI_thr     = 0.1;
         cc_mode         = 'peaks'; % or raw
         
         
-        
+        is_rescaled = false;
         rescaled_traces
         detrend = 1;
         rescaling_info
@@ -168,21 +169,34 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);             
         end
         
+        function extracted_pop = get.extracted_pop(obj) % checked
+            extracted_pop = cellfun(@(x) x.simple_pop_data, obj.arboreal_scans, 'UniformOutput', false); 
+            extracted_pop = cellfun(@(x) x - prctile(x, 1), extracted_pop, 'UniformOutput', false);             
+        end
+        
         function extracted_traces_conc = get.extracted_traces_conc(obj) % checked
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
             if obj.detrend
                 extracted_traces_conc = detrend(extracted_traces_conc);
             end
         end
+
+        function extracted_pop_conc = get.extracted_pop_conc(obj) % checked
+            extracted_pop_conc = vertcat(obj.extracted_pop{:});
+            if obj.detrend
+                extracted_pop_conc = detrend(extracted_pop_conc);
+            end     
+            % figure(666);cla();plot(normalize(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
+        end
         
 
         function timescale = get.timescale(obj)
             %% Prepare timescale for each recording and concatenated timescale
             timescale = {};
-            timescale.sr  = 1./cellfun(@(x) x.analysis_params.measured_points_per_s, obj.arboreal_scans);
+            timescale.sr  = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
             if any(isnan(timescale.sr))
                 warning('some timscale are estimated and not measured')
-                estimated = 1./cellfun(@(x) x.analysis_params.estimated_points_per_s, obj.arboreal_scans);
+                estimated = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
                 timescale.sr(isnan(timescale.sr))  = estimated(isnan(timescale.sr));
             end
             timescale.tp  = cellfun(@(x) x.analysis_params.timepoints, obj.arboreal_scans);
@@ -314,11 +328,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
             if nargin < 4 || isempty(smoothing)
                 smoothing = 0;
+            elseif numel(smoothing) == 1
+                smoothing = [smoothing, 0];
             end
             
             [~, ~, beh] = obj.get_behaviours(type, false);
             beh = beh.value;
-            beh_sm = smoothdata(beh, 'gaussian', [smoothing, 0]);
+            beh_sm = smoothdata(beh, 'gaussian', smoothing);
             %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
             %thr = prctile(beh_sm(beh_sm > 0), 20);
             thr = prctile(beh_sm,20) + range(beh_sm)/20; % 5% of max
@@ -405,6 +421,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
             obj.need_update(:)            = true; 
             obj.binned_data.readmap       = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
+            
+            obj.set_median_traces(false);        
         end
 
         
@@ -430,7 +448,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             all_traces_per_rec = obj.extracted_traces;
             
             if isempty(obj.rescaling_info)
-                fprintf('TRACES WERE NEVER RESCALED - CALL obj.rescale_traces() first.\n')                
+                fprintf('TRACES WERE NEVER RESCALED - CALL obj.rescale_traces() first.\n')   
+                return
             end
             
             %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
@@ -453,8 +472,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled) 
             if nargin < 2 || isempty(use_rescaled)
                 traces = obj.rescaled_traces;
+                obj.is_rescaled = true;
             else
-                traces = [obj.extracted_traces{:}];
+                traces = obj.extracted_traces_conc;
+                obj.is_rescaled = false;
             end
             
             %% Create median trace per bins
@@ -470,7 +491,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.binned_data.median_traces   = all_traces_per_bin;
             
             if obj.rendering
-                obj.plot_median_traces();arrangefigures([1,2]);
+                obj.plot_median_traces(obj.filter_win);arrangefigures([1,2]);
             end
         end
         
@@ -854,7 +875,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle)
             if nargin < 2 || isempty(comp) || ~comp
-                [tree, soma_location, tree_values, values] = obj.plot_strongest_comp_tree();
+                [tree, soma_location, tree_values, values] = obj.plot_strongest_comp_tree();                
                 return
             end
             if nargin < 3 || isempty(fig_handle)
@@ -886,7 +907,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             
             %% Map dimension weights on the tree
             if obj.rendering || ishandle(fig_handle)
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle);
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle);                
             end
         end
         
@@ -933,7 +954,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             
             %% Map dimension weights on the tree
             if obj.rendering
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',10200, 'regular');  
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',10200, 'regular', 'lines'); 
+                colorbar('Ticks',1:nanmax(values));colormap(lines(nanmax(values)))
             end
         end
         
@@ -1095,18 +1117,20 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             
             %% Show mean correlation with each ROI
             n_high_corr = [];
-            max_corr = max(obj.event.globality_index);
+            max_corr = max(obj.event.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
             for key = 1:numel(ROIs)
                 corr_results_sub = corr_results(obj.event.t_corr(obj.event.is_global), comb(:,2) == key | comb(:,1) == key);
                 corr_results_sub = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
                 mean_corr = nanmean(corr_results_sub,2);
                 n_high_corr(key) = sum(mean_corr > 0.5);
             end
-            obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < 0.2); % below 20% of max correlation
+            obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < obj.bad_ROI_thr); % below threshold% of max correlation
             if obj.rendering
-                figure(124);clf();title('Bad ROIs (NEVER above 0.2 corr with the rest of the tree)');;hold on;
-                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',10),'r');hold on;
+                figure(1030);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
+                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',[100, 0]),'r');hold on;
                 plot(nanmedian(obj.extracted_traces_conc,2)/nanmax(nanmedian(obj.extracted_traces_conc,2)),'k');
+                invalid = false(1,size(obj.ref.indices.swc_list,1));invalid(obj.bad_ROI_list) = 1;
+                obj.ref.plot_value_tree(invalid, 1:numel(invalid), obj.default_handle, 'Uncorrelated ROIs', '',  1031,'','RedBlue');                
             end 
         end
         
@@ -1189,9 +1213,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
             %% Save figure and/or analysis
             if obj.auto_save_figures
-                obj.save_figures();  
-            elseif obj.auto_save_analysis
-                obj.save(); 
+                obj.save_figures();
+            end
+            if obj.auto_save_analysis
+            	obj.save(true); 
             end            
         end
         
@@ -1273,11 +1298,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                         savefig(f, [folder, '/',tag,'/',f.Tag,' ', tag,'.fig']);
                     end
                 end
-            end
-
-            %% Save every time in case of failure.
-            if obj.auto_save_analysis
-                obj.save();
             end
         end
     end
