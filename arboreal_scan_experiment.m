@@ -288,7 +288,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 temp.value = [];
                 for rec = 1:numel(raw_beh)
                     downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{rec}.time, obj.timescale.tp(rec));
-                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{rec}.speed, obj.timescale.tp(rec));
+                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{rec}.value, obj.timescale.tp(rec));
                     if isempty(downsampd_beh{beh}{rec}.time)
                         downsampd_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
                         downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
@@ -320,7 +320,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             function out = cellerror_empty(~,varargin)
                 out = {};
                 out.time = [];
-                out.speed = [];
+                out.value = [];
             end
         end     
         

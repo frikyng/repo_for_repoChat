@@ -199,7 +199,7 @@ classdef arboreal_scan_dataset < handle
 %                     try
 %                     parameters = analysis_params('source',current_sources{rec},'data_type','raw');
 %                     [parameters, ~, ~, ~] = load_generic_scan(parameters);
-%                     parameters.external_var = structfun(@(x) struct('time',x.time(:),'data',x.speed(:)), parameters.external_var,'UniformOutput', false);
+%                     parameters.external_var = structfun(@(x) struct('time',x.time(:),'data',x.value(:)), parameters.external_var,'UniformOutput', false);
 %                     current_external_variables{rec} = parameters.external_var;
 %                     catch err
 %                         current_external_variables{rec} = [];
