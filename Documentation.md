@@ -180,7 +180,7 @@ source_folder = 'path/to/expe_folder_or_higher_level'
 export_folder = 'some/folder/to/extract/individual/arboreal_scans'
 meta_batch_process_ribbon_scan(source_folder','','',export_folder)
 
-%% Optionally, you may have to indicate the settings.txt file, and you can modulate the default exraction options
+%% Optionally, you may have to indicate the settings.txt file, and you can modulate the default extraction options
 -TO DOCUMENT
 
 %% Later, you can create an arboreal_scan_experiment object using this export folder
@@ -189,11 +189,29 @@ obj = arboreal_scan_experiment([export_folder,'extracted_arboreal_scans\yyyy-mm-
 
 
 
+## Build arboreal_scan_experiments objects for all recordings
+
+Once the `arboreal_scan` objects are extracted, you can build `arboreal_scan experiment` objects. Basically, all you need is a for-loop.
+
+```matlab
+export_folder = 'some/folder/to/extract/individual/arboreal_scans';
+fold = dir([top_export_folder,'/*-*-*_exp_*']);
+fold = fold([fold.isdir]);
+for idx = 1:numel(fold)
+    expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+    expe.process(); %% Add grouping settings here, for exampl {'depth',50}
+    expe.save(true);
+    close all
+end
+```
+
+
+
 # Analyse an experiment (arboreal_scan_experiment objects)
 
 Load an `arboreal_scan_experiment` object, that you have previously generated. This object regroups multiple `arboreal_scan` objects that shared the same tree structure. The loaded object is called "obj" by default.
 
-[TODO : Link to how they were generated ]
+
 
 ![image-20210604171843850](media/Documentation/image-20210604171843850.png)
 
