@@ -77,13 +77,13 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
         data = cat(4, all_data{:});
         data = data(:,:,:,:,2);
         header.ROIs = ROIs;
-        header.estimated_trial_duration = sum(cell2mat(all_durations));
-        header.estimated_total_duration = sum(cell2mat(all_durations));
+        header.trial_duration = sum(cell2mat(all_durations));
+        header.duration = sum(cell2mat(all_durations));
         header.time_range = [0, header.estimated_total_duration];
         header.timepoints = size(data, 4);
-        header.estimated_points_per_s = header.timepoints/header.estimated_total_duration;
+        header.points_per_s = header.timepoints/header.duration;
         header.data_folder = data_folders{1};
-        header.timescale = linspace(0,header.estimated_total_duration,header.timepoints);
+        header.timescale = linspace(0,header.duration,header.timepoints);
         header.data_type = 'concatenated';
         header.original_repeats = 'all';
         
