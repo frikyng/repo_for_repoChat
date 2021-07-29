@@ -66,8 +66,12 @@ function [global_scal, global_offset, best_ind_scal, best_ind_offset] = scale_ev
                     peak_times_in_record = locs;
                 end
                 peak_times_in_record = peak_times_in_record(peak_times_in_record > 0 & peak_times_in_record < (tp(rec)+1));
-                best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
-                
+                try
+                    best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
+                catch % very rare ;  not sure why
+                    peak_times_in_record = [peak_times_in_record;peak_times_in_record]; % otherwise following function sem to crash
+                    best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, peak_times_in_record), 1e-3, 100, options); % scaling factor must be > 0
+                end
                 %figure(123);cla();plot(offset_median);hold on; plot(current_trace/best_ind_scal{rec}(trace_idx))
             end
         end
