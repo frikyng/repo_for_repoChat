@@ -189,26 +189,23 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             % figure(666);cla();plot(normalize(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
         end
         
-
         function timescale = get.timescale(obj)
             %% Prepare timescale for each recording and concatenated timescale
-            timescale = {};
-            timescale.sr  = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
-            if any(isnan(timescale.sr))
-                warning('some timscale are estimated and not measured')
-                estimated = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
-                timescale.sr(isnan(timescale.sr))  = estimated(isnan(timescale.sr));
+            timescale                   = {};
+            timescale.sr                = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
+            timescale.time_source       = cellfun(@(x) x.analysis_params.time_source, obj.arboreal_scans, 'UniformOutput', false);
+            if any(~strcmp(timescale.time_source, 'encoder'))
+                warning('some timescale are estimated and not measured');
             end
-            timescale.tp  = cellfun(@(x) x.analysis_params.timepoints, obj.arboreal_scans);
-            timescale.durations = timescale.sr.*timescale.tp; % same as cellfun(@(x) x.analysis_params.duration, obj.arboreal_scans)
+            timescale.tp                = cellfun(@(x) x.analysis_params.timepoints, obj.arboreal_scans);
+            timescale.durations         = timescale.sr.*timescale.tp; % same as cellfun(@(x) x.analysis_params.duration, obj.arboreal_scans)
             timescale.rec_timescale     = arrayfun(@(x, y) linspace(0, y*x, x), timescale.tp, timescale.sr, 'UniformOutput', false);
             timescale.global_timescale  = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
             timescale.global_timescale  = cellfun(@(x) [x(1), x], timescale.global_timescale, 'UniformOutput', false);
-            timescale.global_timescale  = cumsum(horzcat(timescale.global_timescale{:}));
-            
-            timescale.t_start_nogap = cellfun(@(x) x(end), timescale.rec_timescale); 
-            timescale.t_start_nogap = cumsum([0, timescale.t_start_nogap(1:end-1) + timescale.sr(1:end-1)]); 
-            timescale.t_start_real  = [];  % to do            
+            timescale.global_timescale  = cumsum(horzcat(timescale.global_timescale{:}));            
+            timescale.t_start_nogap     = cellfun(@(x) x(end), timescale.rec_timescale); 
+            timescale.t_start_nogap     = cumsum([0, timescale.t_start_nogap(1:end-1) + timescale.sr(1:end-1)]); 
+            timescale.t_start_real      = [];  % QQ to do            
         end
         
         function t = get.t(obj) % checked
@@ -237,13 +234,21 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             global_median_raw(:, obj.bad_ROI_list) = [];
             global_median_raw = nanmedian(global_median_raw, 2);
         end
+        
+        function binned_data = get.binned_data(obj)
+            binned_data = obj.binned_data;
+            if isfield(obj.binned_data, 'median_traces')
+            	binned_data.median_traces = smoothdata(binned_data.median_traces,'gaussian',obj.filter_win);
+            end
+            if isfield(obj.binned_data, 'global_median')
+            	binned_data.global_median = smoothdata(binned_data.global_median,'gaussian',obj.filter_win);
+            end
+        end
 
         %% ##############################
         
         function external_variables = get.external_variables(obj)
-            if ~all(cellfun(@(x) ~isempty(x.analysis_params.external_var.encoder.time), obj.arboreal_scans))
-                'FIXME'
-            end
+            %failed_encoder = cellfun(@(x) ~numel(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
             external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
         
@@ -446,9 +451,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         function rescaled_traces = get.rescaled_traces(obj)
             %% Using obj.rescaling_info.scaling & obj.rescaling_info.offset, rescale the traces
             all_traces_per_rec = obj.extracted_traces;
-            
+            obj.is_rescaled = false;            
             if isempty(obj.rescaling_info)
-                fprintf('TRACES WERE NEVER RESCALED - CALL obj.rescale_traces() first.\n')   
+                warning('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first.\n')                 
                 return
             end
             
@@ -466,7 +471,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                     all_traces_per_rec{rec}(:, trace) = temp{rec};
                 end
             end 
-            rescaled_traces = vertcat(all_traces_per_rec{:});           
+            rescaled_traces = vertcat(all_traces_per_rec{:});  
+            obj.is_rescaled = true;
         end
         
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled) 
@@ -491,7 +497,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.binned_data.median_traces   = all_traces_per_bin;
             
             if obj.rendering
-                obj.plot_median_traces(obj.filter_win);arrangefigures([1,2]);
+                obj.plot_median_traces();arrangefigures([1,2]);
             end
         end
         
@@ -609,7 +615,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.crosscorr = corrcoef([nanmean(obj.event_fitting.post_correction_peaks, 2), obj.event_fitting.post_correction_peaks]);
 
             if obj.rendering
-                figure(1008);cla();imagesc(obj.crosscorr); hold on;set(gcf,'Color','w');
+                imAlpha=ones(size(obj.crosscorr));
+                imAlpha(isnan(obj.crosscorr))=0;
+                figure(1008);cla();imagesc(obj.crosscorr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
+                set(gca,'color',0.8*[1 1 1]);
                 caxis([0,1]); hold on;
                 xticks(1:size(obj.crosscorr, 1))
                 yticks(1:size(obj.crosscorr, 1))
@@ -617,7 +626,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 plot([1.5,1.5],[0.5,size(obj.crosscorr, 1)+0.5],'k-');xticklabels(['whole cell',obj.binned_data.bin_legend]);xtickangle(45);
                 plot([0.5,size(obj.crosscorr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['whole cell',obj.binned_data.bin_legend]);
                 title('peak amplitude correlation per subgroup');
-                arrangefigures([1,2]); 
+                arrangefigures(0); 
                 
                 %% Project correlation value onto the tree
                 obj.plot_corr_tree();
@@ -672,10 +681,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if ~isempty(cc)
                 for gp = 1:numel(obj.binned_data.groups)
                     roi_of_gp           = obj.binned_data.groups{gp};
+                    roi_of_gp = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
                     v_of_gp             = cc(valid_gp(1),gp);
-                    ROIs_list           = [ROIs_list, roi_of_gp];
+                    ROIs_list           = [ROIs_list, roi_of_gp];                    
                     mean_bin_cc         = [mean_bin_cc, repmat(v_of_gp, 1, numel(roi_of_gp))];
-                end
+                end                
             end
 
             %% Map CC values on the tree
@@ -1113,7 +1123,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if nargin < 3                
                 [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
             end  
-
             
             %% Show mean correlation with each ROI
             n_high_corr = [];
@@ -1126,8 +1135,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
             obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < obj.bad_ROI_thr); % below threshold% of max correlation
             if obj.rendering
-                figure(1030);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
-                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',[100, 0]),'r');hold on;
+                figure(1031);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
+                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',obj.filter_win),'r');hold on;
                 plot(nanmedian(obj.extracted_traces_conc,2)/nanmax(nanmedian(obj.extracted_traces_conc,2)),'k');
                 invalid = false(1,size(obj.ref.indices.swc_list,1));invalid(obj.bad_ROI_list) = 1;
                 obj.ref.plot_value_tree(invalid, 1:numel(invalid), obj.default_handle, 'Uncorrelated ROIs', '',  1031,'','RedBlue');                
@@ -1184,9 +1193,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Get summary covariance plots of the raw traces
             obj.compute_similarity(); 
 
-            %% Correct for decay to avoid overstimating peak amplitude
-            t_peak_all = vertcat(obj.event.t_peak{obj.event.is_global})';
-            obj.event_fitting = detect_and_fit_events(obj.binned_data.median_traces, obj.t, obj.demo, obj.binned_data.bin_legend, t_peak_all);arrangefigures([1,2]);
+            %% Correct for decay to avoid overestimating peak amplitude
+            t_peak_global = vertcat(obj.event.t_peak{obj.event.is_global})';
+            obj.event_fitting = detect_and_fit_events(obj.binned_data.median_traces, obj.t, obj.demo, obj.binned_data.bin_legend, t_peak_global);arrangefigures([1,2]);
 
             %% Detect and display peak histogram distribution (mean and individual groups)
             obj.get_events_statistics();

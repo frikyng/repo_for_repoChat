@@ -31,18 +31,14 @@ classdef arboreal_scan_plotting < handle
             ax.YAxis(2).Color = 'k';
         end
 
-        function plot_median_traces(obj, smoothing)
-            if nargin < 2 || isempty(smoothing)
-                smoothing = [0,0];
-            elseif numel(smoothing) == 1
-                smoothing = [smoothing, 0];
-            end
+        function plot_median_traces(obj)
+            
             %% Plot the mean trace for each bin  
             if isempty(obj.binned_data)
                warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')
                return 
             end            
-            traces = smoothdata(obj.binned_data.median_traces, 'gaussian',smoothing);
+            traces = obj.binned_data.median_traces;
             figure(1001);cla();plot(obj.t, traces); hold on;
             legend(obj.binned_data.bin_legend); hold on;
             if obj.is_rescaled
@@ -60,7 +56,8 @@ classdef arboreal_scan_plotting < handle
             if size(obj.binned_data.median_traces,2) > 1
                 f       = figure(1022);clf();title('Similarity plot');hold on;set(gcf,'Color','w');hold on;
                 f.Tag   = 'Similarity plot'; %for figure saving
-                ax1     = subplot(3,1,1); hold on;plot(obj.binned_data.median_traces);title('Cell Signal');ylim([-50,range(obj.binned_data.median_traces(:))]);
+                R       = [nanmin(obj.binned_data.median_traces(:)), nanmax(obj.binned_data.median_traces(:))];
+                ax1     = subplot(3,1,1); hold on;plot(obj.binned_data.median_traces);title('Cell Signal');ylim([R(1)-(range(R/10)), R(2)+(range(R/10))]);
                 ax2     = subplot(3,1,2); hold on;plot(obj.variability.corr_results,'Color',[0.9,0.9,0.9]);
                 hold on;plot(nanmean(obj.variability.corr_results, 2),'r');title('pairwise temporal correlation');ylim([-1.1,1.1]);plot([0,size(obj.variability.corr_results, 1)],[-1,-1],'k--');plot([0,size(obj.variability.corr_results, 1)],[1,1],'k--')
                 ax3     = subplot(3,1,3); hold on;plot(obj.variability.precision);title('Precision (1/Var)');set(ax3, 'YScale', 'log');plot([0,size(obj.variability.precision, 1)],[1,1],'k--')

@@ -174,7 +174,11 @@ if animate
     end
 else
     for n = 1:NFigures
+        try
         set(figureHandles(n), 'position', [fx(n) fy(n) fw(n) fh(n)]);
+        catch
+            % usually happens when too manu figs
+        end
     end
 end
 
