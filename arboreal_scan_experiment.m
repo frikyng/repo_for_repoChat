@@ -332,8 +332,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 rendering = false;
             end
             if nargin < 4 || isempty(smoothing)
-                smoothing = 0;
-            elseif numel(smoothing) == 1
+                smoothing = 1;
+            elseif ~any(smoothing)
+                smoothing(1) = 1;
+            end            
+            if numel(smoothing) == 1 
                 smoothing = [smoothing, 0];
             end
             
