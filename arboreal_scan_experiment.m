@@ -324,9 +324,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
         end     
         
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, type, rendering, smoothing)
-            if nargin < 2 || isempty(type)
-                type = 'encoder';
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing)
+            if nargin < 2 || isempty(beh_types)
+                beh_types = {'encoder'};
+            elseif ischar(beh_types)
+                beh_types = {beh_types};
             end
             if nargin < 3 || isempty(rendering)
                 rendering = false;
@@ -339,45 +341,59 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if numel(smoothing) == 1 
                 smoothing = [smoothing, 0];
             end
-            
-            [~, ~, beh] = obj.get_behaviours(type, false);
-            beh = beh.value;
-            beh_sm = smoothdata(beh, 'gaussian', smoothing);
-            %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
-            %thr = prctile(beh_sm(beh_sm > 0), 20);
-            thr = prctile(beh_sm,20) + range(beh_sm)/20; % 5% of max
-
-            dt = nanmedian(diff(obj.t));
+            thr = 5; % threshold in % of max
             margin_duration = 3; %in sec
             if numel(margin_duration) == 1
                 margin_duration = [margin_duration, margin_duration];
-            end            
-            
-            %% Define bouts
-            active_tp   = abs(beh_sm) > abs(thr);
-            [starts, stops] = get_limits(active_tp, beh_sm);
-            
-            %% Add some pts before and after each epoch
-            for epoch = starts
-                active_tp(max(1, epoch-round(margin_duration(1)*(1/dt))):epoch) = 1;
-            end
-            for epoch = stops
-                active_tp(epoch:min(numel(active_tp), epoch+round(margin_duration(2)*(1/dt)))) = 1;
-            end
-            [starts, stops] = get_limits(active_tp, beh_sm); %update bouts edges now that w extended the range
-            
-            if rendering
-                figure(1027);cla();plot(obj.t, beh_sm);hold on;            
-                for el = 1:numel(starts)
-                    x = [starts(el),starts(el),stops(el),stops(el)];
-                    y = [0,nanmax(beh_sm),nanmax(beh_sm),0];
-                    patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
+            end    
+                
+            plts = {};
+            for idx = 1:numel(beh_types)
+                current_type = beh_types{idx};
+                [~, ~, beh] = obj.get_behaviours(current_type, false);
+                beh_sm = smoothdata(beh.value, 'gaussian', smoothing);
+                %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
+                %thr = prctile(beh_sm(beh_sm > 0), 20);
+                current_thr = prctile(beh_sm,(100/thr)) + range(beh_sm)/(100/thr); % 5% of max
+        
+                %% Define bouts
+                active_tp   = abs(beh_sm) > abs(current_thr);
+                [starts, stops] = get_limits(active_tp, beh_sm);
+
+                %% Add some pts before and after each epoch
+                dt = nanmedian(diff(obj.t));
+                for epoch = starts
+                    active_tp(max(1, epoch-round(margin_duration(1)*(1/dt))):epoch) = 1;
                 end
+                for epoch = stops
+                    active_tp(epoch:min(numel(active_tp), epoch+round(margin_duration(2)*(1/dt)))) = 1;
+                end
+                [starts, stops] = get_limits(active_tp, beh_sm); % update bouts edges now that we extended the range
+
+                if rendering
+                    figure(1027);hold on;
+                    if idx == 1
+                        clf();  
+                    end
+                    plts{idx} = subplot(numel(beh_types),1,idx);hold on; 
+                    title(strrep(current_type,'_','\_'))
+                    plot(obj.t, beh_sm);hold on;            
+                    for el = 1:numel(starts)
+                        x = [starts(el),starts(el),stops(el),stops(el)];
+                        y = [0,nanmax(beh_sm),nanmax(beh_sm),0];
+                        patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
+                    end
+                end
+
+                bouts = sort([starts, stops]);
             end
             
-            bouts = sort([starts, stops]);
+            linkaxes([plts{:}],'x');
             
             function [starts, stops] = get_limits(active_tp, beh_sm)
+                if size(active_tp, 1) > 1
+                    active_tp = nanmean(active_tp, 1) > 0;
+                end
                 starts      = find(diff(active_tp) == 1);
                 stops       = find(diff(active_tp) == -1);
                 if any(starts)
@@ -385,10 +401,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                         starts = [1, starts];
                     end
                     if stops(end) < starts(end)
-                        stops = [stops, numel(beh_sm)];
+                        stops = [stops, size(beh_sm,2)];
                     end
                 elseif all(active_tp)
-                    starts = 1; stops = numel(beh_sm);
+                    starts = 1; stops = size(beh_sm,2);
                 end
             end            
         end
