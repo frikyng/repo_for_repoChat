@@ -256,7 +256,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             behaviours                  = obj.behaviours;  
             external_var                = obj.external_variables;
             behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), external_var);
-            behaviours.valid_mc_log     = cellfun(@(x) ~isempty(x.MC.time), external_var);
+            behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), external_var);
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), external_var));
             behaviours.types            = fieldnames(external_var{Max_var_loc})';  
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
