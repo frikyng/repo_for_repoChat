@@ -59,6 +59,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
     
     methods
         function obj = arboreal_scan_experiment(source_folder, varargin)
+            if nargin < 1
+                return
+            end
             %% Fix paths
             obj.source_folder       = parse_paths(source_folder);
 
@@ -663,8 +666,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 %first       = find(~all(isnan(obj.rescaled_traces)),1,'last');                 
                 crosscorr   = corrcoef([nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.binned_data.median_traces],'Rows','Pairwise')';
             elseif strcmp(obj.cc_mode, 'raw_no_peaks')
-                
-                
                 tp_of_events    = quick_find_events(obj, 20);
                 tp_to_use          = ones(1,size(obj.binned_data.median_traces,1)); 
                 tp_to_use(tp_of_events) = 0;
@@ -807,7 +808,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
             rescaled_traces     = obj.rescaled_traces(mask, :);
             all_ROIs            = 1:size(rescaled_traces, 2);
-            normal_n_NaN        = median(sum(isnan(rescaled_traces))) * 4;
+            normal_n_NaN        = median(sum(isnan(rescaled_traces(:,~all(isnan(rescaled_traces)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
             valid_trace_idx     = sum(isnan(rescaled_traces)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
             rescaled_traces     = fillmissing(rescaled_traces(:, valid_trace_idx),'spline'); % removed funny traces
 

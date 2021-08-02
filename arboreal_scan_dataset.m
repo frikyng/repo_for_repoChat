@@ -3,37 +3,47 @@ classdef arboreal_scan_dataset < handle
     % see meta_analyze_arboreal_scans for examples
     properties
         source_folder
-        experiments
+        experiments;
+        valid_expe = [];
     end
     
     methods
         function obj = arboreal_scan_dataset(source_folder)
+            if isempty(obj.experiments)
+                obj.experiments = arboreal_scan_experiment();% initial empty experiment
+            end
             obj.source_folder = source_folder;
             
             %% Find arboreal_scan_experiments
             fold = dir([source_folder,'/*-*-*_exp_*']);
             fold = fold([fold.isdir]);            
-            for idx = 1:numel(fold)
+            for idx = (numel(fold)-5):numel(fold)%1:numel(fold)
+                idx
                 files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-                if numel(files) == 0
-                    warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
-                    expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
-                    expe.save(true);
-                    files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-                end
+%                 if numel(files) == 0
+%                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
+%                     expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+%                     expe.save(true);
+%                     files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
+%                 end
                 
-                for el = 1:numel(files)
-                    m = matfile([files(el).folder,'/',files(el).name]);
-                    if isprop(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
-                        if isempty(obj.experiments)
-                            obj.experiments = m.obj;
-                        else
-                            %% SQUEEZE IDENTIFY HERE
+               % for el = 1:numel(files)
+  
+                    m = load([files(1).folder,'/',files(1).name]);
+                    if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
+%                         if isempty(obj.experiments)
+%                             obj.experiments = m.obj;
+%                         else
+%                             %% SQUEEZE IDENTIFY HERE
+%                             try
                             obj.experiments(idx) = m.obj;
-                        end
-                        break
+%                             catch
+%                                 1
+%                             end
                     end
-                end
+                        %break
+                  %  end
+               % end
             end       
         end
         
@@ -211,12 +221,19 @@ classdef arboreal_scan_dataset < handle
 %         end
 % 
 %         
+
+
+
+
+
+
+
         function expe = identify(obj, filter)
             expe = find(arrayfun(@(x) contains(x.ref.data_folder, filter), obj.experiments));
             fprintf(['Required experiment is # ', num2str(expe),'\n'])            
         end
 
-        function CCs = mean_cc(obj, depth_range)  % if that's the overall mean, we can keep it   
+        function CCs = mean_cc(obj, depth_range, corr_type)  % if that's the overall mean, we can keep it   
             if nargin < 2 || isempty(depth_range)
                 min_depth   = -inf;
                 max_depth   = inf;
@@ -224,24 +241,23 @@ classdef arboreal_scan_dataset < handle
                 min_depth   = depth_range(1);
                 max_depth   = depth_range(2);
             end
+            if nargin < 3 || isempty(corr_type)
+                corr_type   = 'raw';
+            end
             
             %% Get CCs
             CCs_ori = {};
             for expe = 1:numel(obj.experiments)
-                obj.experiments(expe).cc_mode = 'raw_no_peaks';
+                obj.experiments(expe).cc_mode = corr_type;
                 CCs_ori{expe} = obj.experiments(expe).crosscorr;                
             end            
             
             %% Filter CCs
-            subset          = find(arrayfun(@(x) x.ref.soma_location(3) > min_depth, obj.experiments) & arrayfun(@(x) x.ref.soma_location(3) < max_depth, obj.experiments));
+            subset          = obj.valid_expe(find(arrayfun(@(x) x.ref.soma_location(3) > min_depth, obj.experiments(obj.valid_expe)) & arrayfun(@(x) x.ref.soma_location(3) < max_depth, obj.experiments(obj.valid_expe))));
             CCs_ori         = CCs_ori(subset);
             
             %% Make sure there is no empty matrix
             CCs_ori = CCs_ori(~cellfun(@isempty, CCs_ori));
-
-            
-            
-            
             
             %% Full cell only
            % CCs_ori = CCs_ori(~cellfun(@(x) any(isnan(x(:))), CCs_ori));
@@ -276,13 +292,17 @@ classdef arboreal_scan_dataset < handle
                 CCs = [];
             end
         end
+        
+        function valid_expe = get.valid_expe(obj)
+            valid_expe = find(~cellfun(@isempty, {obj.experiments.source_folder}));
+        end
 
         function plot_gallery(obj, mode, range, proj_axis)
             if nargin < 2 || isempty(mode)
                 mode = 'corr';
             end
             if nargin < 3 || isempty(range)
-                range = 1:numel(obj.experiments);%find(~cellfun(@isempty, obj.dimensionality));
+                range = obj.valid_expe;
             end
             if nargin < 4 || isempty(proj_axis)
                 proj_axis = 'xz';
@@ -295,11 +315,11 @@ classdef arboreal_scan_dataset < handle
                 if strcmp(mode, 'corr')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_corr_tree();
                 elseif strcmp(mode, 'dim')
-                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).obj.plot_dim_tree(0); 
+                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dim_tree(2); 
                 elseif strcmp(mode, 'dist')
-                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).obj.plot_dist_tree(0); 
+                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dist_tree(0); 
                 elseif strcmp(mode, 'order')
-                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).obj.plot_ord_tree(0); 
+                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_ord_tree(0); 
                 end
                 close all;
             end
@@ -310,7 +330,7 @@ classdef arboreal_scan_dataset < handle
             L5b = 644 * double(~strcmp(proj_axis, 'xy'));       
             figure(); axis equal;set(gcf,'Color','w');hold on; % FF
             x_offset = 0; y_offset = 0; max_fig_w = 5000; y_max_in_row = 0;
-            for expe = 1:numel(all_values)
+            for expe = range
                 if ~isempty(all_values{expe})
                     if x_offset > (max_fig_w-500) || expe == 1
                         x_offset = 0;
@@ -365,8 +385,6 @@ classdef arboreal_scan_dataset < handle
         %         results = structfun(@(x) x(filter), results, 'UniformOutput', false);
         %     end       
         %             
-      
-        
         
             [biggest_gp,idx]      = max(cellfun(@(x) size(x,2) ,{obj.experiments.crosscorr}));
             CCs             = {obj.experiments.crosscorr};
@@ -385,14 +403,12 @@ classdef arboreal_scan_dataset < handle
 %             figure();imagesc(nanmean(all_cc,3));axis equal;colorbar
 %             figure();imagesc(sum(~isnan(all_cc),3));axis equal;colorbar
 
-
             first_gp_cc = cellfun(@(x) x(2,:), CCs, 'UniformOutput', false);
             first_gp_cc = cellfun(@(x) [x(1,1:size(x,2)), NaN(1,biggest_gp-size(x,2))], first_gp_cc, 'UniformOutput', false);
             first_gp_cc = vertcat(first_gp_cc{:});
             figure();bar(nanmean(first_gp_cc));hold on; errorbar(nanmean(first_gp_cc), nanstd(first_gp_cc)./sqrt(sum(~isnan(first_gp_cc))), 'k') ;
             xticklabels(['whole cell',obj.experiments(idx).binned_data.bin_legend]);xtickangle(45);
-            
-            
+
             % Std per event (need behaviour) 
             %test = cellfun(@(x) nanstd(x'), results.peaks, 'UniformOutput', false); % std per event
 
@@ -403,9 +419,7 @@ classdef arboreal_scan_dataset < handle
             figure();bar(nanmean(test));hold on; errorbar(nanmean(test), nanstd(test)./sqrt(sum(~isnan(test))), 'k') 
             xticklabels(['whole cell',obj.experiments(idx).binned_data.bin_legend]);xtickangle(45);
         end
-
         
-
 %         function extracted_traces = get.extracted_traces(obj)
 %             extracted_traces = obj.extracted_traces;
 %             if ~isempty(obj.current_expe) && ~isempty(extracted_traces{obj.current_expe}) && any(obj.filter_win)
