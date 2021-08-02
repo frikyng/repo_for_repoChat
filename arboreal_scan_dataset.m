@@ -315,7 +315,7 @@ classdef arboreal_scan_dataset < handle
                 if strcmp(mode, 'corr')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_corr_tree();
                 elseif strcmp(mode, 'dim')
-                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dim_tree(2); 
+                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dim_tree(0); 
                 elseif strcmp(mode, 'dist')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dist_tree(0); 
                 elseif strcmp(mode, 'order')

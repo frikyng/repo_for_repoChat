@@ -633,21 +633,30 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         %% #############################################
 
-        function get_correlations(obj) 
-            obj.crosscorr = corrcoef([nanmean(obj.event_fitting.post_correction_peaks, 2), obj.event_fitting.post_correction_peaks]);
-
+        function get_correlations(obj, cc_mode) 
+            if nargin > 1
+                obj.cc_mode = cc_mode; % change cc mode
+            end
+            
+            %% Get CC
+            cross_corr = obj.crosscorr;
+            
             if obj.rendering
-                imAlpha=ones(size(obj.crosscorr));
-                imAlpha(isnan(obj.crosscorr))=0;
-                figure(1008);cla();imagesc(obj.crosscorr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
+                imAlpha=ones(size(cross_corr));
+                imAlpha(isnan(cross_corr))=0;
+                figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
                 set(gca,'color',0.8*[1 1 1]);
                 caxis([0,1]); hold on;
-                xticks(1:size(obj.crosscorr, 1))
-                yticks(1:size(obj.crosscorr, 1))
+                xticks(1:size(cross_corr, 1))
+                yticks(1:size(cross_corr, 1))
                 colorbar; hold on;
-                plot([1.5,1.5],[0.5,size(obj.crosscorr, 1)+0.5],'k-');xticklabels(['whole cell',obj.binned_data.bin_legend]);xtickangle(45);
-                plot([0.5,size(obj.crosscorr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['whole cell',obj.binned_data.bin_legend]);
-                title('peak amplitude correlation per subgroup');
+                if (size(cross_corr, 1)-1) == numel(obj.binned_data.bin_legend)
+                    plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);xtickangle(45);
+                    plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);
+                    title('Correlation between subgroup');
+                else
+                    title('Correlation between ROIs');
+                end                
                 arrangefigures(0); 
                 
                 %% Project correlation value onto the tree
@@ -660,52 +669,88 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 crosscorr = [];
                 return
             end
+
+            %% Get signal time range
+            tp_of_events        = sort(unique([obj.event.t_win{:}]));
+            if contains(obj.cc_mode, 'peaks') %% event time
+                tp          = obj.event_fitting.peak_pos;
+            elseif contains(obj.cc_mode, 'quiet') %% low corr window
+                tp              = true(1,size(obj.binned_data.median_traces,1)); 
+                tp(tp_of_events)= false;
+            elseif contains(obj.cc_mode, 'active') %% high corr window                 
+                tp              = false(1,size(obj.binned_data.median_traces,1)); 
+                tp(tp_of_events)= true;
+            else %% all tp
+                tp    = deal(1:size(obj.rescaled_traces,1));
+            end
             
+            %% Get ref ROIs
             somatic_ROIs = obj.ref.indices.somatic_ROIs;
-            if strcmp(obj.cc_mode, 'raw')
-                %first       = find(~all(isnan(obj.rescaled_traces)),1,'last');                 
-                crosscorr   = corrcoef([nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.binned_data.median_traces],'Rows','Pairwise')';
-            elseif strcmp(obj.cc_mode, 'raw_no_peaks')
-                tp_of_events    = quick_find_events(obj, 20);
-                tp_to_use          = ones(1,size(obj.binned_data.median_traces,1)); 
-                tp_to_use(tp_of_events) = 0;
-                tp_to_use = logical(tp_to_use);
-               % figure(666);cla();plot(obj.binned_data.median_traces(tp_to_use, :))
-                crosscorr   = corrcoef([nanmean(obj.rescaled_traces(tp_to_use,somatic_ROIs),2), obj.binned_data.median_traces(tp_to_use, :)],'Rows','Pairwise')';
-                
-            elseif strcmp(obj.cc_mode, 'peaks')
-%                 %% if against first_valid ROI
-%                 first_valid = find(~all(isnan(obj.event_fitting.post_correction_peaks)),1,'last'); 
-%                 % crosscorr   = corrcoef([obj.event_fitting.post_correction_peaks(:,first), obj.event_fitting.post_correction_peaks],'Rows','pairwise'); % ignore NaNs
-%                 
-%                 %% If against cell mean
-%                 crosscorr   = corrcoef([nanmean(obj.event_fitting.post_correction_peaks, 2), obj.event_fitting.post_correction_peaks],'Rows','pairwise'); % ignore NaNs
-%                 
-                %% If against soma peak values
-                soma_trace = nanmean(obj.rescaled_traces(:,somatic_ROIs),2);
-                crosscorr   = corrcoef([soma_trace(obj.event_fitting.peak_pos), obj.event_fitting.post_correction_peaks],'Rows','pairwise'); % ignore NaNs
+            
+            %% Get signal to use
+            if contains(obj.cc_mode, 'groups')
+                signal = obj.binned_data.median_traces(tp,:);
+                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);  
+            elseif contains(obj.cc_mode, 'ROIs')
+                signal = obj.rescaled_traces(tp,obj.ref.indices.valid_swc_rois);
+                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);  
             end            
+            variable = [ref, signal];
+
+%             
+%             obj.event_fitting.pre_correction_peaks
+%             obj.event_fitting.peak_pos
+            
+%             if strcmp(obj.cc_mode, 'raw')
+%                 %% Cross-correlation between raw traces
+%                 variable = [nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.binned_data.median_traces];
+%             elseif strcmp(obj.cc_mode, 'amplitudes')
+%             	%% Cross-correlation between peak values
+%             	variable = [nanmean(obj.rescaled_traces(obj.event_fitting.peak_pos,somatic_ROIs),2), obj.event_fitting.pre_correction_peaks]; 
+%             elseif strcmp(obj.cc_mode, 'raw_no_peaks')
+%                 %% Cross-correlation between raw traces ignoring detected peaks
+%                 tp_of_events            = sort(unique([obj.event.t_win{:}]));
+%                 tp_to_use               = true(1,size(obj.binned_data.median_traces,1)); 
+%                 tp_to_use(tp_of_events) = false; % figure(666);cla();plot(obj.binned_data.median_traces(tp_to_use, :))
+%                 variable = [nanmean(obj.rescaled_traces(tp_to_use,somatic_ROIs),2), obj.binned_data.median_traces(tp_to_use, :)];                
+%             elseif strcmp(obj.cc_mode, 'raw_only_peaks')
+%                 %% Cross-correlation between raw traces only on detected peaks
+%                 tp_of_events            = sort(unique([obj.event.t_win{:}]));
+%                 tp_to_use               = false(1,size(obj.binned_data.median_traces,1)); 
+%                 tp_to_use(tp_of_events) = true; % figure(666);cla();plot(obj.binned_data.median_traces(tp_to_use, :))
+%                 variable = [nanmean(obj.rescaled_traces(tp_to_use,somatic_ROIs),2), obj.binned_data.median_traces(tp_to_use, :)]; 
+%             elseif strcmp(obj.cc_mode, 'all_ROIs')
+%                 variable = [nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.rescaled_traces(:, obj.ref.indices.valid_swc_rois)]; 
+%             elseif strcmp(obj.cc_mode, 'all_ROIs_peaks')
+%                 variable = [nanmean(obj.rescaled_traces(obj.event_fitting.peak_pos,somatic_ROIs),2), obj.rescaled_traces(obj.event_fitting.peak_pos, obj.ref.indices.valid_swc_rois)]; 
+%             end 
+            crosscorr   = corrcoef(variable,'Rows','Pairwise')'; 
         end
         
-        function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj) 
+        function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc) 
+            if nargin < 2 || isempty(cc)
+                cc = obj.crosscorr(2:end,2:end);
+            end
             
-            %% Identify valid set of traces
-            valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
-            
-            %% Reload CC
-            cc                  = obj.crosscorr(2:end,2:end);
-            
-            %% Build tree values per bin
-            mean_bin_cc     = [];
-            ROIs_list       = [];
-            if ~isempty(cc)
-                for gp = 1:numel(obj.binned_data.groups)
-                    roi_of_gp           = obj.binned_data.groups{gp};
-                    roi_of_gp = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
-                    v_of_gp             = cc(valid_gp(1),gp);
-                    ROIs_list           = [ROIs_list, roi_of_gp];                    
-                    mean_bin_cc         = [mean_bin_cc, repmat(v_of_gp, 1, numel(roi_of_gp))];
-                end                
+            if size(cc, 1) == numel(obj.binned_data.bin_legend)
+                %% Identify valid set of traces
+                valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
+
+                %% Build tree values per bin
+                mean_bin_cc     = [];
+                ROIs_list       = [];
+                if ~isempty(cc)
+                    for gp = 1:numel(obj.binned_data.groups)
+                        roi_of_gp           = obj.binned_data.groups{gp};
+                        roi_of_gp = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
+                        v_of_gp             = cc(valid_gp(1),gp);
+                        ROIs_list           = [ROIs_list, roi_of_gp];                    
+                        mean_bin_cc         = [mean_bin_cc, repmat(v_of_gp, 1, numel(roi_of_gp))];
+                    end                
+                end
+            else
+                ROIs_list   = obj.ref.indices.valid_swc_rois;
+                mean_bin_cc = cc(:,1);
             end
 
             %% Map CC values on the tree
