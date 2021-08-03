@@ -1,7 +1,12 @@
-function fit_data = detect_and_fit_events(all_data, global_timescale, rendering, group_labels, peak_pos)
+function fit_data = fit_events(all_data, global_timescale, rendering, group_labels, peak_pos, peak_av_width)
     if nargin < 3 || isempty(rendering)
         rendering = true;
     end
+    if nargin < 6 || isempty(peak_av_width)
+        peak_av_width = [];
+    end
+    
+    
 %     if nargin < 5 || isempty(peak_thr)
 %         peak_thr = 1;
 %     end
@@ -12,42 +17,24 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     refit                   = true
     gcamp_tau               = 0.2
     fit_data.fast_fit       = true
-    rendering = 1;
+    rendering               = 1;
     
 
-    all_data                = all_data - prctile(nanmean(all_data'),1);
-    
     %% Fitting adjustements with low SR can be a bit funny when cells are bursting, but upsampling data a bit does the job
-    if (nanmedian(diff(global_timescale))/2) < gcamp_tau
-        original_data =  all_data;
-        original_timescale =  global_timescale;       
-        resampling = ceil(gcamp_tau / (nanmedian(diff(global_timescale))/2));
+    dt                      = nanmedian(diff(global_timescale));
+    if (dt/2) < gcamp_tau
+        original_data       = all_data;
+        original_timescale  = global_timescale;       
+        resampling          = ceil(gcamp_tau / (dt/2));        
     else
-        resampling = 1;
+        resampling          = 1;
     end
     fit_data.resampling_factor      = resampling;
     
-    
-%     %% Filter signal (won't work if signal is already upsampled)
-%     if nargin < 5 || isempty(peak_thr)
-%         peak_thr = 1;
-%    
-%         global_median       = nanmedian(all_data, 2);
-%         [denoised, missing] = wavelet_denoise(global_median);    
-%         bsl                 = global_median(~missing) - denoised(~missing);
-%         %thr                 = rms(bsl) * thr_factor;    
-%         %figure(25);cla();envelope(bsl,20,'peak');
-%         [a, ~] = envelope(bsl,20,'peak');
-%         peak_thr = rms(a)*peak_thr;    
-%         %thr = (prctile(a-b,99) - prctile(a-b,1))*peak_thr;
-%         fprintf('PLEASE REVIEW THRESHOLDING CRITERIA BEFORE FINAL ANALYSIS\n') 
-%         denoised(missing)   = NaN; % restore NaNs
-%     end
-
     if resampling > 1
         global_timescale    = interpolate_to(global_timescale, numel(global_timescale) * resampling); 
         peak_pos            = round(peak_pos * resampling);
-%         denoised            = interpolate_to(denoised        , numel(global_timescale));
+        peak_av_width       = round(peak_av_width*resampling);        
         try
             all_data            = interpolate_to(all_data, numel(global_timescale), 'cubic')'; % failed with 2019-11-06_exp_1  
         catch
@@ -61,18 +48,13 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
 %     fit_data.peak_pos               = peak_loc{1}';
     fit_data.peak_times = global_timescale(peak_pos);
     fit_data.peak_pos   = peak_pos;
-    pk_val              = nanmedian(all_data(peak_pos, :), 2)';
-    peak_av_width       = ceil(1/nanmedian(diff(global_timescale))); % 1s
-%peak_times
-
-    %[pk_val, peak_loc, peak_times, widths] = detect_events(denoised', global_timescale', peak_thr);
-
-    %% Use peak width to help with fitting
-    %peak_av_width   = nanmedian([widths{:}]); % that's the average peak width at half height, in points (median is in case there are a few trials with avery different sr
+    if isempty(peak_av_width)
+        peak_av_width       = ceil(3/dt); % 3s
+    end
     
-    % Based on it, we define a reasonable fitting window
-    pre_peak_delay  = round(peak_av_width * 3);
-    post_peak_delay = round(peak_av_width * 15);
+    %% We define a reasonable fitting window around each event
+    pre_peak_delay  = round(peak_av_width * 1);
+    post_peak_delay = round(peak_av_width * 5);
 
     %% We'll do the fitting on denoised data
     [all_data, ~] = wavelet_denoise(all_data);
@@ -84,9 +66,10 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     events = extract_events(all_data, fit_data.peak_pos, pre_peak_delay, post_peak_delay);
     
     %% Get global fit settings to have a rough estimate of the fitting window required. Use small, isolated events (or end-of-burst)
-    to_use = find(diff(fit_data.peak_pos) > (peak_av_width * 5)); % keep events spaced by at least 5 average peak width from the next, to avoid contamination of decay
+    MIN_SPACING = peak_av_width * 5;
+    to_use = find(diff(fit_data.peak_pos) > MIN_SPACING); % keep events spaced by at least 5 average peak width from the next, to avoid contamination of decay
     figure(1019);cla();hold on;plot(reshape(events,size(events,1),[]), 'Color',[0.9,0.9,0.9]); hold on;title('Individual median events amd median fit');hold on;
-    fit_data.global_fit = fit_decay(squeeze(nanmean(nanmedian(events(1:round(peak_av_width * 5),:,to_use), 2),3)), pre_peak_delay, [], true, [], peak_av_width, [], 'exp2'); % the fitting window can be shorter as we don't have bursts in this subselection
+    fit_data.global_fit = fit_decay(squeeze(nanmean(nanmedian(events(1:round(MIN_SPACING),:,to_use), 2),3)), pre_peak_delay, [], true, [], peak_av_width, [], 'exp2'); % the fitting window can be shorter as we don't have bursts in this subselection
     xlabel('points');legend({'mean event','fit result'}); hold on;
     arrangefigures([1,2]); 
 
@@ -98,7 +81,7 @@ function fit_data = detect_and_fit_events(all_data, global_timescale, rendering,
     if fit_data.fast_fit
         guesses     = NaN(size(events, 2), size(fit_data.global_fit,2));
         for gp = 1:size(events, 2)
-            guesses(gp, :) = fit_decay(squeeze(nanmean(events(1:round(peak_av_width * 7),gp,to_use),3)), pre_peak_delay, [], false, [], peak_av_width, [], 'exp2');
+            guesses(gp, :) = fit_decay(squeeze(nanmean(events(1:round(peak_av_width * 5),gp,to_use),3)), pre_peak_delay, [], false, [], peak_av_width, [], 'exp2');
         end
         forced_tau  = true;
         refit       = false;        

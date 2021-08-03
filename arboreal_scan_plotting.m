@@ -31,8 +31,7 @@ classdef arboreal_scan_plotting < handle
             ax.YAxis(2).Color = 'k';
         end
 
-        function plot_median_traces(obj)
-            
+        function plot_median_traces(obj)            
             %% Plot the mean trace for each bin  
             if isempty(obj.binned_data)
                warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')

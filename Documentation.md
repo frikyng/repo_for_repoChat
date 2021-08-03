@@ -429,10 +429,10 @@ The default uses the following steps:
 
 - All events that are at least present in 10% of the tree are selected as "events" This threshold can be modified by using the `cutoff` input. 
 
-  - The time of each detected event is stored in `obj.event.t_corr`. Note that this is using the correlation window, and the actual time of peak may vary and is stored in `obj.event.t_peak` (see below).
+  - The time of each detected event is stored in `obj.event.t_corr`. Note that this is using the correlation window, and the actual time of peak may vary and is stored in `obj.event.peak_time` (see below).
   - The amplitude of the peak indicate how tree-wide is the correlation, and is stored in `obj.event.globality_index`
   - "Global" Events are arbitrarily set as events propagating in more than 50% of the tree, and are indicated in `obj.event.is_global`
-  - Original "raw" amplitude of the fluorescent signal is stored in `obj.event.peak_v`
+  - Original "raw" amplitude of the fluorescent signal is stored in `obj.event.peak_value`
   - The lower and upper time range of each event are stored in `obj.event.t_win` (as defined by the onset from/offset to baseline, or by the end/start of another surrounding event) 
 
 If you want to detect somatic events only, you can use `obj.detect_events('soma')` which will only use the ROIs located the closest to the soma (on primary branches). If there is no soma (e.g. L5 cell, then the most proximal segments will be used instead)

@@ -115,9 +115,9 @@ forced_tau = -1
         end
     end
     
-    fit_summary.events = fit_params;
-    fit_summary.window = vertcat(event_fit{:, 1});
-    fit_summary.t_peak = t_peak_offset;
+    fit_summary.events              = fit_params;
+    fit_summary.window              = vertcat(event_fit{:, 1});
+    fit_summary.peak_jitter         = t_peak_offset;
 end
 
 function [prev, next] = get_limits(peak, peak_times, all_data)

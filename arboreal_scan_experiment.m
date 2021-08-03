@@ -179,9 +179,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         function extracted_traces_conc = get.extracted_traces_conc(obj) % checked
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
-            if obj.detrend
-                extracted_traces_conc = detrend(extracted_traces_conc);
-            end
+%             if obj.detrend
+%                 extracted_traces_conc = detrend(extracted_traces_conc);
+%             end
         end
 
         function extracted_pop_conc = get.extracted_pop_conc(obj) % checked
@@ -430,24 +430,24 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         function prepare_binning(obj, condition)
             if  nargin < 2
-                obj.binned_data.condition = 'single group';
-                obj.binned_data.groups = {1:obj.n_ROIs};
-                obj.binned_data.metrics = 1;
-                obj.binned_data.bin_legend = {'all ROIs'};
+                obj.binned_data.condition   = 'single group';
+                obj.binned_data.groups      = {1:obj.n_ROIs};
+                obj.binned_data.metrics     = 1;
+                obj.binned_data.bin_legend  = {'all ROIs'};
             elseif iscell(condition) && ischar(condition{1})
-                obj.binned_data.condition  = condition;
+                obj.binned_data.condition   = condition;
                 
                 %% Define current binning rule. See arboreal_scan.get_ROI_groups for more info % CC and peak extractions are based on this binning    
                 [obj.binned_data.groups, obj.binned_data.metrics, obj.binned_data.bin_legend] = obj.ref.get_ROI_groups(obj.binned_data.condition, obj.demo);                
             elseif iscell(condition) && ismatrix(condition{1})
-                obj.binned_data.condition = 'custom';
-                obj.binned_data.groups = condition;
-                obj.binned_data.metrics = 1:numel(condition);
+                obj.binned_data.condition   = 'custom';
+                obj.binned_data.groups      = condition;
+                obj.binned_data.metrics     = 1:numel(condition);
                 legends = strcat('group ', num2str(1:numel(condition))');
-                obj.binned_data.bin_legend = cellstr(legends(1:3:end,:))';
+                obj.binned_data.bin_legend  = cellstr(legends(1:3:end,:))';
             end
-            obj.need_update(:)            = true; 
-            obj.binned_data.readmap       = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
+            obj.need_update(:)              = true; 
+            obj.binned_data.readmap         = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
             
             obj.set_median_traces(false);        
         end
@@ -463,7 +463,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
             
             %% Rescale traces
-            t_peak_all = vertcat(obj.event.t_peak{obj.event.is_global});
+            t_peak_all = vertcat(obj.event.peak_time{obj.event.is_global});
             [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset] = scale_every_recordings(traces, obj.demo, t_peak_all); % qq consider checking and deleting "scale_across_recordings"
             if obj.rendering
                 obj.plot_rescaling_info();arrangefigures([1,2]);                
@@ -646,17 +646,33 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 imAlpha(isnan(cross_corr))=0;
                 figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
                 set(gca,'color',0.8*[1 1 1]);
-                caxis([0,1]); hold on;
-                xticks(1:size(cross_corr, 1))
-                yticks(1:size(cross_corr, 1))
+                caxis([0,1]); hold on;xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
                 colorbar; hold on;
-                if (size(cross_corr, 1)-1) == numel(obj.binned_data.bin_legend)
+                if contains(obj.cc_mode, 'pop')
+                    pop_label = num2cell(1:size(obj.extracted_pop_conc,2));
+                else
+                    pop_label = [];
+                end
+                if contains(obj.cc_mode, 'groups')
                     plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);xtickangle(45);
                     plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);
-                    title('Correlation between subgroup');
+                    part_1 = ' groups';
+                    N_reg = numel(obj.binned_data.bin_legend)+1;
                 else
-                    title('Correlation between ROIs');
-                end                
+                    xticklabels(['Soma/Proximal seg', num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);xtickangle(45);
+                    yticklabels(['Soma/Proximal seg',num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);
+                    N_reg = numel(obj.ref.indices.valid_swc_rois)+1;
+                    part_1 = ' ROIs';
+                end
+                if contains(obj.cc_mode, 'pop')
+                    part_2 = ' and population';
+                    ax = gca;
+                    ax.XTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.XTickLabel((N_reg+1):end),'uni',false);
+                    ax.YTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.YTickLabel((N_reg+1):end),'uni',false);
+                else
+                    part_2 = '';
+                end
+                title(['Correlation between',part_1,part_2]);
                 arrangefigures(0); 
                 
                 %% Project correlation value onto the tree
@@ -668,12 +684,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if isempty(obj.binned_data)
                 crosscorr = [];
                 return
-            end
-
+            end 
+            
+            mode = obj.cc_mode;
+            
             %% Get signal time range
             tp_of_events        = sort(unique([obj.event.t_win{:}]));
             if contains(obj.cc_mode, 'peaks') %% event time
-                tp          = obj.event_fitting.peak_pos;
+                tp          = obj.event_fitting.peak_pos;% could be using obj.event_fitting.pre_correction_peaks
             elseif contains(obj.cc_mode, 'quiet') %% low corr window
                 tp              = true(1,size(obj.binned_data.median_traces,1)); 
                 tp(tp_of_events)= false;
@@ -683,6 +701,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             else %% all tp
                 tp    = deal(1:size(obj.rescaled_traces,1));
             end
+            mode = erase(mode, {'peaks','quiet','active'});
             
             %% Get ref ROIs
             somatic_ROIs = obj.ref.indices.somatic_ROIs;
@@ -694,44 +713,36 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             elseif contains(obj.cc_mode, 'ROIs')
                 signal = obj.rescaled_traces(tp,obj.ref.indices.valid_swc_rois);
                 ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);  
-            end            
-            variable = [ref, signal];
-
-%             
-%             obj.event_fitting.pre_correction_peaks
-%             obj.event_fitting.peak_pos
+            end  
+            mode = erase(mode, {'ROIs','groups'});
             
-%             if strcmp(obj.cc_mode, 'raw')
-%                 %% Cross-correlation between raw traces
-%                 variable = [nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.binned_data.median_traces];
-%             elseif strcmp(obj.cc_mode, 'amplitudes')
-%             	%% Cross-correlation between peak values
-%             	variable = [nanmean(obj.rescaled_traces(obj.event_fitting.peak_pos,somatic_ROIs),2), obj.event_fitting.pre_correction_peaks]; 
-%             elseif strcmp(obj.cc_mode, 'raw_no_peaks')
-%                 %% Cross-correlation between raw traces ignoring detected peaks
-%                 tp_of_events            = sort(unique([obj.event.t_win{:}]));
-%                 tp_to_use               = true(1,size(obj.binned_data.median_traces,1)); 
-%                 tp_to_use(tp_of_events) = false; % figure(666);cla();plot(obj.binned_data.median_traces(tp_to_use, :))
-%                 variable = [nanmean(obj.rescaled_traces(tp_to_use,somatic_ROIs),2), obj.binned_data.median_traces(tp_to_use, :)];                
-%             elseif strcmp(obj.cc_mode, 'raw_only_peaks')
-%                 %% Cross-correlation between raw traces only on detected peaks
-%                 tp_of_events            = sort(unique([obj.event.t_win{:}]));
-%                 tp_to_use               = false(1,size(obj.binned_data.median_traces,1)); 
-%                 tp_to_use(tp_of_events) = true; % figure(666);cla();plot(obj.binned_data.median_traces(tp_to_use, :))
-%                 variable = [nanmean(obj.rescaled_traces(tp_to_use,somatic_ROIs),2), obj.binned_data.median_traces(tp_to_use, :)]; 
-%             elseif strcmp(obj.cc_mode, 'all_ROIs')
-%                 variable = [nanmean(obj.rescaled_traces(:,somatic_ROIs),2), obj.rescaled_traces(:, obj.ref.indices.valid_swc_rois)]; 
-%             elseif strcmp(obj.cc_mode, 'all_ROIs_peaks')
-%                 variable = [nanmean(obj.rescaled_traces(obj.event_fitting.peak_pos,somatic_ROIs),2), obj.rescaled_traces(obj.event_fitting.peak_pos, obj.ref.indices.valid_swc_rois)]; 
-%             end 
+            %% Add population signal if needed
+            if contains(obj.cc_mode, 'pop')
+                pop = obj.extracted_pop_conc(tp,:);
+            else
+                pop = [];
+            end  
+            mode = erase(mode, {'pop','_'});
+            
+            beh = obj.behaviours.types(find(contains(obj.behaviours.types, mode)));
+            if ~isempty(beh)
+                [~, ~, beh] = obj.get_behaviours(beh);
+                ref         = beh.value(tp)';
+            end
+            
+            variable    = [ref, signal, pop];
             crosscorr   = corrcoef(variable,'Rows','Pairwise')'; 
         end
         
         function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc) 
             if nargin < 2 || isempty(cc)
                 cc = obj.crosscorr(2:end,2:end);
+                if contains(obj.cc_mode,'pop')
+                    pop_sz = size(obj.extracted_pop_conc,2);
+                    cc = cc(1:(end-pop_sz),1:(end-pop_sz));
+                end                    
             end
-            
+
             if size(cc, 1) == numel(obj.binned_data.bin_legend)
                 %% Identify valid set of traces
                 valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
@@ -752,11 +763,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 ROIs_list   = obj.ref.indices.valid_swc_rois;
                 mean_bin_cc = cc(:,1);
             end
-
+            
             %% Map CC values on the tree
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
             caxis([0,1]);
-            col = colorbar; col.Label.String = 'Correlation coeff of peaks amplitude with soma';
+            col = colorbar; col.Label.String = 'Spatial correlation between ROIs/groups with soma';
         end
         
         %% ###################
@@ -1068,7 +1079,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 idx_filter = obj.ref.indices.somatic_ROIs;
             end
             if nargin < 3 || isempty(corr_window)
-                corr_window = obj.get_ideal_corr_window();             
+                corr_window = [];             
             end
             if nargin < 4 || isempty(cutoff)
                 cutoff = 0.1;
@@ -1076,106 +1087,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
             %% Get pairwise correlations
             raw_traces              = obj.extracted_traces_conc(:, idx_filter);
-            [corr_results, comb]    = generate_pairwise_correlations(raw_traces, corr_window); 
-            
-            %% Scale correlation to have max corr at 1 (so that if some ROIs do not elong to the cell ,they get removed)
-            mean_corr               = fillmissing(nanmean(corr_results,2),'nearest');
-            mean_corr               = smoothdata(mean_corr,'movmean',corr_window*2);
-            mean_corr               = mean_corr / nanmax(mean_corr(corr_window:end));
-            mean_corr(mean_corr > 1) = 1;  
-            
-            %% Get global/local epochs using correlation
-            obj.event               = {};
-            obj.event.corr_window   = corr_window;
-            [obj.event.globality_index, obj.event.t_corr]    = findpeaks(mean_corr, 'MinPeakHeight', cutoff);
-            
-            %% Fill gaps between peaks
-%             mean_trace = movmean(nanmean(raw_traces,2),20);
-%             for idx = 1:(numel(obj.event.t_corr)-1)
-%                 pt = obj.event.t_corr(idx);
-%                 while pt < obj.event.t_corr(idx+1) && pt < numel(mean_trace) && mean_trace(pt) >= mean_trace(obj.event.t_corr(idx))
-%                     mean_corr(pt) = mean_corr(obj.event.t_corr(idx));
-%                     pt = pt+1;
-%                 end
-%             end
-            obj.event               = {};
-            [obj.event.globality_index, obj.event.t_corr]    = findpeaks(smoothdata(mean_corr,'gaussian',20), 'MinPeakHeight', cutoff);
-            obj.event.is_global = obj.event.globality_index > 0.5;%(max_corr/2);%% QQ CHECK WHY WE HAVE BOTH THIS AND  mean_corr               = mean_corr / nanmax(mean_corr(10:end));
-            
-            %% Rescale traces roughly
-            raw_traces              = raw_traces - prctile(raw_traces, 10);
-            tmp                     = movmean(raw_traces,20);
-            tmp                     = tmp(obj.event.t_corr(obj.event.is_global), :); %scaling on big events only
-            scaled_mean             = raw_traces ./ nanmedian(tmp);
 
-            %% Get individual peaks for each epoch based on correlation
-            peak                    = [];
-            scaled_mean = nanmean(scaled_mean,2);
-            for ev = 1:numel(obj.event.t_corr)
-                corr_t                  = obj.event.t_corr(ev);
-                start                   = find(mean_corr(1:corr_t) < cutoff, 1, 'last');
-                if isempty(start)
-                    start = 1;
-                end
-                stop = (find(mean_corr(corr_t:end) < cutoff, 1, 'first')+corr_t);
-                if isempty(stop) || stop > numel(mean_corr)
-                    stop = numel(mean_corr);
-                end
-                local_range             = start:stop;
-                obj.event.t_win{ev}     = local_range;
-                obj.event.globality_index(ev) = nanmax(mean_corr(local_range));
-                peak(ev)                = nanmax(scaled_mean(local_range));
-            end
-            
-            %% Get individual peaks for each epoch, based on signal. Min peak promience is based on the events detected above
-            for ev = 1:numel(obj.event.t_corr)              
-                local_range = obj.event.t_win{ev};
-                if numel(local_range) > 2
-                    [pk, pkloc] = findpeaks(nanmean(scaled_mean(local_range,:),2),'MinPeakProminence',nanmin(abs(peak)));
-                else
-                    pk = [];
-                end
-                if isempty(pk) % happen when range is < 3 pts or no peak was found
-                    [pk, pkloc] = nanmax(nanmean(scaled_mean(local_range,:),2));    
-                end
-                obj.event.t_peak{ev} = pkloc+local_range(1)-1;
-                obj.event.peak_v{ev} = pk;
-            end
-
-            %% Idntify events that are of similar amplitude, but not correlated
-            [obj.event.lowcorr_peak_v, obj.event.lowcorr_t_peak] = findpeaks(nanmean(scaled_mean,2),'MinPeakProminence',nanmin(abs(peak)));
-            all_peak_t = vertcat(obj.event.t_peak{:});
-            already_detected = ismembertol(obj.event.lowcorr_t_peak, all_peak_t, 3, 'DataScale', 1);
-            obj.event.lowcorr_peak_v = obj.event.lowcorr_peak_v(~already_detected);
-            obj.event.lowcorr_t_peak = obj.event.lowcorr_t_peak(~already_detected);
-            %figure();plot(scaled_mean); hold on;scatter(obj.event.lowcorr_t_peak, obj.event.lowcorr_peak_v,'ko','filled');hold on; scatter(vertcat(obj.event.t_peak{:}), vertcat(obj.event.peak_v{:}),'ro','filled')
-            
-            if obj.rendering
-                figure(1030);clf();
-                plot(obj.t, mean_corr, 'Color',[0.8,0.8,0.8]); hold on;
-                plot(obj.t, scaled_mean); hold on;
-                scatter(obj.t(obj.event.lowcorr_t_peak), obj.event.lowcorr_peak_v, 'MarkerEdgeColor','k','MarkerFaceColor','none','Marker','x');  
-                scatter(obj.t([obj.event.t_win{obj.event.is_global}]), zeros(1,numel([obj.event.t_win{obj.event.is_global}])), 'k', 'filled');
-                scatter(obj.t([obj.event.t_win{~obj.event.is_global}]), zeros(1,numel([obj.event.t_win{~obj.event.is_global}])), 'r', 'filled');
-                col  = obj.event.t_peak;
-                for ev = 1:numel(col)
-                    col{ev}(:) = obj.event.globality_index(ev);
-                end                
-                scatter(obj.t(obj.event.t_corr), mean_corr(obj.event.t_corr), 'kv', 'filled');
-                scatter(obj.t(vertcat(obj.event.t_peak{:})), scaled_mean(vertcat(obj.event.t_peak{:})), [],vertcat(col{:}), 'filled');                              
-                legend({'Correlation','Mean Trace','Uncorrelated Large Event','Global Event','Non-global Event','High-correlation Event time'})
-            end
+            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, 'corr', 0.2, corr_window);
+            %[obj.event]             = detect_events(raw_traces, obj.t, 'global_amp', 60, corr_window);
             
             %% Identify and log poorly correlated ROIs
-            obj.find_bad_ROIs(corr_results, comb, corr_window, idx_filter);           
-        end
-        
-        function corr_window = get_ideal_corr_window(obj)
-            med = obj.global_median_raw;
-            med = med(~isnan(med));
-            bsl_guess = rms(med)*2;
-            [~,~,w] = findpeaks(obj.global_median_raw,'SortStr','descend','MinPeakProminence',bsl_guess);
-            corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])     
+            obj.find_bad_ROIs(correlation_res.corr_results, correlation_res.comb, corr_window, idx_filter);           
         end
         
         function find_bad_ROIs(obj, corr_results, comb, corr_window, ROIs)
@@ -1189,6 +1106,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
             end  
             
+            THR_FOR_GLOBAL      = 0.5
+            
             %% Show mean correlation with each ROI
             n_high_corr = [];
             max_corr = max(obj.event.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
@@ -1196,7 +1115,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 corr_results_sub = corr_results(obj.event.t_corr(obj.event.is_global), comb(:,2) == key | comb(:,1) == key);
                 corr_results_sub = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
                 mean_corr = nanmean(corr_results_sub,2);
-                n_high_corr(key) = sum(mean_corr > 0.5);
+                n_high_corr(key) = sum(mean_corr > THR_FOR_GLOBAL);
             end
             obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < obj.bad_ROI_thr); % below threshold% of max correlation
             if obj.rendering
@@ -1259,8 +1178,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.compute_similarity(); 
 
             %% Correct for decay to avoid overestimating peak amplitude
-            t_peak_global = vertcat(obj.event.t_peak{obj.event.is_global})';
-            obj.event_fitting = detect_and_fit_events(obj.binned_data.median_traces, obj.t, obj.demo, obj.binned_data.bin_legend, t_peak_global);arrangefigures([1,2]);
+            global_event_time   = unique(sort(vertcat(obj.event.peak_time{obj.event.is_global})))';
+            global_event_width  = nanmean(vertcat(obj.event.peak_width{:}));
+            obj.event.fitting   = fit_events(obj.binned_data.median_traces, obj.t, obj.demo, obj.binned_data.bin_legend, global_event_time, global_event_width);arrangefigures([1,2]);
 
             %% Detect and display peak histogram distribution (mean and individual groups)
             obj.get_events_statistics();
