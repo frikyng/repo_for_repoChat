@@ -1137,7 +1137,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 med = nanmedian(obj.binned_data.median_traces,2);
                 med = med(~isnan(med));
                 bsl_guess = rms(med)*2;
-                [~,~,w,p] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
+                [~,~,w] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
                 corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])                
             end
             [corr_results, comb]    = generate_pairwise_correlations(obj.extracted_traces_conc(:, idx_filter), obj.event.corr_window); % same as in detect_events            

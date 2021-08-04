@@ -149,10 +149,12 @@ function fit_data = fix_resampling(fit_data)
     %% If the initial trace was resampled, some elements needs to be readjusted
     fit_data.peak_pos = round(fit_data.peak_pos / fit_data.resampling_factor);
     for el = 1:numel(fit_data.window)
-        fit_data.window{el} = interpolate_to(fit_data.window{el}, ceil(size(fit_data.window{el},1)/fit_data.resampling_factor))';
-        fit_data.window{el}(:,1) = round(fit_data.window{el}(:,1)/fit_data.resampling_factor);
+        fit_data.window{el}         = interpolate_to(fit_data.window{el}, ceil(size(fit_data.window{el},1)/fit_data.resampling_factor))';
+        fit_data.window{el}(:,1)    = round(fit_data.window{el}(:,1)/fit_data.resampling_factor);
     end
-    % .t_peak % ?
+    % .peak_times is ok
+    % .peak_jitter TO FIX
+    % .global_fit & events TO CHECK --> possibly tau to fix
 end
 
 function show_results(fit_data, traces, group_labels, global_timescale)
