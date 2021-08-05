@@ -38,7 +38,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         binned_data             % Defines how ROIs are grouped                 
         rescaling_info          % Defines how each ROi get rescaled to match the cell median
         event                   % Event detection output (event times, amplitude, correlation etc....)    
-        event_fitting           % Event kintics following detection --> TO MOVE TO EVENTS
         variability             % Signal variability over time
         dimensionality          % Results of diemensionality reduction
         behaviours              % List of available behaviours
@@ -130,7 +129,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                     end
                 end
                 obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
-                for field = {'arboreal_scans','binned_data', 'rescaling_info','event', 'event_fitting', 'variability','crosscorr', 'dimensionality'}
+                for field = {'arboreal_scans','binned_data', 'rescaling_info','event', 'variability','dimensionality'}
                     obj.(field{1}) = {};
                 end
                 
@@ -482,33 +481,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Rescale traces
             t_peak_all = vertcat(obj.event.peak_time{obj.event.is_global});
             [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset] = scale_every_recordings(traces, obj.demo, t_peak_all); % qq consider checking and deleting "scale_across_recordings"
-            obj.set_rescaled_traces();            
+            obj.is_rescaled = true; 
+            obj.set_median_traces(true); 
             if obj.rendering
                 obj.plot_rescaling_info();arrangefigures([1,2]);                
             end
-        end
-        
-        function set_rescaled_traces(obj)
-            %% Using obj.rescaling_info.scaling & obj.rescaling_info.offset, rescale the traces
-            all_traces_per_rec = obj.extracted_traces;                        
-            
-            %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
-            for trace = 1:obj.n_ROIs                 
-                temp            = cellfun(@(x) x(:, trace) ,all_traces_per_rec, 'UniformOutput', false); % 'end' or any group you want to test
-                for rec = 1:numel(temp)
-                    temp{rec}(1:2) = NaN; % first 2 points are sometimes a bit lower than the rest. We NaN them. This is also useful later on to identify trials
-                end
-                concat_trace    = vertcat(temp{:});
-                off             = prctile(concat_trace, obj.rescaling_info.offset(trace));
-                temp            = cellfun(@(x) x - off, temp, 'UniformOutput', false);
-                temp            = cellfun(@(x) x / obj.rescaling_info.scaling(trace), temp, 'UniformOutput', false);
-                for rec = 1:numel(temp)
-                    all_traces_per_rec{rec}(:, trace) = temp{rec};
-                end
-            end 
-            obj.rescaled_traces = vertcat(all_traces_per_rec{:});
-            obj.set_median_traces(true); 
-            obj.is_rescaled = true;
         end
         
         function rescaled_traces = get.rescaled_traces(obj)            
@@ -518,7 +495,23 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 rescaled_traces = [];
                 return
             else
-                rescaled_traces = obj.rescaled_traces;
+                all_traces_per_rec = obj.extracted_traces;                  
+
+                %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
+                for trace = 1:obj.n_ROIs                 
+                    temp            = cellfun(@(x) x(:, trace) ,all_traces_per_rec, 'UniformOutput', false); % 'end' or any group you want to test
+                    for rec = 1:numel(temp)
+                        temp{rec}(1:2) = NaN; % first 2 points are sometimes a bit lower than the rest. We NaN them. This is also useful later on to identify trials
+                    end
+                    concat_trace    = vertcat(temp{:});
+                    off             = prctile(concat_trace, obj.rescaling_info.offset(trace));
+                    temp            = cellfun(@(x) x - off, temp, 'UniformOutput', false);
+                    temp            = cellfun(@(x) x / obj.rescaling_info.scaling(trace), temp, 'UniformOutput', false);
+                    for rec = 1:numel(temp)
+                        all_traces_per_rec{rec}(:, trace) = temp{rec};
+                    end
+                end 
+                rescaled_traces = vertcat(all_traces_per_rec{:});
             end
         end
         
@@ -574,7 +567,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
     
         function norm_cumsum = get_events_statistics(obj)
             
-            peaks = obj.event_fitting.post_correction_peaks;
+            peaks = obj.event.fitting.post_correction_peaks;
             
             %% Detect and display peak histogram distribution (mean and individual groups)
             max_peaks = max(peaks(:));
@@ -591,7 +584,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             [m,n] = numSubplots(size(obj.binned_data.median_traces, 2));
             for gp = 1:size(obj.binned_data.median_traces, 2)
                 subplot(m(1), m(2), gp)
-                %figure();plot(global_timescale,obj.binned_data.median_traces(:,gp));hold on;scatter(obj.event_fitting.peak_times,obj.event_fitting.post_correction_peaks(:,gp), 'kv')
+                %figure();plot(global_timescale,obj.binned_data.median_traces(:,gp));hold on;scatter(obj.event.fitting.peak_times,obj.event.fitting.post_correction_peaks(:,gp), 'kv')
                 if ~isempty(peaks)
                     histogram(peaks(:,gp),0:bin_size:max_peaks, 'FaceAlpha', 0.8,'EdgeColor','none', 'FaceColor', cmap(gp, :));hold on;
                 end
@@ -611,18 +604,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         function norm_vmr = assess_variability(obj)            
             %sr = nanmedian(diff(obj.timescale{expe}.global_timescale));
-            vmr = nanvar(obj.event_fitting.post_correction_peaks,[],2)./nanmean(obj.event_fitting.post_correction_peaks, 2);
-            %cv  = nanstd(obj.event_fitting.post_correction_peaks,[],2)./nanmean(obj.event_fitting.post_correction_peaks, 2); % (maybe chack snr at one point?  mu / sigma)
+            vmr = nanvar(obj.event.fitting.post_correction_peaks,[],2)./nanmean(obj.event.fitting.post_correction_peaks, 2);
+            %cv  = nanstd(obj.event.fitting.post_correction_peaks,[],2)./nanmean(obj.event.fitting.post_correction_peaks, 2); % (maybe chack snr at one point?  mu / sigma)
             %fano = []; % windowed VMR. usually for spike trains
             [~, idx] = sort(vmr,'descend');
             
-            %figure(123); cla();ylim([0, nanmax(obj.event_fitting.post_correction_peaks(:))]); hold on;
+            %figure(123); cla();ylim([0, nanmax(obj.event.fitting.post_correction_peaks(:))]); hold on;
             %     for event = idx'
-            %         show_event(obj.binned_data.median_traces, round(obj.event_fitting.peak_times/sr), event);
+            %         show_event(obj.binned_data.median_traces, round(obj.event.fitting.peak_times/sr), event);
             %         drawnow;%pause(0.1)
             %     end
 
-            figure(1009);cla();plot(obj.event_fitting.post_correction_peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
+            figure(1009);cla();plot(obj.event.fitting.post_correction_peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
 
             R = max(range(obj.binned_data.median_traces));
             %norm_vmr = vmr/range(vmr);
@@ -630,7 +623,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.variability.index_of_disp = norm_vmr;
             figure(1010);clf();
             ax1 = subplot(2,1,1);plot(obj.t, obj.binned_data.median_traces); ylabel('Amplitude'); hold on;set(gcf,'Color','w');ylim([-R/20,R + R/20]);title('bin traces'); hold on;
-            ax2 = subplot(2,1,2);plot(obj.event_fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
+            ax2 = subplot(2,1,2);plot(obj.event.fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
             hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
@@ -644,16 +637,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %             behaviour = smoothdata(beh.value, 'gaussian', [50, 0]);
             %             hold on;plot(obj.t, behaviour,'b');
             %             
-            %             plot(obj.event_fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
+            %             plot(obj.event.fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
             %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
             %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
             %             hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');  
             %  
             %             
-            %             temp = behaviour(round(obj.event_fitting.peak_pos));
-            %             hold on;plot(obj.t(obj.event_fitting.peak_pos), temp,'-vr');
+            %             temp = behaviour(round(obj.event.fitting.peak_pos));
+            %             hold on;plot(obj.t(obj.event.fitting.peak_pos), temp,'-vr');
 
-            figure(1011);cla();scatter(nanmedian(obj.event_fitting.post_correction_peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w')
+            figure(1011);cla();scatter(nanmedian(obj.event.fitting.post_correction_peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w')
         end
 
         %% #############################################
@@ -716,7 +709,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Get signal time range
             tp_of_events        = sort(unique([obj.event.t_win{:}]));
             if contains(obj.cc_mode, 'peaks') %% event time
-                tp          = obj.event_fitting.peak_pos;% could be using obj.event_fitting.pre_correction_peaks
+                tp          = obj.event.fitting.peak_pos;% could be using obj.event.fitting.pre_correction_peaks
             elseif contains(obj.cc_mode, 'quiet') %% low corr window
                 tp              = true(1,size(obj.binned_data.median_traces,1)); 
                 tp(tp_of_events)= false;
@@ -810,7 +803,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %first_valid = find(~cellfun(@(x) all(isnan(x)), calcium),1,'first');
             
             AMAX        = 10; % wtf
-            p = obj.event_fitting.global_fit;f = p(2) / (p(2)+p(4));estimated_tau = p(3)*f+p(5)*(1-f); 
+            p = obj.event.fitting.global_fit;f = p(2) / (p(2)+p(4));estimated_tau = p(3)*f+p(5)*(1-f); 
 
             %% Auto-calibration
             pax         = spk_autocalibration('par');
