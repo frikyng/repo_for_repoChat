@@ -6,56 +6,65 @@
 
 classdef arboreal_scan_experiment < handle & arboreal_scan_plotting   
     properties
-        source_folder           % The folder where individual arboreal_scans were obtained
-        extracted_data_paths    % the location of the individual arboreal_scans
-        arboreal_scans          % a compressed copy of the individual arboreal_scans
-        ref                     % a pointer to the first extracted arboreal scan, for conveniency
-        timescale               % time and sampling rate info for the individual recordings
-        global_median_raw       % 
-        global_median_scaled    % 
-        t                       % pointer to obj.timescale.global_timescale
-        batch_params    = {};   % pointer to obj.ref.batch_params ; the info to rebuild and locate the tree
-
+        %% Extraction/Re-extraction Settings
+        extraction_method = 'median'; % the 1D -> 0D compression method
+        source_folder           % The folder where individual arboreal_scans were located when you built the object
+        extracted_data_paths    % The original location of the individual arboreal_scans when you built the object
         need_update
-
-        extraction_method = 'median';
-        extracted_traces
-        extracted_traces_conc
-        extracted_pop
-        extracted_pop_conc
-        n_ROIs          = [];
-
         
+        %% Children
+        arboreal_scans          % A copy of the individual arboreal_scans, but where the uncompressed signal per ROIs had ben deleted
+        
+        %% Across expe Timescale info
+        timescale               % time and sampling rate info for the individual recordings
+
+        %% Saving options
         demo            = 0;
         auto_save_analysis = false
         auto_save_figures = false
         
+        %% Analysis/extraction settings
         filter_win      = 0;
         filter_type     = 'gaussian';
-
+        dim_red_type    = 'nnmf' 
         peak_thr        = 2;
         bad_ROI_thr     = 0.1;
-        cc_mode         = 'peaks'; % or raw
-        
-        
-        is_rescaled = false;
-        rescaled_traces
-        detrend = 1;
-        rescaling_info
-        binned_data
-        
-        event
-        event_fitting
-        variability
-        crosscorr
-        dimensionality
-        external_variables
-        spiketrains
-        behaviours        
+        cc_mode         = 'groups_peaks'; % or raw        
+        detrend         = false;
+        is_rescaled     = false; % is set to True once you ran the rescaling step.
         default_handle
-        
-        bad_ROI_list = [];
+
+        %% All the fields computed in 
+        binned_data             % Defines how ROIs are grouped                 
+        rescaling_info          % Defines how each ROi get rescaled to match the cell median
+        event                   % Event detection output (event times, amplitude, correlation etc....)    
+        event_fitting           % Event kintics following detection --> TO MOVE TO EVENTS
+        variability             % Signal variability over time
+        dimensionality          % Results of diemensionality reduction
+        behaviours              % List of available behaviours
+        spiketrains             % If available, spike inference results
+        bad_ROI_list     = [];  % list of uncorrelated ROIs (following event detection)
     end
+    
+    properties (Dependent = true, Transient = true)
+        extracted_traces        % Concatenated version of each obj.arboral_scan.simple_data
+        extracted_pop           % Concatenated version of each obj.arboral_scan.simple_pop_data
+        extracted_traces_conc   % Concatenated version of extracted_traces 
+        rescaled_traces         % Rescaled Traces according to rescaling_info
+        extracted_pop_conc      % Concatenated version of extracted_pop
+        global_median_raw       % The median of extracted_traces_conc
+        t                       % Pointer to obj.timescale.global_timescale
+        n_ROIs                  % Total number of ROIs in the swc, including bad ones  
+        n_pop_ROIs              % Total number of population ROIs
+        ref                     % A pointer to the first extracted arboreal scan, for conveniency
+        batch_params            % Pointer to obj.ref.batch_params ; the info to rebuild and locate the tree
+        crosscorr               % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+    end
+    
+    properties (Dependent = true, Transient = true, Hidden = true)
+        external_variables      % Pointer to behavioural variables of each arboreal scan --> set in obj.behaviours
+    end
+    
     
     methods
         function obj = arboreal_scan_experiment(source_folder, varargin)
@@ -158,7 +167,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
                     obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
-                    obj.arboreal_scans{pos}.full_data               = []; % clear full data. If you change t you'll need to re-extract everything anyway
+                    obj.arboreal_scans{pos}.full_data               = []; % clear full data. 
+                    obj.arboreal_scans{pos}.population_data         = []; % clear population_data. 
                     obj.need_update(pos)                            = false;
                 else
                     obj.arboreal_scans(pos)                         = [];
@@ -169,26 +179,24 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
 
         function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);  
-            extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);             
+            if obj.detrend
+                extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);
+            end
         end
         
         function extracted_pop = get.extracted_pop(obj) % checked
-            extracted_pop = cellfun(@(x) x.simple_pop_data, obj.arboreal_scans, 'UniformOutput', false); 
-            extracted_pop = cellfun(@(x) x - prctile(x, 1), extracted_pop, 'UniformOutput', false);             
+            extracted_pop = cellfun(@(x) x.simple_pop_data, obj.arboreal_scans, 'UniformOutput', false);
+            if obj.detrend
+                extracted_pop = cellfun(@(x) x - prctile(x, 1), extracted_pop, 'UniformOutput', false);          
+            end
         end
         
         function extracted_traces_conc = get.extracted_traces_conc(obj) % checked
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
-%             if obj.detrend
-%                 extracted_traces_conc = detrend(extracted_traces_conc);
-%             end
         end
 
         function extracted_pop_conc = get.extracted_pop_conc(obj) % checked
-            extracted_pop_conc = vertcat(obj.extracted_pop{:});
-            if obj.detrend
-                extracted_pop_conc = detrend(extracted_pop_conc);
-            end     
+            extracted_pop_conc = vertcat(obj.extracted_pop{:}); 
             % figure(666);cla();plot(normalize(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
         end
         
@@ -226,6 +234,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         function n_ROIs = get.n_ROIs(obj) % checked
             n_ROIs = size(obj.extracted_traces{1}, 2);
         end
+
+        function n_ROIs = get.n_pop_ROIs(obj) % checked
+            n_ROIs = size(obj.extracted_pop{1}, 2);
+        end
+        
         
         function f_handle = get.default_handle(obj)
             use_mask = false;
@@ -257,14 +270,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         
         function behaviours = get.behaviours(obj)
             behaviours                  = obj.behaviours;  
-            external_var                = obj.external_variables;
-            behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), external_var);
-            behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), external_var);
-            [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), external_var));
-            behaviours.types            = fieldnames(external_var{Max_var_loc})';  
+            behaviours.external_var     = obj.external_variables;
+            behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), behaviours.external_var);
+            behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), behaviours.external_var);
+            [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
+            behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';  
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
             for beh = 1:Max_var
-                behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), external_var)';
+                behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)';
             end
         end
         
@@ -286,7 +299,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 return
             end
             for beh = 1:numel(type)
-                raw_beh                     = arrayfun(@(x) x{1}.(type{beh}), obj.external_variables, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
+                raw_beh                     = arrayfun(@(x) x{1}.(type{beh}), obj.behaviours.external_var, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
                 temp.time  = [];
                 temp.value = [];
                 for rec = 1:numel(raw_beh)
@@ -391,7 +404,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 bouts = sort([starts, stops]);
             end
             
-            linkaxes([plts{:}],'x');
+            if rendering
+                linkaxes([plts{:}],'x');
+            end
             
             function [starts, stops] = get_limits(active_tp, beh_sm)
                 if size(active_tp, 1) > 1
@@ -429,6 +444,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         %% #############################
 
         function prepare_binning(obj, condition)
+            
+            %% Clear fields depending on a different scaling
+            obj.rescaling_info = {};
+            obj.need_update(:)              = true; 
             if  nargin < 2
                 obj.binned_data.condition   = 'single group';
                 obj.binned_data.groups      = {1:obj.n_ROIs};
@@ -445,16 +464,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 obj.binned_data.metrics     = 1:numel(condition);
                 legends = strcat('group ', num2str(1:numel(condition))');
                 obj.binned_data.bin_legend  = cellstr(legends(1:3:end,:))';
-            end
-            obj.need_update(:)              = true; 
+            end            
             obj.binned_data.readmap         = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map            
-            
             obj.set_median_traces(false);        
         end
-
         
         function rescale_traces(obj) 
-            traces                        = obj.extracted_traces;
+            obj.is_rescaled             = false;
+            traces                      = obj.extracted_traces;
             
             %% Filter out excluded ROIs so they don't mess up the scaling process
             invalid = [~ismember(1:size(traces{1}, 2), obj.ref.indices.valid_swc_rois') | ismember(1:size(traces{1}, 2), obj.bad_ROI_list)];
@@ -465,19 +482,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% Rescale traces
             t_peak_all = vertcat(obj.event.peak_time{obj.event.is_global});
             [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset] = scale_every_recordings(traces, obj.demo, t_peak_all); % qq consider checking and deleting "scale_across_recordings"
+            obj.set_rescaled_traces();            
             if obj.rendering
                 obj.plot_rescaling_info();arrangefigures([1,2]);                
             end
         end
         
-        function rescaled_traces = get.rescaled_traces(obj)
+        function set_rescaled_traces(obj)
             %% Using obj.rescaling_info.scaling & obj.rescaling_info.offset, rescale the traces
-            all_traces_per_rec = obj.extracted_traces;
-            obj.is_rescaled = false;            
-            if isempty(obj.rescaling_info)
-                warning('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first.\n')                 
-                return
-            end
+            all_traces_per_rec = obj.extracted_traces;                        
             
             %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
             for trace = 1:obj.n_ROIs                 
@@ -493,8 +506,20 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                     all_traces_per_rec{rec}(:, trace) = temp{rec};
                 end
             end 
-            rescaled_traces = vertcat(all_traces_per_rec{:});  
+            obj.rescaled_traces = vertcat(all_traces_per_rec{:});
+            obj.set_median_traces(true); 
             obj.is_rescaled = true;
+        end
+        
+        function rescaled_traces = get.rescaled_traces(obj)            
+            if isempty(obj.rescaling_info)
+                warning('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first.\n');
+                obj.is_rescaled = false;
+                rescaled_traces = [];
+                return
+            else
+                rescaled_traces = obj.rescaled_traces;
+            end
         end
         
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled) 
@@ -710,7 +735,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             if contains(obj.cc_mode, 'groups')
                 signal = obj.binned_data.median_traces(tp,:);
                 ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);  
-            elseif contains(obj.cc_mode, 'ROIs')
+            else% if contains(obj.cc_mode, 'ROIs')
                 signal = obj.rescaled_traces(tp,obj.ref.indices.valid_swc_rois);
                 ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);  
             end  
