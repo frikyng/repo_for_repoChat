@@ -18,7 +18,6 @@ classdef arboreal_scan_dataset < handle
             fold = dir([source_folder,'/*-*-*_exp_*']);
             fold = fold([fold.isdir]);            
             for idx = (numel(fold)-5):numel(fold)%1:numel(fold)
-                idx
                 files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
 %                 if numel(files) == 0
 %                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
@@ -28,23 +27,43 @@ classdef arboreal_scan_dataset < handle
 %                 end
                 
                % for el = 1:numel(files)
-  
-                    m = load([files(1).folder,'/',files(1).name]);
-                    if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
+               fname = [files(1).folder,'/',files(1).name];
+               if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
+                   fprintf(['loading ',files(1).name,' ... please wait\n'])
+                   m = load(fname);  
+                   obj.experiments(idx) = m.obj;
+               end
+               
+                    
+                  % if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
 %                         if isempty(obj.experiments)
 %                             obj.experiments = m.obj;
 %                         else
 %                             %% SQUEEZE IDENTIFY HERE
 %                             try
-                            obj.experiments(idx) = m.obj;
+                            
 %                             catch
 %                                 1
 %                             end
-                    end
+                  %  end
                         %break
                   %  end
                % end
             end       
+        end
+        
+        function class_name = fast_class_check(obj,fname)
+            class_name = '';
+            fid = H5F.open(fname); % Use low level H5F builtin to open
+            try 
+                 obj_id = H5O.open(fid,'/obj','H5P_DEFAULT');
+                 attr_id = H5A.open(obj_id,'MATLAB_class');
+                 class_name = [H5A.read(attr_id)'];
+
+                 H5O.close(obj_id);
+                 H5A.close(attr_id);
+            end
+            H5F.close(fid);
         end
         
 
@@ -97,7 +116,7 @@ classdef arboreal_scan_dataset < handle
 %             obj.extracted_traces{expe}  = [];
 %             obj.binned_data{expe}       = [];
 %             obj.timescale{expe}         = [];
-%             obj.event_fitting{expe}     = [];
+%             obj.event.fitting{expe}     = [];
 %             obj.crosscorr{expe}         = [];
 %             obj.dimensionality{expe}    = [];
 %             obj.external_variables{expe}= [];
@@ -128,7 +147,7 @@ classdef arboreal_scan_dataset < handle
 %             obj.extracted_traces = obj.extracted_traces(to_keep);
 %             obj.binned_data = obj.binned_data(to_keep);
 %             obj.timescale = obj.timescale(to_keep);
-%             obj.event_fitting = obj.event_fitting(to_keep);
+%             obj.event.fitting = obj.event.fitting(to_keep);
 %             obj.crosscorr = obj.crosscorr(to_keep);
 %             obj.dimensionality = obj.dimensionality(to_keep);
 %             obj.expe_list = obj.expe_list(to_keep);
@@ -142,7 +161,7 @@ classdef arboreal_scan_dataset < handle
 %             obj.extracted_traces = obj.extracted_traces(order);
 %             obj.binned_data = obj.binned_data(order);
 %             obj.timescale = obj.timescale(order);
-%             obj.event_fitting = obj.event_fitting(order);
+%             obj.event.fitting = obj.event.fitting(order);
 %             obj.crosscorr = obj.crosscorr(order);
 %             obj.dimensionality = obj.dimensionality(order);
 %             obj.need_update = obj.need_update(order);
@@ -242,7 +261,7 @@ classdef arboreal_scan_dataset < handle
                 max_depth   = depth_range(2);
             end
             if nargin < 3 || isempty(corr_type)
-                corr_type   = 'raw';
+                corr_type   = 'peaks_groups';
             end
             
             %% Get CCs
@@ -392,9 +411,9 @@ classdef arboreal_scan_dataset < handle
             
             CCs             = CCs(valid);
             %obj.cumsum      = obj.cumsum(~cellfun(@isempty, obj.cumsum));
-            peaks           = {obj.experiments.event_fitting};
+            peaks           = {obj.experiments.event};
             peaks           = peaks(valid);
-            peaks           = cellfun(@(x) x.post_correction_peaks, peaks, 'UniformOutput', false);
+            peaks           = cellfun(@(x) x.fitting.post_correction_peaks, peaks, 'UniformOutput', false);
             
              all_cc = cellfun(@(x) [x(1:size(x,1),1:size(x,2)), NaN(size(x,1),biggest_gp-size(x,2))], CCs, 'UniformOutput', false);
              all_cc = cellfun(@(x) [x(1:size(x,1),1:size(x,2)); NaN(biggest_gp-size(x,1),size(x,2))], all_cc, 'UniformOutput', false);
