@@ -9,9 +9,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         %% Extraction/Re-extraction Settings
         extraction_method = 'median'; % the 1D -> 0D compression method
         source_folder           % The folder where individual arboreal_scans were located when you built the object
+        update_folder     = ''; % If you need to update the arboral_scans, but the orginal path changed, set the folder containing the new files here
         extracted_data_paths    % The original location of the individual arboreal_scans when you built the object
         need_update
-        
+
         %% Children
         arboreal_scans          % A copy of the individual arboreal_scans, but where the uncompressed signal per ROIs had ben deleted
         
@@ -46,6 +47,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
     end
     
     properties (Dependent = true, Transient = true)
+        updatable               % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
+        updated_path            % If update_folder is used, the updated filpath
         extracted_traces        % Concatenated version of each obj.arboral_scan.simple_data
         extracted_pop           % Concatenated version of each obj.arboral_scan.simple_pop_data
         extracted_traces_conc   % Concatenated version of extracted_traces 
@@ -63,8 +66,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
     properties (Dependent = true, Transient = true, Hidden = true)
         external_variables      % Pointer to behavioural variables of each arboreal scan --> set in obj.behaviours
     end
-    
-    
+
     methods
         function obj = arboreal_scan_experiment(source_folder, varargin)
             if nargin < 1
@@ -85,9 +87,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             %% List available arboreal scans
             all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
             if isempty(all_recordings)
-                warning('no extracted arboreal_scans found in this folder');
-                extracted_data_paths = [];
+                obj.updatable       = false;
+                warning('no extracted arboreal_scans found in this folder. exraction/re-extraction not availabl');
                 return
+            else
+                obj.updatable       = true;
             end            
             all_recordings          = all_recordings(~[all_recordings(:).isdir]);
             all_recordings          = all_recordings(~(arrayfun(@(x) strcmp(x.name, '.'), all_recordings) | arrayfun(@(x) strcmp(x.name, '..'), all_recordings)));
@@ -95,7 +99,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             names                   = [vertcat(all_recordings.folder), repmat('/',numel(all_recordings), 1), vertcat(all_recordings.name)];
             extracted_data_paths    = cellfun(@(x) parse_paths(x), cellstr(names)', 'UniformOutput', false);
         end
-        
+
         function update(obj, bypass, varargin)
             if nargin < 2 || isempty(bypass) || ~bypass
                 quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESS DATA. Continue?','Update?','Yes','No','No');
@@ -175,6 +179,29 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 end
             end            
         end
+        
+        %% ########### GET METHODS ###################
+        
+        function updatable = get.updatable(obj)
+            updatable = cellfun(@(x) ~isempty(obj.updated_path), obj.extracted_data_paths);
+        end
+        
+        function updated_path = get.updated_path(obj) 
+            if isempty(obj.update_folder)
+                updated_path = obj.extracted_data_paths;
+            else
+                updated_path = cellfun(@(x) get_fname(x), obj.extracted_data_paths, 'uni', false);
+            end
+            
+            function fname = get_fname(in)
+                [~, in_name, in_ext] = fileparts(in);
+                fname = [in_name,in_ext];
+                replacement = dir([obj.update_folder,'/**/',fname]);
+                if ~isempty(replacement)
+                    fname = [replacement(1).folder,'/',replacement(1).name];
+                end
+            end
+        end
 
         function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);  
@@ -238,7 +265,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             n_ROIs = size(obj.extracted_pop{1}, 2);
         end
         
-        
         function f_handle = get.default_handle(obj)
             use_mask = false;
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
@@ -259,8 +285,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             	binned_data.global_median = smoothdata(binned_data.global_median,'gaussian',obj.filter_win);
             end
         end
-
-        %% ##############################
         
         function external_variables = get.external_variables(obj)
             %failed_encoder = cellfun(@(x) ~numel(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
@@ -280,6 +304,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             end
         end
         
+        %% ########### ... ###################
+
         function [raw_beh, downsampd_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering)
             if nargin < 2 || isempty(type)
                 type = 'encoder';
