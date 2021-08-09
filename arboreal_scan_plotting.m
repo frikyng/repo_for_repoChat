@@ -1,10 +1,66 @@
+% 1001 : Median scaled responses per group
+% 1002 : Event detection on median
+% 1003 (NO TITLE) : global distribution of event amplitudes
+% 1004 (NO TITLE) : distribution of event amplitudes per region
+% 1005 : Median Events and fitted decay
+    % 10051-1005n : Median Events and fitted decay for group n
+% 1006 : peaks values per subgroups
+% 1007 : cumulative sum of peaks
+% 1008 : CC matrix
+% 1009 : event per index of dispersion
+% 1010 : index of dispersion vs traces
+% 1011 : index of dispersion vs amplitude
+% 1012 : Scaling factor per ROI
+% 1013 : Global scaling factor and offset per ROI
+% 1014 : median tau per group
+% 1015 : median tau 1 per event
+% 1016 : tau vs event amplitude
+% 1017 : components weight per ROI (matrix)
+% 1018 : corr_tree
+% 1019 – no title  individual events?
+% 1020 : strongest component
+    % 10201 – 1020n : individual components
+% 1021 : Weighted signal average per component
+% 1022 : variability assessment 
+% 1023 : median traces  - overall median
+% 1024 : …
+% 1025 : Spike inference (pr bin)
+% 1026 : Behaviour
+% 1027 : Behaviour activity bouts
+% 1028 : cross validation result - training
+% 1029 : cross validation result - testing
+% to find un-numbered figures look for "% FF"
+
 classdef arboreal_scan_plotting < handle
     %% subclass of arboreal_scan_experiment 
     properties
         rendering = true;
     end
     
+    
+    methods(Static)
+        function clear_plots()
+            close_list = [obj.get_fig_list(50,50), 124]; % adding temporary figures # 124
+            figHandles = get(groot, 'Children');
+            for f = 1:numel(figHandles)
+                if ismember(figHandles(f).Number, close_list)
+                	close(figHandles(f));
+                end
+            end      
+        end
+    end
+    
     methods
+        function figure_list = get_fig_list(obj, n_groups, n_dims)   
+            if nargin < 2 || isempty(n_groups)
+                n_groups = obj.numel(obj.binned_data.groups);
+            end
+            if nargin < 3 || isempty(n_dims)
+                n_dims = size(obj.dimensionality.LoadingsPM, 2);
+            end
+            figure_list = [1001:1031, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
+        end
+        
         function plot_rescaling_info(obj)
             n_gp = numel(obj.rescaling_info.individual_scaling{1});
             n_rec = numel(obj.rescaling_info.individual_scaling);
@@ -66,6 +122,13 @@ classdef arboreal_scan_plotting < handle
                 annotation('textbox','String','N/A','FitBoxToText','on','FontSize',16,'FontWeight','bold')
             end
         end 
+        
+%         function plot_events(obj)
+%             for region = 1:size(obj.events.fitting)
+%                 figure();plot(squeeze(events(:,2,:)))
+%             end
+%             
+%         end
         
         function plot_dimensionality_summary(obj, weights_to_show, weighted_averages)
             if nargin < 2 || isempty(weights_to_show) % number or list of factor to display

@@ -237,8 +237,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         function n_ROIs = get.n_pop_ROIs(obj) % checked
             n_ROIs = size(obj.extracted_pop{1}, 2);
         end
-        
-        
+
         function f_handle = get.default_handle(obj)
             use_mask = false;
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
@@ -309,10 +308,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                         downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
                     end
                     
+                    
                     %downsampd_beh{beh}{rec}.value = smoothdata(downsampd_beh{beh}{rec}.value, 'movmean', [5, 0]);
                     
                     temp.time = [temp.time, downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
-                    temp.value = [temp.value, downsampd_beh{beh}{rec}.value];
+                    value = downsampd_beh{beh}{rec}.value;
+                    if size(value, 1) > 1 % if your behavioural metrics is made of multiple arrays
+                        value = nanmean(value, 1);
+                    end
+                    temp.value = [temp.value, value];
                 end 
                 
                 concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
@@ -1247,50 +1251,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
         end
         
         function save_figures(obj)
-            % 1001 : Median scaled responses per group
-            % 1002 : Event detection on median
-            % 1003 (NO TITLE) : global distribution of event amplitudes
-            % 1004 (NO TITLE) : distribution of event amplitudes per region
-            % 1005 : Median Events and fitted decay
-                % 10051-1005n : Median Events and fitted decay for group n
-            % 1006 : peaks values per subgroups
-            % 1007 : cumulative sum of peaks
-            % 1008 : CC matrix
-            % 1009 : event per index of dispersion
-            % 1010 : index of dispersion vs traces
-            % 1011 : index of dispersion vs amplitude
-            % 1012 : Scaling factor per ROI
-            % 1013 : Global scaling factor and offset per ROI
-            % 1014 : median tau per group
-            % 1015 : median tau 1 per event
-            % 1016 : tau vs event amplitude
-            % 1017 : components weight per ROI (matrix)
-            % 1018 : corr_tree
-            % 1019 – no title  individual events?
-            % 1020 : strongest component
-                % 10201 – 1020n : individual components
-            % 1021 : Weighted signal average per component
-            % 1022 : variability assessment 
-            % 1023 : median traces  - overall median
-            % 1024 : …
-            % 1025 : Spike inference (pr bin)
-            % 1026 : Behaviour
-            % 1027 : Behaviour activity bouts
-            % 1028 : cross validation result - training
-            % 1029 : cross validation result - testing
-            % to find un-numbered figures look for "% FF"
-
+            %% See arboreal_scan_plotting for an index of the figures
             p = get(groot,'DefaultFigurePosition');
             folder = parse_paths([obj.source_folder, '/figures/']);
             if isfolder(folder)
                 rmdir(folder,'s');
             end
             mkdir(folder);
-            [~, tag] = fileparts(fileparts(obj.source_folder));
-            n_dim = size(obj.dimensionality.LoadingsPM, 2);
-            n_groups = numel(obj.binned_data.groups);      
-            figs = [1001:1030, 10051:(10050 + n_groups), 10021:(10020+n_dim), 10200:(10200+n_dim),10830];
-            for fig_idx = figs
+            [~, tag] = fileparts(fileparts(obj.source_folder));  
+            for fig_idx = obj.get_fig_list()
                 f = figure(fig_idx);
                 set(f, 'Position', p)
                 try
