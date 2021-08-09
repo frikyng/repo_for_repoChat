@@ -4,7 +4,7 @@
 % - add warning if source folde ris the actual raw experiment
 
 
-classdef arboreal_scan_experiment < handle & arboreal_scan_plotting   
+classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting   
     properties
         %% Extraction/Re-extraction Settings
         extraction_method = 'median'; % the 1D -> 0D compression method
@@ -1142,10 +1142,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.bad_ROI_list = find(n_high_corr/max(n_high_corr) < obj.bad_ROI_thr); % below threshold% of max correlation
             if obj.rendering
                 figure(1031);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
-                plot(smoothdata(obj.extracted_traces_conc(:, obj.bad_ROI_list)./nanmax(obj.extracted_traces_conc(:, obj.bad_ROI_list)),'gaussian',obj.filter_win),'r');hold on;
-                plot(nanmedian(obj.extracted_traces_conc,2)/nanmax(nanmedian(obj.extracted_traces_conc,2)),'k');
+                ref = nanmedian(obj.extracted_traces_conc,2);
+                ref = ref - prctile(ref, 1);
+                bad = obj.extracted_traces_conc(:, obj.bad_ROI_list);
+                bad = bad - prctile(bad, 1);
+                plot(smoothdata(bad./nanmax(bad),'gaussian',obj.filter_win),'r');hold on;
+                plot(ref/nanmax(ref),'k');
                 invalid = false(1,size(obj.ref.indices.swc_list,1));invalid(obj.bad_ROI_list) = 1;
-                obj.ref.plot_value_tree(invalid, 1:numel(invalid), obj.default_handle, 'Uncorrelated ROIs', '',  1031,'','RedBlue');                
+                obj.ref.plot_value_tree(invalid, 1:numel(invalid), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','RedBlue');                
             end 
         end
         
@@ -1172,12 +1176,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 condition = {'distance',Inf};                
             end  
             if nargin < 3 || isempty(filter_win)
-                filter_win = [5,0];                
+                obj.filter_win = [5,0];   
+            else
+                obj.filter_win  = filter_win;
             end            
             if nargin >= 4 && ~isempty(rendering)
                 obj.rendering = rendering;
             end
-            obj.filter_win  = filter_win;
+            
+            %% Remove previous plots
+            obj.clear_plots();
 
             %% Load and concatenate traces for the selected experiment
             % obj.load_extracted_data();   % this also sets the current expe #
@@ -1200,9 +1208,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
             obj.compute_similarity(); 
 
             %% Correct for decay to avoid overestimating peak amplitude
-            global_event_time   = unique(sort(vertcat(obj.event.peak_time{obj.event.is_global})))';
-            global_event_width  = nanmean(vertcat(obj.event.peak_width{:}));
-            obj.event.fitting   = fit_events(obj.binned_data.median_traces, obj.t, obj.demo, obj.binned_data.bin_legend, global_event_time, global_event_width);arrangefigures([1,2]);
+            obj.fit_events();
 
             %% Detect and display peak histogram distribution (mean and individual groups)
             obj.get_events_statistics();
@@ -1258,8 +1264,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting
                 rmdir(folder,'s');
             end
             mkdir(folder);
-            [~, tag] = fileparts(fileparts(obj.source_folder));  
-            for fig_idx = obj.get_fig_list()
+            [~, tag] = fileparts(fileparts(obj.source_folder)); 
+            list = obj.get_fig_list();
+            for fig_idx = list
                 f = figure(fig_idx);
                 set(f, 'Position', p)
                 try

@@ -37,9 +37,8 @@ classdef arboreal_scan_plotting < handle
         rendering = true;
     end
     
-    
-    methods(Static)
-        function clear_plots()
+    methods
+        function clear_plots(obj)
             close_list = [obj.get_fig_list(50,50), 124]; % adding temporary figures # 124
             figHandles = get(groot, 'Children');
             for f = 1:numel(figHandles)
@@ -48,9 +47,7 @@ classdef arboreal_scan_plotting < handle
                 end
             end      
         end
-    end
-    
-    methods
+        
         function figure_list = get_fig_list(obj, n_groups, n_dims)   
             if nargin < 2 || isempty(n_groups)
                 n_groups = obj.numel(obj.binned_data.groups);
@@ -58,7 +55,7 @@ classdef arboreal_scan_plotting < handle
             if nargin < 3 || isempty(n_dims)
                 n_dims = size(obj.dimensionality.LoadingsPM, 2);
             end
-            figure_list = [1001:1031, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
+            figure_list = [1001:1032, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
         
         function plot_rescaling_info(obj)
