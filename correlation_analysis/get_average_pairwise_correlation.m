@@ -29,7 +29,7 @@ function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_corr
         if cond < 3
             n_high_corr(key) = sum(mean_corr > max_corr/2);
         else % check in how many subpeaks this region is involved
-            peak_thr        = nanmean(prctile(current_expe.event_fitting.pre_correction_peaks, 10))*1.5; % based on large event detect, set a small value
+            peak_thr        = nanmean(prctile(current_expe.event.fitting.pre_correction_peaks, 10))*1.5; % based on large event detect, set a small value
             min_local_size  = 0;
             local_event     = data_sm(subpeaks_t, key) > peak_thr;
             N_coactive      = sum(data_sm(subpeaks_t(local_event), :) > peak_thr & corr_results_sub(subpeaks_t(local_event), :) > 0.8,1); % at least 0.5 corr amd big enough
