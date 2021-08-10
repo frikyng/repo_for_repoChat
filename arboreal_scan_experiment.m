@@ -25,7 +25,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         auto_save_figures = false
 
         %% Analysis/extraction settings
-        filter_win      = 0;
+        filter_win      = [0, 0];
         filter_type     = 'gaussian';
         dim_red_type    = 'nnmf'
         peak_thr        = 2;
@@ -34,6 +34,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         detrend         = false;
         is_rescaled     = false; % is set to True once you ran the rescaling step.
         default_handle
+        rescaling_method= 'global';
 
         %% All the fields computed in
         binned_data             % Defines how ROIs are grouped
@@ -44,10 +45,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         behaviours              % List of available behaviours
         spiketrains             % If available, spike inference results
         bad_ROI_list     = [];  % list of uncorrelated ROIs (following event detection)
+        updatable               % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
+
     end
 
     properties (Dependent = true, Transient = true)
-        updatable               % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
         updated_path            % If update_folder is used, the updated filpath
         extracted_traces        % Concatenated version of each obj.arboral_scan.simple_data
         extracted_pop           % Concatenated version of each obj.arboral_scan.simple_pop_data
@@ -205,8 +207,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
-            if obj.detrend
+            if obj.detrend == 1
                 extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);
+            elseif obj.detrend == 2
+                extracted_traces = cellfun(@(x, y) x - y, extracted_traces,obj.rescaling_info.individual_offset, 'UniformOutput', false);
+            end
+
+            if any(obj.filter_win)
+                tic
+                extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.filter_win), extracted_traces, 'UniformOutput', false);
+                toc
             end
         end
 
@@ -223,7 +233,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function extracted_pop_conc = get.extracted_pop_conc(obj) % checked
             extracted_pop_conc = vertcat(obj.extracted_pop{:});
-            % figure(666);cla();plot(normalize(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
+            % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
         end
 
         function timescale = get.timescale(obj)
@@ -278,12 +288,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function binned_data = get.binned_data(obj)
             binned_data = obj.binned_data;
-            if isfield(obj.binned_data, 'median_traces')
-            	binned_data.median_traces = smoothdata(binned_data.median_traces,'gaussian',obj.filter_win);
-            end
-            if isfield(obj.binned_data, 'global_median')
-            	binned_data.global_median = smoothdata(binned_data.global_median,'gaussian',obj.filter_win);
-            end
+%             if isfield(obj.binned_data, 'median_traces')
+%             	binned_data.median_traces = smoothdata(binned_data.median_traces,'gaussian',obj.filter_win);
+%             end
+%             if isfield(obj.binned_data, 'global_median')
+%             	binned_data.global_median = smoothdata(binned_data.global_median,'gaussian',obj.filter_win);
+%             end
         end
 
         function external_variables = get.external_variables(obj)
@@ -499,22 +509,48 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.set_median_traces(false);
         end
 
-        function rescale_traces(obj)
-            obj.is_rescaled             = false;
-            traces                      = obj.extracted_traces;
-
-            %% Filter out excluded ROIs so they don't mess up the scaling process
-            invalid = [~ismember(1:size(traces{1}, 2), obj.ref.indices.valid_swc_rois') | ismember(1:size(traces{1}, 2), obj.bad_ROI_list)];
-            for idx = 1:numel(traces)
-                traces{idx}(:,invalid) = NaN;
+        function rescale_traces(obj, method, smoothing)
+            if nargin >= 2 && ~isempty(method)
+                obj.rescaling_method = method;
+            end
+            if nargin < 3 || isempty(smoothing)
+                pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
+                smoothing               = [pk_width*2,0];
             end
 
-            %% Rescale traces
-            t_peak_all = vertcat(obj.event.peak_time{obj.event.is_global});
-            [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset] = scale_every_recordings(traces, obj.demo, t_peak_all); % qq consider checking and deleting "scale_across_recordings"
+            %% Set some flag
+            obj.is_rescaled             = false;
+            invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
+
+
+            %% Get traces to rescale and Filter out excluded ROIs so they don't mess up the scaling process
+            if strcmp(obj.rescaling_method, 'global')
+                traces                   = obj.extracted_traces_conc;
+                traces(:,invalid)          = NaN;
+            elseif strcmp(obj.rescaling_method, 'by_trials')
+                traces                      = obj.extracted_traces;
+                for idx = 1:numel(traces)
+                    traces{idx}(:,invalid) = NaN;
+                end
+            else
+                error('rescaling method not valid, use "global" or "by_trials"')
+            end
+
+            %% Now rescale
+            if strcmp(obj.rescaling_method, 'global')
+                [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
+                obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
+                obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
+            elseif strcmp(obj.rescaling_method, 'by_trials')
+                t_peak_all              = unique(vertcat(obj.event.peak_time{:}));
+                t_for_baseline          = unique([obj.event.t_win_no_overlap{:}]);
+                [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
+            end
+
             obj.is_rescaled = true;
             obj.set_median_traces(true);
             if obj.rendering
+                obj.plot_rescaled_traces();
                 obj.plot_rescaling_info();arrangefigures([1,2]);
             end
         end
@@ -547,7 +583,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled)
-            if nargin < 2 || isempty(use_rescaled)
+            if (nargin < 2 || isempty(use_rescaled) || use_rescaled) && ~isempty(obj.rescaling_info)
                 traces = obj.rescaled_traces;
                 obj.is_rescaled = true;
             else
@@ -828,7 +864,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Formatting calcium. It seems that signal need to be normalized
-            calcium = num2cell(fillmissing(normalize(obj.binned_data.median_traces',[], 'norm_method','signal/max','percentile',10)','constant',0), 1);
+            calcium = num2cell(fillmissing(normalize_sig(obj.binned_data.median_traces',[], 'norm_method','signal/max','percentile',10)','constant',0), 1);
             dt      = median(diff(obj.t));
             valid   = find(cellfun(@(x) any(x), calcium));
             %first_valid = find(~cellfun(@(x) all(isnan(x)), calcium),1,'first');
@@ -883,7 +919,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function plot_inferred_spikes(obj)
-            calcium = num2cell(normalize(obj.binned_data.median_traces',[], 'norm_method','signal/max','percentile',10)', 1);
+            calcium = num2cell(normalize_sig(obj.binned_data.median_traces',[], 'norm_method','signal/max','percentile',10)', 1);
             valid   = cellfun(@(x) ~all(isnan(x)), calcium);
 
             figure(1025);cla();plot(obj.t,calcium{1},'k');hold on;title('Spike inference per bin');xlabel('time(s)')
@@ -1155,7 +1191,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
             end
 
-            THR_FOR_GLOBAL      = 0.5
+            THR_FOR_GLOBAL      = 0.3
 
             %% Show mean correlation with each ROI
             n_high_corr = [];
@@ -1173,10 +1209,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 ref = ref - prctile(ref, 1);
                 bad = obj.extracted_traces_conc(:, obj.bad_ROI_list);
                 bad = bad - prctile(bad, 1);
-                plot(smoothdata(bad./nanmax(bad),'gaussian',obj.filter_win),'r');hold on;
+                %plot(smoothdata(bad./nanmax(bad),'gaussian',obj.filter_win),'r');hold on;
+                plot(bad./nanmax(bad),'r');hold on;
                 plot(ref/nanmax(ref),'k');
                 invalid = false(1,size(obj.ref.indices.swc_list,1));invalid(obj.bad_ROI_list) = 1;
                 obj.ref.plot_value_tree(invalid, 1:numel(invalid), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','RedBlue');
+                caxis([0,1]); % otherwise if all values are the same you get a white tree on a white bkg
             end
         end
 
@@ -1203,7 +1241,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 condition = {'distance',Inf};
             end
             if nargin < 3 || isempty(filter_win)
-                obj.filter_win = [5,0];
+                obj.filter_win = [0,0];
             else
                 obj.filter_win  = filter_win;
             end
@@ -1222,11 +1260,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Prepare binning of ROIs based on specific grouping condition
             obj.prepare_binning(condition);
 
-            %% Find peaks basd on amplitude AND correlation
+            %% Find peaks based on amplitude AND correlation
             obj.detect_events();
 
             %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
-            obj.rescale_traces();
+            obj.rescale_traces(); % note that signal rescaling is computed on peaks, not noise
 
             %% Create median trace per bins
             obj.set_median_traces()

@@ -22,7 +22,6 @@ classdef event_fitting < handle
                 obj.detect_events();
             end
             
-            %% Get signal and detected event times
             traces                  = obj.binned_data.median_traces;
             peak_pos                = unique(sort(vertcat(obj.event.peak_time{obj.event.is_global})))';
             peak_av_width           = nanmean(vertcat(obj.event.peak_width{obj.event.is_global}));
@@ -41,6 +40,9 @@ classdef event_fitting < handle
             %% We do the fitting on denoised data - THIS MUST BE DONE BEFORE RESAMPLING
             %% ## DEBUG % figure();plot(all_data,'r'); [test_denoised, ~] = wavelet_denoise(all_data);hold on;plot(test_denoised,'k');
             [traces, ~] = wavelet_denoise(traces);
+            
+            %% QQ NOT GREAT
+            %traces = tweak_scaling(traces, peak_pos);
             
             %% Fitting adjustements with low SR can be a bit funny when cells are bursting, but upsampling data a bit does the job            
             if (dt/2) < tau_decay

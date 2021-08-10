@@ -55,7 +55,7 @@ classdef arboreal_scan_plotting < handle
             if nargin < 3 || isempty(n_dims)
                 n_dims = size(obj.dimensionality.LoadingsPM, 2);
             end
-            figure_list = [1001:1032, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
+            figure_list = [1001:1033, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
         
         function plot_rescaling_info(obj)
@@ -102,6 +102,11 @@ classdef arboreal_scan_plotting < handle
             if obj.is_rescaled
                 figure(1023);cla();plot(traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
             end
+        end
+        
+        function plot_rescaled_traces(obj)
+            M = prctile(obj.rescaled_traces(:),90);
+            figure(1033);imagesc(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list))');caxis([0, M]);title('rescaled traces');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
