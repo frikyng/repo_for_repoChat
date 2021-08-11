@@ -50,7 +50,7 @@ classdef arboreal_scan_plotting < handle
         
         function figure_list = get_fig_list(obj, n_groups, n_dims)   
             if nargin < 2 || isempty(n_groups)
-                n_groups = obj.numel(obj.binned_data.groups);
+                n_groups = numel(obj.binned_data.groups);
             end
             if nargin < 3 || isempty(n_dims)
                 n_dims = size(obj.dimensionality.LoadingsPM, 2);
@@ -106,7 +106,8 @@ classdef arboreal_scan_plotting < handle
         
         function plot_rescaled_traces(obj)
             M = prctile(obj.rescaled_traces(:),90);
-            figure(1033);imagesc(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list))');caxis([0, M]);title('rescaled traces');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1034);cla();plot(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list)));
+            figure(1033);cla();imagesc(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list))');caxis([0, M]);title('rescaled traces');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
@@ -133,7 +134,7 @@ classdef arboreal_scan_plotting < handle
 %         end
         
         function plot_dimensionality_summary(obj, weights_to_show, weighted_averages)
-            if nargin < 2 || isempty(weights_to_show) % number or list of factor to display
+                if nargin < 2 || isempty(weights_to_show) % number or list of factor to display
                 weights_to_show = 1:obj.dimensionality.n_factors;
             end
             if nargin < 3 || isempty(weighted_averages)
