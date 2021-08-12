@@ -55,7 +55,7 @@ classdef arboreal_scan_plotting < handle
             if nargin < 3 || isempty(n_dims)
                 n_dims = size(obj.dimensionality.LoadingsPM, 2);
             end
-            figure_list = [1001:1033, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
+            figure_list = [1001:1035, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
         
         function plot_rescaling_info(obj)
@@ -100,14 +100,21 @@ classdef arboreal_scan_plotting < handle
             end
             title(['median traces trace per group',suffix]);xlabel('time (s)');set(gcf,'Color','w');
             if obj.is_rescaled
-                figure(1023);cla();plot(traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
+                figure(1023);cla();plot(obj.t, traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
             end
+        end
+        
+        function plot_detected_events(obj)
+            raw_med = nanmedian(obj.extracted_traces_conc, 2);raw_med = raw_med - prctile(raw_med,1); %% QQ CHCK WHAT@S THE THING USED IN DETTECT_EVETS
+            figure(1035);clf(); subplot(2,1,1);plot(obj.t,raw_med , 'r'); hold on; plot(obj.t, obj.binned_data.global_median); hold on;scatter(obj.t(vertcat(obj.event.peak_time{:})), vertcat(obj.event.peak_value{:}), 'filled');xlabel('time (s)');ylabel('median signal (A.U)');
+            subplot(2,1,2); plot(obj.t, obj.event.mean_pairwise_corr); hold on;scatter(obj.t(obj.event.t_corr), obj.event.mean_pairwise_corr(obj.event.t_corr), [], obj.event.globality_index, 'filled');xlabel('time (s)');ylabel('Mean pairwise correlation');set(gcf,'Color','w');
         end
         
         function plot_rescaled_traces(obj)
             M = prctile(obj.rescaled_traces(:),90);
-            figure(1034);cla();plot(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list)));
-            figure(1033);cla();imagesc(obj.rescaled_traces(:,~ismember(1:obj.n_ROIs,obj.bad_ROI_list))');caxis([0, M]);title('rescaled traces');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
+            valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
+            figure(1034);cla();plot(obj.t, obj.rescaled_traces(:,valid_ROIS));title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1033);cla();imagesc(obj.rescaled_traces(:,valid_ROIS)');caxis([0, M]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
