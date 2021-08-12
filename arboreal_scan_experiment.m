@@ -1326,7 +1326,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
-        function save_figures(obj)
+        function save_figures(obj, file_type)
+            if nargin < 2 || isempty(file_type)
+                file_type = {'pdf'};
+            elseif ischar(file_type)
+                file_type = {file_type};
+            end
             %% See arboreal_scan_plotting for an index of the figures
             p = get(groot,'DefaultFigurePosition');
             folder = parse_paths([obj.source_folder, '/figures/']);
@@ -1340,20 +1345,32 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 f = figure(fig_idx);
                 set(f, 'Position', p)
                 try
-                    saveas(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.pdf']);
-                    saveas(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.png']);
-                    dcm_obj = datacursormode(f);
-                    bkp_callback = get(dcm_obj,'UpdateFcn');
-                    set(dcm_obj,'UpdateFcn',[], 'enable', 'off');
-                    savefig(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.fig']);
-                    if ~isempty(bkp_callback)
-                        set(dcm_obj,'UpdateFcn',bkp_callback, 'enable', 'on');
+                    if any(contains(file_type, 'pdf'))
+                        saveas(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.pdf']);
+                    end
+                    if any(contains(file_type, 'png'))
+                        saveas(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.png']);
+                    end
+                    if any(contains(file_type, 'fig'))
+                        dcm_obj = datacursormode(f);
+                        bkp_callback = get(dcm_obj,'UpdateFcn');
+                        set(dcm_obj,'UpdateFcn',[], 'enable', 'off');
+                        savefig(f, [folder,'/',f.Children(end).Title.String,' ', tag,'.fig']);
+                        if ~isempty(bkp_callback)
+                            set(dcm_obj,'UpdateFcn',bkp_callback, 'enable', 'on');
+                        end
                     end
                 catch % for figures with subplots
                     try
-                        saveas(f, [folder,'/',f.Tag,' ', tag,'.pdf']);
-                        saveas(f, [folder, '/',tag,'/',f.Tag,' ', tag,'.png']);
-                        savefig(f, [folder, '/',tag,'/',f.Tag,' ', tag,'.fig']);
+                        if any(contains(file_type, 'pdf'))
+                            saveas(f, [folder,'/',f.Tag,' ', tag,'.pdf']);
+                        end
+                        if any(contains(file_type, 'png'))
+                            saveas(f, [folder, '/',tag,'/',f.Tag,' ', tag,'.png']);
+                        end
+                        if any(contains(file_type, 'fig'))
+                            savefig(f, [folder, '/',tag,'/',f.Tag,' ', tag,'.fig']);
+                        end
                     end
                 end
             end
