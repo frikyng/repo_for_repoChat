@@ -50,10 +50,10 @@ forced_tau = -1
         
         difference = abs(locs - pre_peak_delay);
         [m, closest] = min(difference);
-        if numel(difference == m) > 1 && locs(closest) < pre_peak_delay %sometimes, you may detect 2 paks at the same distace. Then we'll favour the one happening after peak time
+        if sum(difference == m) > 1 && locs(closest) < pre_peak_delay %sometimes, you may detect 2 peaks at the same distace. Then we'll favour the one happening after peak time
             closest = closest + 1;
         end
-        
+
         median_event_loc    = locs(closest);
         median_event_amp    = median_event(median_event_loc);
 
