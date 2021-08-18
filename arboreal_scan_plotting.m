@@ -61,7 +61,7 @@ classdef arboreal_scan_plotting < handle
         function plot_rescaling_info(obj)
             n_gp = numel(obj.rescaling_info.individual_scaling{1});
             n_rec = numel(obj.rescaling_info.individual_scaling);
-            figure(1012);clf();hold on;
+            figure(1012);cla();hold on;
             col = mat2cell(viridis(n_gp), ones(1,n_gp), 3);
             p = plot(1:n_rec, vertcat(obj.rescaling_info.individual_scaling{:}),'o-');set(gcf,'Color','w');
             arrayfun(@(x, y) set(x, 'Color', y{1}), p, col);
@@ -73,7 +73,7 @@ classdef arboreal_scan_plotting < handle
             xlabel('Recording #');
             title('Scaling factor per ROI, per trial');
 
-            figure(1013);clf();hold on;set(gcf,'Color','w');
+            figure(1013);cla();hold on;set(gcf,'Color','w');
             xlim([1,n_gp]);hold on;
             title('global scaling factor and offset per ROI');
             xlabel('ROI');
@@ -104,6 +104,48 @@ classdef arboreal_scan_plotting < handle
             end
         end
         
+        function plot_correlation_results(obj, cross_corr)
+            if nargin < 2 || isempty(cross_corr)
+                cross_corr = obj.crosscorr;
+            end
+            imAlpha=ones(size(cross_corr));
+            imAlpha(isnan(cross_corr))=0;
+            figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
+            set(gca,'color',0.8*[1 1 1]);
+            caxis([0,1]); hold on;xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
+            colorbar; hold on;
+            if contains(obj.cc_mode, 'pop')
+                pop_label = num2cell(1:size(obj.extracted_pop_conc,2));
+            else
+                pop_label = [];
+            end
+            if contains(obj.cc_mode, 'groups')
+                plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);xtickangle(45);
+                plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);
+                part_1 = ' groups';
+                N_reg = numel(obj.binned_data.bin_legend)+1;
+            else
+                xticklabels(['Soma/Proximal seg', num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);xtickangle(45);
+                yticklabels(['Soma/Proximal seg',num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);
+                N_reg = numel(obj.ref.indices.valid_swc_rois)+1;
+                part_1 = ' ROIs';
+            end
+            if contains(obj.cc_mode, 'pop')
+                part_2 = ' and population';
+                ax = gca;
+                ax.XTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.XTickLabel((N_reg+1):end),'uni',false);
+                ax.YTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.YTickLabel((N_reg+1):end),'uni',false);
+            else
+                part_2 = '';
+            end
+            title(['Correlation between',part_1,part_2]);
+            arrangefigures(0);
+
+            %% Project correlation value onto the tree
+            obj.plot_corr_tree();
+        end
+        
+        
         function plot_detected_events(obj)
             raw_med = nanmedian(obj.extracted_traces_conc, 2);raw_med = raw_med - prctile(raw_med,1); %% QQ CHCK WHAT@S THE THING USED IN DETTECT_EVETS
             figure(1035);clf(); subplot(2,1,1);plot(obj.t,raw_med , 'r'); hold on; plot(obj.t, obj.binned_data.global_median); hold on;scatter(obj.t(vertcat(obj.event.peak_time{:})), vertcat(obj.event.peak_value{:}), 'filled');xlabel('time (s)');ylabel('median signal (A.U)');
@@ -111,10 +153,10 @@ classdef arboreal_scan_plotting < handle
         end
         
         function plot_rescaled_traces(obj)
-            M = prctile(obj.rescaled_traces(:),90);
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
-            figure(1034);cla();plot(obj.t, obj.rescaled_traces(:,valid_ROIS));title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
-            figure(1033);cla();imagesc(obj.rescaled_traces(:,valid_ROIS)');caxis([0, M]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
+            rescaled_traces = obj.rescaled_traces(:,valid_ROIS);            
+            figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1033);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
@@ -141,7 +183,7 @@ classdef arboreal_scan_plotting < handle
 %         end
         
         function plot_dimensionality_summary(obj, weights_to_show, weighted_averages)
-                if nargin < 2 || isempty(weights_to_show) % number or list of factor to display
+            if nargin < 2 || isempty(weights_to_show) % number or list of factor to display
                 weights_to_show = 1:obj.dimensionality.n_factors;
             end
             if nargin < 3 || isempty(weighted_averages)
@@ -154,7 +196,7 @@ classdef arboreal_scan_plotting < handle
             end
             figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
             figure(1017);cla();imagesc(obj.dimensionality.LoadingsPM(:,weights_to_show)); colorbar;set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('component');ylabel('ROI');
-            figure(1021);clf();
+            figure(1021);cla();
             for w = weights_to_show
                 hold on; plot(obj.t(obj.dimensionality.mask), weighted_averages(w, obj.dimensionality.mask));
             end

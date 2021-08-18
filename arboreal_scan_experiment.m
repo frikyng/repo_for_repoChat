@@ -34,6 +34,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         is_rescaled     = false; % is set to True once you ran the rescaling step.
         default_handle
         rescaling_method= 'by_trials';
+        breakpoints     =[]; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
 
         %% All the fields computed in
         binned_data             % Defines how ROIs are grouped
@@ -45,7 +46,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         spiketrains             % If available, spike inference results
         bad_ROI_list     = [];  % list of uncorrelated ROIs (following event detection)
         updatable               % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
-
+        crosscorr               % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
     end
 
     properties (Dependent = true, Transient = true)
@@ -61,7 +62,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         n_pop_ROIs              % Total number of population ROIs
         ref                     % A pointer to the first extracted arboreal scan, for conveniency
         batch_params            % Pointer to obj.ref.batch_params ; the info to rebuild and locate the tree
-        crosscorr               % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+        logs                    % Display the logs for all experiments
     end
 
     properties (Dependent = true, Transient = true, Hidden = true)
@@ -204,8 +205,40 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
+        function breakpoints = get.breakpoints(obj)
+            if isfield(obj.batch_params, 'breakpoints') && ~isempty(obj.batch_params.breakpoints)
+                breakpoints = find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.extracted_data_paths));
+            else
+                breakpoints = [];
+            end
+        end
+        
+        function set.breakpoints(obj, breakpoints)
+            for rec = 1:numel(obj.arboreal_scans)
+                obj.arboreal_scans{rec}.batch_params.breakpoints = breakpoints;
+            end
+        end
+        
+        
         function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
+            
+            if ~isempty(obj.breakpoints)
+                temp    = vertcat(extracted_traces{:});
+                t       = cumsum([1, obj.timescale.tp]);
+                groups  = [1, obj.breakpoints, numel(extracted_traces)+1];
+                pts = [1,t(obj.breakpoints),size(temp,1)];
+                metric = [];
+                for time_region = 1:(numel(pts)-1)
+                	metric = [metric; nanmedian(temp(pts(time_region):pts(time_region+1),:))];
+                end
+                scaling = metric .\ metric(1,:); % normalize to first group;
+                for time_region = 1:(numel(pts)-1)
+                    idx = (groups(time_region)):(groups(time_region+1)-1);
+                    extracted_traces(idx) = cellfun(@(x) x.*scaling(time_region,:), extracted_traces(idx), 'uni',false);
+                end
+            end
+            
             if obj.detrend == 1
                 extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);
             elseif obj.detrend == 2
@@ -267,11 +300,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function n_ROIs = get.n_ROIs(obj) % checked
-            n_ROIs = size(obj.extracted_traces{1}, 2);
+            n_ROIs = size(obj.ref.simple_data,2);
         end
 
         function n_ROIs = get.n_pop_ROIs(obj) % checked
-            n_ROIs = size(obj.extracted_pop{1}, 2);
+            n_ROIs = size(obj.ref.population_data,2);
+        end
+        
+        function logs = get.logs(obj) % checked
+            logs = cellfun(@(x) x.log, obj.arboreal_scans, 'Uniformoutput', false); % vertcat(obj.logs{:})
         end
 
         function f_handle = get.default_handle(obj)
@@ -541,8 +578,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
                 obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
             elseif contains(obj.rescaling_method, 'by_trials')
-                t_peak_all              = unique(vertcat(obj.event.peak_time{:}));
-                t_for_baseline          = unique([obj.event.t_win_no_overlap{:}]);
+                t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
+                t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
                 [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
             end
 
@@ -561,29 +598,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 rescaled_traces = [];
                 return
             else
-                all_traces_per_rec = obj.extracted_traces;
-
                 %% Now rescale each trace with a unique value across recordings (which would be spectific of that region of the tree).
-                for trace = 1:obj.n_ROIs
-                    if ismember(trace, obj.bad_ROI_list)
-                        for rec = 1:numel(all_traces_per_rec)
-                            all_traces_per_rec{rec}(:, trace) = NaN;
-                        end
-                    else
-                        temp            = cellfun(@(x) x(:, trace) ,all_traces_per_rec, 'UniformOutput', false); % 'end' or any group you want to test
-                        for rec = 1:numel(temp)
-                            temp{rec}(1:2) = NaN; % first 2 points are sometimes a bit lower than the rest. We NaN them. This is also useful later on to identify trials
-                        end
-                        concat_trace    = vertcat(temp{:});
-                        off             = prctile(concat_trace, obj.rescaling_info.offset(trace));
-                        temp            = cellfun(@(x) x - off, temp, 'UniformOutput', false);
-                        temp            = cellfun(@(x) x / obj.rescaling_info.scaling(trace), temp, 'UniformOutput', false);
-                        for rec = 1:numel(temp)
-                            all_traces_per_rec{rec}(:, trace) = temp{rec};
-                        end
-                    end
-                end
-                rescaled_traces = vertcat(all_traces_per_rec{:});
+                rescaled_traces                         = obj.extracted_traces_conc;
+                transition                              = cumsum([1,obj.timescale.tp(1:end-1)]);
+                rescaled_traces([transition,transition+1],  obj.bad_ROI_list) = NaN; % remove bad ROis and transition timepoints
+                rescaled_traces = rescaled_traces - diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offst percentile for ach trace. much faster than  a loop
+                rescaled_traces = rescaled_traces ./ obj.rescaling_info.scaling;
             end
         end
 
@@ -722,60 +742,29 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         %% #############################################
-
-        function get_correlations(obj, cc_mode)
+        
+        function set.cc_mode(obj, cc_mode)
+        	if ~strcmp(obj.cc_mode,cc_mode)
+                obj.crosscorr = []; %if you change the cc mod, clear the previous correlation results
+            end
+            obj.cc_mode = cc_mode;
+        end
+        
+        
+        function cross_corr = get_correlations(obj, cc_mode)
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             end
 
-            %% Get CC
+            %% Get CC (and build the correlation matrix if the settings changed)
             cross_corr = obj.crosscorr;
-
+            
             if obj.rendering
-                imAlpha=ones(size(cross_corr));
-                imAlpha(isnan(cross_corr))=0;
-                figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
-                set(gca,'color',0.8*[1 1 1]);
-                caxis([0,1]); hold on;xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
-                colorbar; hold on;
-                if contains(obj.cc_mode, 'pop')
-                    pop_label = num2cell(1:size(obj.extracted_pop_conc,2));
-                else
-                    pop_label = [];
-                end
-                if contains(obj.cc_mode, 'groups')
-                    plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);xtickangle(45);
-                    plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);
-                    part_1 = ' groups';
-                    N_reg = numel(obj.binned_data.bin_legend)+1;
-                else
-                    xticklabels(['Soma/Proximal seg', num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);xtickangle(45);
-                    yticklabels(['Soma/Proximal seg',num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);
-                    N_reg = numel(obj.ref.indices.valid_swc_rois)+1;
-                    part_1 = ' ROIs';
-                end
-                if contains(obj.cc_mode, 'pop')
-                    part_2 = ' and population';
-                    ax = gca;
-                    ax.XTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.XTickLabel((N_reg+1):end),'uni',false);
-                    ax.YTickLabel((N_reg+1):end) = cellfun(@(x) ['\color{red}', x], ax.YTickLabel((N_reg+1):end),'uni',false);
-                else
-                    part_2 = '';
-                end
-                title(['Correlation between',part_1,part_2]);
-                arrangefigures(0);
-
-                %% Project correlation value onto the tree
-                obj.plot_corr_tree();
+                obj.plot_correlation_results(cross_corr);
             end
         end
-
-        function crosscorr = get.crosscorr(obj)
-            if isempty(obj.binned_data)
-                crosscorr = [];
-                return
-            end
-
+        
+        function set_crosscorr(obj)
             mode = obj.cc_mode;
 
             %% Get signal time range
@@ -808,7 +797,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
-                pop = obj.extracted_pop_conc(tp,:);
+                if isempty(obj.extracted_pop_conc)
+                    warning('No population data for this rcording')
+                    pop = [];
+                else
+                    pop = obj.extracted_pop_conc(tp,:);
+                end
             else
                 pop = [];
             end
@@ -821,7 +815,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             variable    = [ref, signal, pop];
-            crosscorr   = corrcoef(variable,'Rows','Pairwise')';
+            obj.crosscorr   = corrcoef(variable,'Rows','Pairwise')';
+        end
+
+        function crosscorr = get.crosscorr(obj)
+            %% Add a few more check
+            if isempty(obj.binned_data)
+                crosscorr = [];
+                return
+            elseif isempty(obj.crosscorr)
+                obj.set_crosscorr(); 
+            end
+            crosscorr = obj.crosscorr;
         end
 
         function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc)
