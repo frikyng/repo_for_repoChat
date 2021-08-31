@@ -207,7 +207,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function breakpoints = get.breakpoints(obj)
             if isfield(obj.batch_params, 'breakpoints') && ~isempty(obj.batch_params.breakpoints)
-                breakpoints = find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.extracted_data_paths));
+                breakpoints = obj.batch_params.breakpoints;%find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.extracted_data_paths));
             else
                 breakpoints = [];
             end
@@ -219,37 +219,101 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
+        function extracted_traces = fix_changes_in_gain(obj,extracted_traces)
+        	temp        = vertcat(extracted_traces{:}); % get traces
+            real_low    = 0;%nanmin(temp(:)); % real dark noise level (won't change if gain change)
+            temp        = temp - real_low; % remove dark noise
+            tp_start    = cumsum([1, obj.timescale.tp]); % pt start of trials
+            breakpoints_idx = find(cellfun(@(x) ~isempty(obj.breakpoints) && contains(x, obj.breakpoints),obj.extracted_data_paths));
+            blocks      = [1, breakpoints_idx, numel(extracted_traces)+1]; % pt range of the blocks
+            pts         = [1,tp_start(breakpoints_idx),size(temp,1)+1]; % pt start of blocks
+            bsl_value   = [];
+            slope_gain  = {};
+            
+            for block_idx = 1:(numel(pts)-1)
+                tmp_traces = temp(pts(block_idx):pts(block_idx+1)-1,:);
+                
+                %% Fix slop first since we'll fix the gain later
+                local_tp        = size(tmp_traces,1);
+
+                if obj.detrend
+                    if any(isnan(tmp_traces(:)))
+                        tmp_traces  = fillmissing(tmp_traces,'movmean',5);
+                        to_use      = ~all(isnan(tmp_traces), 1);
+                    else
+                        to_use      = true(1,size(tmp_traces, 2));
+                    end
+                    
+%                     %% Get slope for current trace
+%                     p = polyfit(repmat(1:local_tp,sum(to_use),1),movmin(tmp_traces(:,to_use),50)',1);
+%                     slope = (local_tp*p(1)) ./ nanmean(tmp_traces(:)); % slope in percent
+%                     slope_gain{block_idx} = linspace(-slope/2,slope/2,local_tp); 
+                    
+%                     x = 1:local_tp;
+%                     a = nanmean(movmin(tmp_traces(:,to_use),50),2);
+%                     out = fit(x',a,'a + b*log(c - x)','Lower',[0,1,numel(a)],'Upper',[max(a),100,numel(a)*2]);toc
+%                     slope_gain{block_idx} = out.a + out.b*log(out.c-x);
+%                     %slope_gain{block_idx}(slope_gain{block_idx} < nanmin(a)) = nanmin(a);
+%                     slope_gain{block_idx} = slope_gain{block_idx} ./ mean(slope_gain{block_idx}) - 1;;
+
+                    x = 1:local_tp;
+                    p = polyfit(repmat(x,sum(to_use),1),movmedian(tmp_traces(:,to_use),[300, 0])',4);
+                    %figure(555);cla();plot(nanmean(movmedian(tmp_traces(:,to_use),300)')); hold on;plot(x, polyval(p,x))
+                    slope_gain{block_idx} = polyval(p,x);
+                    slope_gain{block_idx} = slope_gain{block_idx} ./ nanmean(slope_gain{block_idx}) - 1;
+                    
+                    
+%                     out = fit(x',a,'a + b*log(c - x)','Lower',[0,1,numel(a)],'Upper',[max(a),100,numel(a)*2]);toc
+%                     slope_gain{block_idx} = out.a + out.b*log(out.c-x);
+%                     %slope_gain{block_idx}(slope_gain{block_idx} < nanmin(a)) = nanmin(a);
+%                     slope_gain{block_idx} = slope_gain{block_idx} ./ mean(slope_gain{block_idx}) - 1;;
+
+
+                    %% Temporarily corect the block
+                   
+                    tmp_traces = tmp_traces - tmp_traces.* slope_gain{block_idx}';
+
+                    %% Reslice per trial
+                    slope_gain{block_idx} = mat2cell(slope_gain{block_idx},1, obj.timescale.tp(blocks(block_idx):(blocks(block_idx+1)-1)));
+                end
+                if ~isempty(breakpoints_idx)
+                    bsl_value = [bsl_value; prctile(tmp_traces,1)];
+                end
+            end
+            
+            %% Get scaling if gain fix is required
+            if ~isempty(breakpoints_idx)
+                scaling     = bsl_value .\ bsl_value(1,:); % normalize to first group;
+            end
+            
+            %% Now apply correction per trial
+            for block_idx = 1:(numel(pts)-1)
+                trial_idx                     = (blocks(block_idx)):(blocks(block_idx+1)-1);
+                if obj.detrend
+                    extracted_traces(trial_idx)   = cellfun(@(x, y) x - x.*y', extracted_traces(trial_idx),slope_gain{block_idx}, 'uni',false);
+                end
+                if ~isempty(breakpoints_idx)
+                    extracted_traces(trial_idx)   = cellfun(@(x) (x.*scaling(block_idx,:)), extracted_traces(trial_idx), 'uni',false);
+                end
+            end
+        end
+        
         
         function extracted_traces = get.extracted_traces(obj) % checked
+            tic
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
             
-            if ~isempty(obj.breakpoints)
-                temp    = vertcat(extracted_traces{:});
-                t       = cumsum([1, obj.timescale.tp]);
-                groups  = [1, obj.breakpoints, numel(extracted_traces)+1];
-                pts = [1,t(obj.breakpoints),size(temp,1)];
-                metric = [];
-                for time_region = 1:(numel(pts)-1)
-                	metric = [metric; nanmedian(temp(pts(time_region):pts(time_region+1),:))];
-                end
-                scaling = metric .\ metric(1,:); % normalize to first group;
-                for time_region = 1:(numel(pts)-1)
-                    idx = (groups(time_region)):(groups(time_region+1)-1);
-                    extracted_traces(idx) = cellfun(@(x) x.*scaling(time_region,:), extracted_traces(idx), 'uni',false);
-                end
-            end
-            
-            if obj.detrend == 1
-                extracted_traces = cellfun(@(x) x - prctile(x, 1), extracted_traces, 'UniformOutput', false);
-            elseif obj.detrend == 2
-                extracted_traces = cellfun(@(x, y) x - y, extracted_traces,obj.rescaling_info.individual_offset, 'UniformOutput', false);
+            %% If  expe was interrupted an it changes signal gain, w fix it here
+            if ~isempty(obj.breakpoints) || obj.detrend
+            	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
             end
 
+            %extracted_traces = cellfun(@(x, y) x - y, extracted_traces,obj.rescaling_info.individual_offset, 'UniformOutput', false);
+            
             if any(obj.filter_win)
-                tic
                 extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.filter_win), extracted_traces, 'UniformOutput', false);
-                toc
             end
+            toc
         end
 
         function extracted_pop = get.extracted_pop(obj) % checked
@@ -297,6 +361,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function batch_params = get.batch_params(obj) % checked
             batch_params = obj.ref.batch_params;
+            if ~isfield(batch_params, 'breakpoints')
+                batch_params.breakpoints = [];
+                warning('breakpoint field added post hoc. plase re-extract')
+            end
         end
 
         function n_ROIs = get.n_ROIs(obj) % checked
