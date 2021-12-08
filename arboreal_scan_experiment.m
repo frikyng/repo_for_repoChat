@@ -455,6 +455,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             temp = {};
             type                        = obj.behaviours.types(contains(obj.behaviours.types, type));
             if isempty(type)
+                raw_beh = {};
                 warning(['Type not detected. Valid behaviours are :\n', strjoin(obj.behaviours.types,'\n')]);
                 return
             end
@@ -465,10 +466,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 temp.value = [];
                 for rec = 1:numel(raw_beh)                    
                     %% If behaviour timescale is longer than recording, clip it
-                    clipping_idx = find(raw_beh{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
-                    if ~isempty(clipping_idx)
-                        raw_beh{rec}.time = raw_beh{rec}.time(1:clipping_idx);
-                        raw_beh{rec}.value = raw_beh{rec}.value(1:clipping_idx);
+                    if ~isempty(raw_beh{rec}.time)
+                        clipping_idx = find(raw_beh{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
+                        if ~isempty(clipping_idx)
+                            raw_beh{rec}.time = raw_beh{rec}.time(1:clipping_idx);
+                            raw_beh{rec}.value = raw_beh{rec}.value(1:clipping_idx);
+                        end
                     end
                         
                     downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{rec}.time, obj.timescale.tp(rec));
@@ -1335,9 +1338,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                      '      - are member of batch_params.excluded_branches \n',...
                      '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])  
             THR_FOR_CONNECTION
-
-            %% ROIs that were manually excluded
-            excl = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);
             
             %% Show mean correlation with each ROI
             mean_corr_with_others   = [];
@@ -1348,23 +1348,31 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 mean_corr           = nanmean(corr_results_sub,1);
                 mean_corr_with_others(key) = sum(mean_corr > THR_FOR_CONNECTION);
             end
-            figure(88888);cla();hist(100*mean_corr_with_others/numel(mean_corr_with_others),0:2:100); hold on; 
+
+            %% Normalize to 100%
+            mean_corr_with_others = mean_corr_with_others / max(mean_corr_with_others); % renormalize to max possible corr for this cell
+            
+            figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
             xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             
-            mean_corr_with_others = mean_corr_with_others / max(mean_corr_with_others); % renormalize to max possible corr for this cell
+            %% Renormalize to max possible corr for this cell
+            mean_corr_with_others = mean_corr_with_others / max(mean_corr_with_others); 
+            figure(88889);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
+            xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             
             %% Update class variables
             obj.bad_ROI_list = mean_corr_with_others < obj.bad_ROI_thr; % below threshold% of max correlation
             obj.bad_ROI_thr = THR_FOR_CONNECTION;
             
+            %% ROIs that were manually excluded
+            excl = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);
+            
             RECOVERY_THR = 1-THR_FOR_CONNECTION
             excl_but_not_bad    = excl & ~obj.bad_ROI_list';
             excl_but_good       = excl & (mean_corr_with_others > RECOVERY_THR)';
             if any(excl_but_good)
-                 fprintf(['!!! ROIs ',num2str(find(excl_but_good)),' was/were excluded but seem highly correlated\n'])
+                 fprintf(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'])
             end
-            
-            
                             
             if obj.rendering     
                 bad = obj.extracted_traces_conc(:, find(obj.bad_ROI_list));
