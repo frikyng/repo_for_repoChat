@@ -17,7 +17,7 @@ classdef arboreal_scan_dataset < handle
             %% Find arboreal_scan_experiments
             fold = dir([source_folder,'/*-*-*_exp_*']);
             fold = fold([fold.isdir]);            
-            for idx = (numel(fold)-5):numel(fold)%1:numel(fold)
+            for idx = 1:(numel(fold))%1:numel(fold)
                 files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
 %                 if numel(files) == 0
 %                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
@@ -31,6 +31,13 @@ classdef arboreal_scan_dataset < handle
                if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
                    fprintf(['loading ',files(1).name,' ... please wait\n'])
                    m = load(fname);  
+%                    test = m.obj;
+%                    close all
+%                    test.detect_events
+%                    test.rescale_traces      
+%                    %% CHECK 3,9,15    for low gain,
+%                    %% CHeck 10 for low offset          
+%                    test.plot_detected_events 
                    obj.experiments(idx) = m.obj;
                end
                
