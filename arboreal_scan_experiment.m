@@ -1321,7 +1321,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.find_bad_ROIs(correlation_res.corr_results, correlation_res.comb, corr_window, idx_filter);
         end
 
-        function find_bad_ROIs(obj, corr_results, comb, corr_window, ROIs)
+        function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, corr_results, comb, corr_window, ROIs)
             if nargin < 4
                 corr_window = obj.get_ideal_corr_window();
             end
@@ -1350,26 +1350,28 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Normalize to 100%
-            mean_corr_with_others = mean_corr_with_others / max(mean_corr_with_others); % renormalize to max possible corr for this cell
+            mean_corr_with_others = mean_corr_with_others / numel(mean_corr_with_others); % renormalize to max possible corr for this cell
             
             figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
             xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             
             %% Renormalize to max possible corr for this cell
-            mean_corr_with_others = mean_corr_with_others / max(mean_corr_with_others); 
-            figure(88889);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
+            mean_corr_with_others_norm = mean_corr_with_others / max(mean_corr_with_others); 
+            figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on; 
             xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             
             %% Update class variables
-            obj.bad_ROI_list = mean_corr_with_others < obj.bad_ROI_thr; % below threshold% of max correlation
+            bad_ROIs = mean_corr_with_others_norm < obj.bad_ROI_thr;
+            obj.bad_ROI_list = bad_ROIs; % below threshold% of max correlation
             obj.bad_ROI_thr = THR_FOR_CONNECTION;
+            bad_ROIs = find(bad_ROIs);
             
             %% ROIs that were manually excluded
             excl = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);
             
             RECOVERY_THR = 1-THR_FOR_CONNECTION
             excl_but_not_bad    = excl & ~obj.bad_ROI_list';
-            excl_but_good       = excl & (mean_corr_with_others > RECOVERY_THR)';
+            excl_but_good       = excl & (mean_corr_with_others_norm > RECOVERY_THR)';
             if any(excl_but_good)
                  fprintf(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'])
             end
