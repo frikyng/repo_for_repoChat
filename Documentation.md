@@ -1,3 +1,409 @@
+# Arboreal Scanning Curation & Analysis Pipeline Overview
+
+## Multiple levels of analysis
+
+To analyse signals from a single recording, the easy way is to use the `load_experiment()` function. This function enable the extraction of signals and various normalization, smoothing and masking options. 
+
+However, if you wish to integrate the 3D spatial structure in the analysis process, each signals need to be linked to its 3D location on the dendritic tree. This is handled using methods of an `arboreal_scan` object (see [here](#Analyse-a-recording-(arboreal_scan-objects))), which is essentially an object containing:
+
+- The extracted signal (as provided by load_experiment())
+- The tree structure and additional mophomtric informtion (e.g. soma location, depth etc...)
+- Aligned behavioural variables (e.g. camera, encoder etc...)
+
+If you wish to compare data across multiple successive recordings, the data from multiple (matching) `arboreal_scan`objects can be stored in an `arboreal_scan_experiment` object (see [here](Analyse-an-experiment-(arboreal_scan_experiment-objects))). This will help analyse data cross multiple behavioural conditions. If you need to pool multiple recordings, it will be essential to guarantee that all ROIs are matching each other from the beginning to the end of the experiments (i.e. same mask, no drift etc....). This requires a thorough curation of your data, as explained in the [Data Curation](#Curation) chapter
+
+Finally, to perform group data analysis across experiments, `arboreal_scan_experiment` objects can be regroups in an `arboreal_scan_dataset` object
+
+## Curation
+
+### Global Curation Flow chart
+
+1 - Deletion of failed recordings (lost MC etc…)
+
+2 - Identification of « homogeneous experiments » (same resolution and same ROIs)
+
+3 - Global registration
+
+4 - Global mask computed on registered data
+
+5 - Extraction of RAW Ca2+, using global registration and mask
+
+6 – Compression of each ROI data into a single line. This is 2-step process
+
+\-    Max across the dendrite (mean would work, median would be bad)
+
+\-    Median along the dendrite (Mean would work, max would work. Median removes most artifacts, max emphasize hotspots (and artifacts). Mean is usually close to median
+
+7 - Data goes into an « arboreal_scan » object that also contains information about the tree morphology. Extraction info are stored too (masks, and other info). Behavioural data (encoder, MC log and Video motion indices for example) is stored too
+
+8 - Recordings are concatenated
+
+9 - Some analysis requires normalized data. For each ROI, we find a unique offset and scalar that scale all the bAPs amplitude to the cell median trace (ref_trace). Several options are possible here
+
+9a – For the offset -> computed on baseline
+
+\-    Option 1 : Constant percentile subtraction (not used, 10th percentile would do)
+
+\-    Option 2 : Custom optimisation that prevent over subtraction. I made one. 
+
+ 
+
+9b – For the scalar -> computed on peaks
+
+\-    Option 1 : Simple linear regression between ROI_trace and ref_trace
+
+\-    Option 2 : Custom optimisation function that
+
+ 
+
+### General process after data acquisition
+
+Store/backup data à create folder for analysis à cleanup unwanted data & build lab-book and settings file à Fix tree morphologies à extract calcium per ROI à Extract/analysis features from calcium signals (e.g. events) à meta-analysis on extracted features, per cell/experiment.
+
+For a script going through the different steps, see `Curation_Helper.m`
+
+ 
+
+#### **1.**    **Select and organize folders**
+
+<u>1.1.   Backup you data</u>
+
+Put a copy of all experiments relevant to the study in the same folder. This folder will be called `“TOP_FOLDER”` in the following examples. THIS SHOULD BE A **COPY** OF YOUR ORIGINAL DATA. because the curation process will include the deletion of some recordings.
+
+In the following examples, the folder used for analysis, and containing all the raw data is called
+
+``` matlab
+TOP_FOLDER = "D:/Curated Data/";
+```
+
+<u>1.2.  Clean-up unnecessary files</u>
+
+Remove any empty *folder/subfolder* and processed files (concatenated, averaged etc…). Use the dedicated function for that (safer and faster): 
+
+```matlab
+cleanup_processed_data(TOP_FOLDER)
+```
+
+<u>1.3.  Fix timestamp issues</u>
+
+Experiment order is extracted from the folder timestamp, which is in the *hh-mm-ss* format. If you had experiments spanning over midnight, you need to manually merge those by changing the date of the recordings (i.e. the *data_folder*) past midnight back to when the experiment started. 
+
+>  Note : This will be improved in a future release, but for now, you need to handle it manually 
+
+Essentially, all you must do is to add 24 to the hour value for each *data_folder* passed midnight, and then move these recordings to the folder when it started. For example you started your experiment in *…/01-01-2020/experiment_3/* and then your recordings data_folders are […*]; 23-55-00 ; 23-59-00.* Then the next recording passed midnight and probably created a new *day_folder* and *experiment_folder* folder as *…/02-01-2020/experiment_1/* where *data_folder* names are now (for example) *00-00-01 ; 00-05-00* etc… . Select those, rename them *24-00-01 ; 24-05-00* etc… and move them to …*/01-01-2020/experiment_3/* Don’t forget to merge the content of the log too, and to update time tags of the log there too.
+
+ **2.**    **Create a lab-book**
+
+As it can be hard to see the big picture with many recordings, you can automatically generate a xlsx file from all recordings.
+
+<u>2.1.  Create a log from your raw data</u>
+
+Create a .xlsx log file using available files. See “Create lab book” in the manual. This will create an xlsx table with some key information using the header and some other information available in the data_folders
+
+```matlab
+SPREADSHEET_NAME = create_spreadsheet(TOP_FOLDER, '.xlsx')
+```
+
+> Note : If you update an existing spreadsheet, see `*update_spreadsheet()*` documentation
+
+<u>2.2.     Complete the header info</u>
+
+You can (and should) fill it with header info, which can be done using fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME). This will go through every recording, load the hader, extrac some info and add it to the table
+
+ **3.**    **Identify good experiments. Delete the rest**
+
+<u>3.1.  Manual curation</u>
+
+Using the pre-filled lab-book, you can identify experiments that can be deleted easily (e.g. short “test” recordings, funny dwell times or patch size). It is recommended to go manually through every folder. However you can detect specific condition automatically. For example:
+
+```matlab
+data_folders = find_specific_condition(TOP_FOLDER, {'duration','<1', 'mode','Ribbon'})'  
+```
+
+You could automatically delete those, but it is recommended to manually check each case. 
+
+>  Don’t delete the initial skeleton!
+
+<u>3.2.  Customized problem detection</u>
+
+Use specific functions to identify problematic recordings:
+
+```matlab
+batch_detect_mc_issues(TOP_FOLDER) ;` % for failed MC issues
+```
+
+#### **4.**    **Create *settings* file for batch analysis**
+
+For later batch analysis (i.e. going through multiple recordings or across multiple experiments), only experiments listed in the file *settings.txt* will be used. This file contains summarized information about the tree morphology for each experiment, one line per experiment.
+
+Ideally, you want to list all your experiments. Line starting with # are ignored. See “Build your batch settings file” chapter. Essentially, in the *settings.txt* file you have multiples entries per line, separated by vertical bars (|).
+
+<u>4.1.  Auto-Generate settings.txt</u>
+
+You can automatically generate the file using specific columns from your spreadsheet to get the required information. 
+
+> This means you need to complete your spreadsheet first, by going through each neuron and checking/fixing each Tree morphologies. See the [fix tree morphol](#) section to know how to do that
+
+ 
+
+The fields required in the spreadsheet are: 
+
+1 – experiment path. 
+
+2 - array of trials to use (0 or [] for all);
+
+3 - branch to connect to soma. If NaN, branch 1 is used as a start point; If [], the branch selector is opened interactively
+
+4 - manual reconnections; [] or NaN to ignore; 
+
+5 - branch to exclude; [] or NaN to ignore.
+
+6 - pia position OR pia position and soma manual Z location. Soma location is useful if you didn’t trace an entire tree (maybe the soma is too dep) and need to estimate where the tree starts.
+
+​       If soma is NaN or not specified, value is obtained from the start point of branch 1.
+
+​       If pia is [] or NaN, surface is set as the highest Z value of the tree.
+
+You need to identify these values if you plan to use information using the tree morphology, as it will help locate the soma and connect branches with each other. There’s a GUI available to help you find those called ROI_Filter. You can call it directly from the microscope_controller or use the core functions in command line. See “Fixing tree using the toolbox” in the manual. Although you can create the settings.txt file manually, I recommend to put the values in some columns in your labbook and then generate a settings file automatically using get_setting_file_from_table
+
+è ADD note on script handles
+
+ 
+
+4.2.  Once the spreadsheet updated, you can generate the batch setting file using get_setting_file_from_table(SPREADSHEET_NAME, TOP_FOLDER); 
+
+4.3.  You should verify
+
+ 
+
+**5.**    **Generate Tree projection figures**. This is to check that you have a good representation of the tree shape and soma location. This code assumes that your tree is properly reconnected (see previous step)
+
+5.1.  Use this batch function to generate all the tree thumbnails
+
+batch_generate_lateral_projection(TOP_FOLDER,SETTINGS_FILE).
+
+Once done, chck ll these images and come back to the tree with incorrected morphology, fix the spreadsheet info, regenerate the settings file, and rerun the script for the problematic experiments (or for all experiments)
+
+ 
+
+**6.**    **(Optional) Quickly Generate thumbnails** 
+
+If you want to do a visual inspection of your data first, before diving into the time consuming steps that follows, consider using batch_generate_experiment_thumbnails(TOP_FOLDER, channel). Note that this step requires Imagej and miji. Look for information about setting up miji in the documentation (you have a couple .jar files to copy when you first set it up). This step is included into batch_generate_consensus_dendritic_mask but running it standalone, without MC is faster and will help identify bad recordings, lost MC, off-centred cells etc….
+
+ 
+
+**7.**    **Generate Global registration.** This is a very very long and tedious step. It should be done after deleting problematic recordings AND should be regenerated if you delete some recordings. However, have preregistered posthoc MC will speed up later batch analysis. In each data_folder, a file called auto_offsets.mat is generated.
+
+If you want to generate at the same time registration values, thumbnails and masks, you can call:
+
+batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})
+
+ 
+
+This will process all the Ribbon scan of same resolution. Among this it will choose the largest group. For the second largest group, you would pick {'Ribbon',2}. If you have partial scan of the tree, the largest homogeneous group of partial scan can be selected with {'Ribbon',’partial’,1} etc…
+
+ 
+
+Warning: This is an extremely long process. This should be done on a powerful PC with a lot or RAM (eg 20-core, 32-64GB RAM). It may take 1 hr or more per experiment! 
+
+ 
+
+ 
+
+**8.**    **Generate Global Thumbnails.** Thumbnails are convenient to browse data and know what the general content for a given recording is. They are essentially a “time projection” of the ribbon scan. The projection can be done with the curtain view (more useful, as it enables the visioning of all ROIs at their real resolution) or a realistic view (Which can be useful to have an image of the cell true shape). Several projection methods are available, although std, corr and max give the best results. Ideally, the projection should use the posthoc registred data for better sharpness. The typical pipeline generates individual masks, for each recording, but also a consensus_thumbnail using all similar recordings in a given experiment. Ideally, the global masks computed in the next step will use the global_thumbnail rather than the thumbnail of individual recordings.
+
+To only generate / regenerate thumbnails for an experiment, use ….
+
+This process can be integrated in the batch_generate_consensus_dendritic_mask function. The generation of the thumbnail is controlled by the 4th input of
+
+batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})
+
+ 
+
+**9.**    **Generate Global masks.** Masks are useful to filter out non-dendritic signals (for example, other neurons). As for global registration, this step can be pretty long to do, however you can do the processing once, and reload them later on. Global masks are not done on a data_folder-by-data folder basis, but we use a concatenation of all your recordings to find the best mask. If you already computed the consensus_thumbnail and want to generate/regenerate masks, you can use 
+
+ 
+
+batch_show_cell_mask('D:\Curated Data\', 'thin_mask');
+
+ 
+
+You could actually compute the mask on any image, including image you would have pre-processed externally, providing the resolution matches the recording. This could be useful if for example only one recording was enabling the identification of the dendrites position, while the global mask or the other recordings were to dim. The mask computed on the optimal recording could then be propagated to the other data_folders. Using a single mask for all recordings is only reasonable if :
+
+\-     Your sample is perfectly still across recordings.
+
+\-     You computed global registration, and always reload registrated data using the global registration values
+
+è TRY TO GET RID OF THE BIOINFORMATIC TOOLBOX REQUIREMENT FOR MASKS
+
+ 
+
+**10.**  **Generate Mean Calcium trace.** Before loading the data for analysis, you may want to check if there is no other undetected issue. This could be a bleaching issue, a poorly corrected MC etc… You can fenerate a single image using the first branch of your recording. This is done for recordings of similar shape (see find_homognenous_cases). If required, you overlay the encoder or log. You can also overlay the type of task from the log, and the trigger location
+
+[table, ~] = read_xlsx_columns(‘xlsx log path.xlsx','','A','L',1);
+
+batch_generate_experiment_mean_trace('D:\Curated Data\',2, 1, true, table)
+
+**11.**  **Additional controls**
+
+Once all these extraction steps are done, there are a few additional control functions possible
+
+\-     Test if all files were extracted
+
+test_global_processing_files(expe_folder, settings_file_path)
+
+\-     Test the amount of posthoc MC (this will show if there was some drift)
+
+test_global_processing(expe_folder, settings_file_path)
+
+ 
+
+ 
+
+**12.**  Check the extraction for undetected issues. You can generate a power point with one slide per cell to screen the dataset. 
+
+12.1.           The ppt generator will look for specific images from the previous steps. This includes
+
+\-     Global thumbnail + mask in curtain view. If not available, just the global thumbnail. See “Generate Global masks”
+
+\-     Global thumbnail in realistic mode. See “Generate Global Thumbnails”
+
+\-     3 tree figures : Distance tree from soma, fixed tree (excluded branches, direct soma connections etc…), tree + population. See “Generate Tree projection figures”
+
+\-     Stack Z, X and Y projection with the tree shape and the interpolated soma location overlaid. See “Generate Tree projection figures”
+
+\-     The mean calcium trace for the trial. If available, you can add markers for triggers and experiment type. See 
+
+ 
+
+**13.**  **Extract calcium transients and generate \*arboreal_scan\* objects.** Values per ROI for each data_folder are extracted and stored in an *arboreal_scan* object that can be used later to plot some results (see section XXX) or for meta analysis. This is a tree-simplification step. If you change the way you signal is extracted from a given ROI, (e.g. different masks, different registration or averaging method), you will have to regenerate those. For each recording, an *arboreal_scan*.mat object is created. 
+
+ 
+
+13.1.           Arboreal scan object
+
+If you want to use the default extraction settings for a given data folder (channel 2, no filtering, non-partial etc… see *process_ribbon_scan.m* default values), you can type directly:
+
+ 
+
+process_ribbon_scan(‘Some/data/folder’). 
+
+ 
+
+13.2.           Extract all arboreal scan objects for one or several experiments
+
+You most likely don’t one a single data_folder but recordings from one or several experiments. You can use batch processing functions for that.
+
+For a single experiment, use *batch_process_ribbon_scan*
+
+batch_process_ribbon_scan('Some/expe/folder')
+
+ 
+
+For multiple experiments, use *meta_batch_process_ribbon_scan*
+
+meta_batch_process_ribbon_scan({'Some/expe/folder/ , Another/expe/folder/'})
+
+ 
+
+OR
+
+ 
+
+meta_batch_process_ribbon_scan('Top/Folder')
+
+ 
+
+13.3.           Input control
+
+ 
+
+If the settings file is not in your top folder, you need to specify it or your tree morphologies will be incorrect
+
+ 
+
+meta_batch_process_ribbon_scan('Top/Folder/', ‘Path/to/settings.txt)
+
+ 
+
+You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *process_ribbon_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used
+
+ 
+
+**14.**  **Generate \*arboreal_scan_experiment\* objects.** the *arboreal_scan_experiment* object enable computing features across experiment (eg. event detection, coross correlation, factor analysis etc…). and plotting figures per neuron.
+
+ 
+
+14.1.           *Arboreal_scan_experiment* object for single experiment
+
+ 
+
+To create an *arboreal_scan_experiment* object, simply type
+
+expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path');
+
+ 
+
+To fill the fields automatically (using default binning by steps of 100um), use 
+
+expe.process();
+
+ 
+
+However, you may want to set the correct binning method (see arboreal_scan.get_ROI_groups()).
+
+ 
+
+This processing pipeline load multiple recordings and rescale traces with each other. It then detects and extract baps, perform multiple operation on event correlation, distribution etc… Dimensionality analysis is done too. Figures can be saved in the export folder (expe.save()) for the meta_analysis step
+
+ 
+
+14.2.           *Arboreal_scan_experiment* object for multiple experiment
+
+ 
+
+Just Use a tiny for loop
+
+top_export_folder = '…/extracted_arboreal_scans/';
+
+fold = dir([top_export_folder,'/*-*-*_exp_*']);
+
+fold = fold([fold.isdir]);
+
+for idx = 1:numel(fold)
+
+  expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+
+  expe.process();
+
+  expe.save(true);
+
+  close all
+
+end
+
+ 
+
+ 
+
+**15.**  **Meta analysis**. You can later reuse the extracted features from each tree to build figures. To analyse individual trees after the meta analysis extraction step, reload summary.mat. then results.plot_dim_tree(neuron_id, 1)
+
+ 
+
+To do some meta analysis across all the trees, 
+
+Results.plot_gallery ('dim') % use ‘dim’, ‘dist’, ‘corr’
+
+**16.**  You can select a range of trees or change the projection dimension.
+
+ 
+
+
+
+
+
+
+
 # Analyse a recording (arboreal_scan objects)
 
 TODO
@@ -453,3 +859,288 @@ ADD FIGURES
 
 ADD IMAGE COMPRESSION
 
+# Analyse a dataset (arboreal_scan_dataset objects)
+
+
+
+to add
+
+
+
+
+
+# CURATION (IN PROGRESS)
+
+
+
+
+
+ 
+
+**Fixing database / experiment / processing**
+
+If any step in the global processing goes wrong, you’ll have to resume all the steps following that step before regenerating the meta-analysis
+
+**1.**    **I added some files in my database**
+
+As they have not been integrated at all in the process, we only need to add information. 
+
+1.1.  Update spreadsheet
+
+BASE_SPREADSHEET_NAME
+
+SPREADSHEET_NAME = update_spreadsheet(TOP_FOLDER, BASE_SPREADSHEET_NAME);
+
+fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME);
+
+ 
+
+Note that this will update the table and squeeze new recordings if they happened in between existing recordings. A new file is created
+
+ 
+
+**2.**    **I had a bad recording that had to be deleted.**
+
+If a recording made it through the curation process, and you later decide to delete it (for example, MC was lost but not detected, or RT3D MC was really poor etc…). Here on the left is an example of a failed recording. The thumbnail is blurry, Checking the recording revealed that RT3D-MC was lost
+
+ 
+
+​                                 ![image-20211201113523597](media/Documentation/image-20211201113523597.png) ![image-20211201113527171](media/Documentation/image-20211201113527171.png)
+
+ 
+
+Here is a second example where the PMT gain was changed during the experiments. I recommend discarding the first part of the analysis to avoid any unpredictable analysis problems
+
+ ![image-20211201113533023](media/Documentation/image-20211201113533023.png)
+
+\-     Delete the data folder from your curated data folder. You should write down somewhere that you deleted it.
+
+\-     If you reached the stage where you have the global mean trace, you can use the image generated to see which recordings are problematic. To get the corresponding recordings name, 
+
+ ![image-20211201113542612](media/Documentation/image-20211201113542612.png)
+
+conditions = {      'partial'   , false         ,...
+
+​                  'mode'    , 'Ribbon'       ,...
+
+​                  'duration'  , '>= 10'        };  
+
+data_folders = find_specific_condition(EXPE_FOLDER, conditions);
+
+[data_folders, ~]       = filter_homogeneous_cases(data_folders,'Ribbon',1);
+
+data_folders’
+
+\-     Delete corresponding thumbnail if any
+
+\-     Delete entry from your lab-book. Not that a trace of this recoding will remain in you Log.txt file.
+
+\-     You then need to regenerate the global MC template, the global thumbnails and the global mask before using the data. this can all be done at once with, although it can take > 1hr per experiment.
+
+batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})
+
+ 
+
+ 
+
+**3.**    **I have bad posthoc MC**
+
+ 
+
+\4.    
+
+ 
+
+**5.**       **I have a bad mask**
+
+Diagnostic: You need to identify the root cause of the bad mask. It could be poor tracing, but could also come from a bad thumbnail, which itself can come from a bad global registration. Here, the final branches look really dim, so nothing was traced. They are basolateral dendrites, so they are deep and dim in a first, place, but maybe we can get some better results.
+
+![image-20211201113601845](media/Documentation/image-20211201113601845.png)
+
+Check that the mask is really the issue. The thumbnail + image can be misleading, as the mask is overlaid in red over the black and white thumbnail. A dark region may have a mask and not be visible. Check the mask first :
+
+show_cell_mask(‘some/data/folder’, 'thin_mask.mat', true);
+
+If there is a problem with the mask, it most likely come from the reference image. There are a few options : 
+
+5.1.     Not use the global thumbnail (maybe a single recording is better somewhere). Here, there’s a recording that was a bit brighter, from individual recordings thumbnails. You can define it a ref for tracing instead of the global thumbnail
+
+[data_folders] = filter_homogeneous_cases('D:\Curated Data\2019-11-05\experiment_3','Ribbon', 1);
+
+new_imsource = "D:\Curated Data\2019-11-05\experiment_3\std_projection_2019-11-05_exp_3_12-38-47_mosaic_group_1_full_green_channel.png";
+
+show_cell_mask(data_folders{1}, 'thin_mask.mat', true, true, new_imsource, true, true);
+
+![image-20211201113615414](media/Documentation/image-20211201113615414.png)
+
+5.2.  Regenerate the global mask
+
+ 
+
+ 
+
+\6.    Regenerate the thumbnail. Maybe the thumbnail was generated a long time ago, and you improved posthoc MC in between, or removed low quality recordings. In any case, you now need the regenerate the global thumbnail for this experiment. See case
+
+ 
+
+ 
+
+ 
+
+ 
+
+**7.**    **My PowerPoint summary needs to be updated**
+
+Once you updated thumbnails, you may want to update a specific ppt slide instead of regenerating the entire ppt
+
+ 
+
+**8.**    **I deleted some files after extracting the transients. How to rematch the datasets**
+
+8.1.  To delete extracted dataset that don’t exist enaymore
+
+8.2.  To update a meta_analysise_arborea_scan object, run results.cleanup_expe(‘extracted’, Export_path) or results.cleanup_expe(‘original’, TOP_FOLDER). This will identify which data folder need to be removed, if they have been removed from the original/extracted data. 
+
+Updated folders are indicated in results.need_update, and you have to re-run the meta_analysis process for those experiments
+
+ 
+
+ 
+
+ 
+
+ 
+
+Arboreal_scan object
+
+ 
+
+This contains essential information about the tree structure such as the list of ROIS, the branch filtering and reconnection rules, the original, and simplified tree etc… as well as information about the data extracted and the analysis_params used for that
+
+ori = obj.original_tree{1};
+
+simplified = obj.simplified_tree{1};
+
+filtered = obj.simplified_tree_filtered{1};
+
+skeleton = obj.simplified_skeleton{1};
+
+cmap = lines(4);
+
+ 
+
+figure();hold on;
+
+a = plot_tree(ori,cmap(1,:));hold on;
+
+plot_tree(skeleton,cmap(2,:));hold on;
+
+plot_tree(simplified,cmap(3,:));
+
+hold on;plot_tree(filtered,cmap(4,:));
+
+axis equal;legend({'original','skeleton','simplified','filtered'});
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+ 
+
+**Fixing tree morphology**
+
+After extracting all the trees for the meta analysis, you may want to double-check 
+
+ 
+
+ 
+
+ 
+
+**Meta-analysis figure number**
+
+**1001** : Median scaled responses per group
+
+1002 : Event detection on median
+
+**1003** (NO TITLE) : global distribution of event amplitudes
+
+**1004** (NO TITLE) : distribution of event amplitudes per region
+
+**1005** : Median Events and fitted decay
+
+**10051-1005n** : Median Events and fitted decay for group n
+
+**1006** : peaks values per subgroups
+
+**1007** : cumulative sum of peaks
+
+**1008** : CC matrix
+
+**1009** : event per index of dispersion
+
+**1010** : index of dispersion vs traces
+
+ 
+
+**1011 :** index of dispersion vs amplitude
+
+**1012** : Scaling factor per ROI
+
+**1013** : Global scaling factor and offset per ROI
+
+**1014** : median tau per group
+
+**1015** : median tau 1 per event
+
+**1016** : tau vs event amplitude
+
+**1017** : components weight per ROI (matrix)
+
+1018 : corr_tree
+
+**1019** : individual median events and median fit
+
+1020 : strongest component
+
+10201 – 1020n : individual components
+
+**1021** : Weighted signal average per component
+
+**1022** : variability assessment (Similarity Plot)
+
+**1023** : median traces - overall median
+
+**1024** : …
+
+**1025** : Spike inference (pr bin)
+
+1026 : Behaviour
+
+1027 : Behaviour activity bouts
+
+1028 : cross validation result - training
+
+1029 : cross validation result - testing
+
+ 
+
+ 
+
+\---- 
+
+10010 -> calibrate peak detection?
