@@ -460,22 +460,22 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 return
             end
             for beh = 1:numel(type)
-                raw_beh                     = arrayfun(@(x) x{1}.(type{beh}), obj.behaviours.external_var, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
+                raw_beh{beh}                     = arrayfun(@(x) x{1}.(type{beh}), obj.behaviours.external_var, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
 
                 temp.time  = [];
                 temp.value = [];
-                for rec = 1:numel(raw_beh)                    
+                for rec = 1:numel(raw_beh{beh})                    
                     %% If behaviour timescale is longer than recording, clip it
-                    if ~isempty(raw_beh{rec}.time)
-                        clipping_idx = find(raw_beh{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
+                    if ~isempty(raw_beh{beh}{rec}.time)
+                        clipping_idx = find(raw_beh{beh}{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
                         if ~isempty(clipping_idx)
-                            raw_beh{rec}.time = raw_beh{rec}.time(1:clipping_idx);
-                            raw_beh{rec}.value = raw_beh{rec}.value(1:clipping_idx);
+                            raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
+                            raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
                         end
                     end
                         
-                    downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{rec}.time, obj.timescale.tp(rec));
-                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{rec}.value, obj.timescale.tp(rec));
+                    downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{beh}{rec}.time, obj.timescale.tp(rec));
+                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{beh}{rec}.value, obj.timescale.tp(rec));
                     if isempty(downsampd_beh{beh}{rec}.time)
                         downsampd_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
                         downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
@@ -489,7 +489,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     temp.time = [temp.time, downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
                     value = downsampd_beh{beh}{rec}.value;
                     if size(value, 1) > 1 % if your behavioural metrics is made of multiple arrays
-                        value = nanmean(value, 1);
+                        value = nanmax(value, [], 1);
                     end
                     temp.value = [temp.value, value];
                 end
@@ -503,7 +503,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 figure(1026);clf();
                 for beh = 1:numel(type)
                     subplot(numel(type),1,beh)
-                    for rec = 1:numel(raw_beh)
+                    for rec = 1:numel(raw_beh{beh})
                         if ~isempty(downsampd_beh{beh}{rec}.time)                           
                             plot(downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec), downsampd_beh{beh}{rec}.value);hold on;
                         end
@@ -1069,50 +1069,88 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         %% ###################
-        function get_dimensionality(obj, cross_validate, n_factors, mask)
+        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, weigthed_average)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
             end
-            if ~isfield(obj.dimensionality, 'n_factors')
-                obj.dimensionality.n_factors = 5 % temp fix until we regenerate all recordings
-            end
-
-            if nargin >= 3 && ~isempty(n_factors) && (isempty(obj.dimensionality) || n_factors ~= obj.dimensionality.n_factors) % if you change the value
+%             if ~isfield(obj.dimensionality, 'n_factors')
+%                 obj.dimensionality.n_factors = 5; % temp fix until we regenerate all recordings
+%             end
+            if (nargin >= 3 && ~isempty(n_factors)) && (isempty(obj.dimensionality) || n_factors ~= obj.dimensionality.n_factors) % if you change the value
                 obj.dimensionality           = {};
                 obj.dimensionality.n_factors = n_factors;
+            elseif nargin < 3 || isempty(n_factors) && ~isfield(obj.dimensionality, 'n_factors') || (isfield(obj.dimensionality, 'n_factors') && isempty(obj.dimensionality.n_factors))
+                obj.dimensionality.n_factors = 5;                
             end
-            if nargin < 4 || isempty(mask)
-                mask                  = true(size(obj.timescale.global_timescale));
+            if nargin < 4 || isempty(timepoints)
+                timepoints                  = true(size(obj.timescale.global_timescale));
             end
-
-            rescaled_traces     = obj.rescaled_traces(mask, :);
-            all_ROIs            = 1:size(rescaled_traces, 2);
-            normal_n_NaN        = median(sum(isnan(rescaled_traces(:,~all(isnan(rescaled_traces)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
-            valid_trace_idx     = sum(isnan(rescaled_traces)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
-            rescaled_traces     = fillmissing(rescaled_traces(:, valid_trace_idx),'spline'); % removed funny traces
+            if nargin < 5 || isempty(dim_red_type)
+                dim_red_type                  = 'pca';
+            end
+            if nargin < 6 || isempty(weigthed_average)
+                weigthed_average              = true;
+            end
+            
+            t_mode = 'peaks'
+            if strcmp(t_mode, 'peaks')
+            	timepoints     = vertcat(obj.event.peak_time{:});
+            elseif strcmp(t_mode, 'beh')
+                [timepoints, beh_sm, active_tp] = obj.get_activity_bout('BodyCam_Wheel', true, 5);
+            end            
+            data                = obj.rescaled_traces(timepoints,:);
+            
+            %rescaled_traces     = rescaled_traces - obj.binned_data.global_median;
+            
+            all_ROIs            = 1:size(data, 2);
+            normal_n_NaN        = median(sum(isnan(data(:,~all(isnan(data)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
+            valid_trace_idx     = sum(isnan(data)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
+            data                = fillmissing(data(:, valid_trace_idx),'spline'); % removed funny traces
+            
+            %% Need to set it now
+            obj.dimensionality.valid_trace_idx = valid_trace_idx;
 
             %% Get single or multiple factor estimate
             if ~cross_validate
-                %[LoadingsPM, specVarPM, T, stats, F] = factoran(double(rescaled_traces), obj.dimensionality.n_factors,'rotate','quartimax'); % varimax
-
-%                 %% NNMF
-                [F,LoadingsPM, D] = nnmf(double(rescaled_traces),5,'replicates',20,'algorithm','als');
-                LoadingsPM = LoadingsPM';
                 T = [];
                 stats = {};
                 specVarPM = [];
+                
+                switch dim_red_type
+                    case 'pca'
+                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',obj.dimensionality.n_factors);
+                        [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data) - obj.binned_data.global_median(vertcat(obj.event.peak_time{:})),'NumComponents',obj.dimensionality.n_factors);
 
+                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)','NumComponents',obj.dimensionality.n_factors)
+                        T = []
+                    case 'nnmf'
+                        [F,LoadingsPM, D] = nnmf(double(data),obj.dimensionality.n_factors,'replicates',20,'algorithm','als');
+                        LoadingsPM = LoadingsPM';
+                        T = [];
+                        stats = {};
+                        specVarPM = [];
+                    case 'factoran'
+                        [LoadingsPM, specVarPM, T, stats, F] = factoran(double(data), obj.dimensionality.n_factors,'rotate','varimax'); % varimax, quartimax
+                end
+                
 
-                                %% PCA?
-%                 [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',10);
-%                 [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)','NumComponents',10)
-%                T = []
+                %% If no weighted average, Find clusters from latent variables
+                if ~weigthed_average
+                    cluster_idx = kmeans_opt(LoadingsPM,ceil(sqrt(size(LoadingsPM, 1))),0.8,10);
+                    %idx = kmeans(LoadingsPM, obj.dimensionality.n_factors);
 
-%                 idx = kmeans(LoadingsPM, obj.dimensionality.n_factors);[~, gp] = sort(idx);%figure();imagesc(LoadingsPM(gp,:));caxis([0,0.5]);
-%                 for row = 1:size(LoadingsPM, 1)
-%                     LoadingsPM(row, :) = 0;
-%                     LoadingsPM(row, idx(row)) = 1;
-%                 end
+                    %% Sort clusters by number of elements
+                    [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
+                    idx_sorted = NaN(size(cluster_idx));
+                    count = 1;
+                    for gp_idx = gp  
+                        idx_sorted(cluster_idx == gp_idx) = count;
+                        count = count + 1;
+                    end
+                    obj.dimensionality.cluster_idx = idx_sorted;
+                else
+                    obj.dimensionality.cluster_idx = [];
+                end
 
                 %% Store results
                 obj.dimensionality.LoadingsPM         = LoadingsPM;
@@ -1121,8 +1159,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.dimensionality.stats              = stats;            % Factoran stats
                 obj.dimensionality.F                  = F;                % components
                 obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
-                obj.dimensionality.valid_trace_idx    = valid_trace_idx;  % additional filter for recordings with many NaNs
-                obj.dimensionality.mask               = mask;
+                obj.dimensionality.mask               = timepoints;
 
                 %% Plot weight-tree for each component
                 for comp = 1:obj.dimensionality.n_factors
@@ -1130,46 +1167,74 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
 
                 %% Plot a map of tree weights by ROI number for each component
-                obj.get_weight_map();
+                weighted_averages = obj.get_weight_map();
+                if obj.rendering
+                    obj.plot_factor_tree();
+                end
 
-                %% Plot strongest component per ROI
-                obj.plot_strongest_comp_tree();
+                %% Plot clusters
+                obj.plot_cluster_tree();
+
+
+                    
+%                     %% To assign to strongest component
+%                     for row = 1:size(LoadingsPM,1)
+%                         [~, maxloc] = max(LoadingsPM(row, :));
+%                         LoadingsPM(row, :) = 0;
+%                         LoadingsPM(row, maxloc) = 1;                        
+%                     end
+
+                    %% To assign to strongest component
+%                     for row = 1:size(LoadingsPM,1)
+%                         LoadingsPM(row, :) = 0;
+%                         LoadingsPM(row, idx(row)) = 1;    
+%                         if ~ismember(idx(row), [1,4,5])
+%                             LoadingsPM(row, :) = 0;
+%                         end                            
+%                     end
+                
             else
                 %% Cross validation (thanks Harsha)
-                [~,N]                       = size(rescaled_traces);
+                %[~,N]                       = size(rescaled_traces);
                 nFactors                    = 20;%round(0.66*N);
                 n_iter                      = 5;
                 train                       = NaN(nFactors, n_iter);
                 test                        = NaN(nFactors, n_iter);
                 fac_steps                   = 1;
+                weighted_averages = [];
                 tic
                 for jj = 1:n_iter
                     %% Partition data into Xtrain and Xtest
                     %% random indexing
-                    blocks = true
+                    blocks = false
                     if ~blocks
-                        test_idx = randperm(size(rescaled_traces, 1));
-                        Xtrain = double(rescaled_traces(test_idx(1:2:end), :));
-                        Xtest  = double(rescaled_traces(test_idx(2:2:end), :));
+                        test_idx = randperm(size(data, 1));
+                        Xtrain = double(data(test_idx(1:2:end), :));
+                        Xtest  = double(data(test_idx(2:2:end), :));
                     else
-                        test_idx = randperm(size(rescaled_traces, 1)/10)*10;
+                        test_idx = randperm(size(data, 1)/10)*10;
                         test_idx(test_idx == max(test_idx)) = [];
                         idx_train = cell2mat(arrayfun(@(x) x:x+9, test_idx(1:2:end-1), 'UniformOutput', false));
                         idx_test = cell2mat(arrayfun(@(x) x:x+9, test_idx(2:2:end-1), 'UniformOutput', false));
-                        Xtrain = double(rescaled_traces(idx_train, :));
-                        Xtest  = double(rescaled_traces(idx_test, :));
+                        Xtrain = double(data(idx_train, :));
+                        Xtest  = double(data(idx_test, :));
                     end
 
                     jj
                     parfor factor_nb = 1:nFactors
                         if ~rem(factor_nb-1, fac_steps) % every fac_steps steps, starting at 1
+                            try
                             [LoadingsPM, specVarPM, ~, stats, F] = factoran(Xtrain, factor_nb,'maxit',1500);
                             train(factor_nb, jj)                 = stats.loglike;
                             test(factor_nb, jj)                  = testloglike_factorAnalysis(Xtest, nanmean(Xtrain,1), LoadingsPM, specVarPM);
+                            catch
+                            test(factor_nb, jj)                  = NaN;
+                            train(factor_nb, jj)                 = NaN;
+                            
+                            end
                         end
                     end
                 end
-
 
                 tested_modes = 1:fac_steps:nFactors;
                 figure(1028);cla();plot(tested_modes,train(tested_modes,1:n_iter),'o');hold on;plot(tested_modes,nanmean(train(tested_modes,1:n_iter), 2),'ko-')
@@ -1178,7 +1243,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 xlabel('number of modes');ylabel('?');set(gcf,'Color','w');title('test');
 
                 [~, n_factor] = max(nanmean(test, 2));
-                obj.get_dimensionality(false, n_factor)
+                obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
             end
         end
 
@@ -1216,7 +1281,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Map dimension weights on the tree
             if obj.rendering || ishandle(fig_handle)
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle);
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle, 'regular');
             end
         end
 
@@ -1242,16 +1307,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 all_weights{w}          = L/sum(LoadingsPM(:,w));
                 weighted_averages(w, :) = nanmean(rescaled_traces'.* all_weights{w}, 1);
             end
-
-            if obj.rendering
-                obj.plot_dimensionality_summary(weigths_to_show, weighted_averages);
-            end
         end
 
-        function [tree, soma_location, tree_values, values] = plot_strongest_comp_tree(obj, n_dim)
+        function [tree, soma_location, tree_values, values] = plot_strongest_comp_tree(obj, n_dim, fig_handle)
             if nargin < 2 || isempty(n_dim)
                 n_dim = size(obj.dimensionality.LoadingsPM, 2);
             end
+            if nargin < 3 || isempty(fig_handle)
+                fig_handle = 10200;
+            end
+            
 
             [~, loc]    = nanmax(obj.dimensionality.LoadingsPM(:,1:n_dim),[],2);
             Valid_ROIs  = find(obj.dimensionality.valid_trace_idx);
@@ -1263,8 +1328,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Map dimension weights on the tree
             if obj.rendering
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',10200, 'regular', 'lines');
-                colorbar('Ticks',1:nanmax(values));colormap(lines(nanmax(values)))
+                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',fig_handle, 'regular', 'jet');
+                colorbar('Ticks',1:nanmax(values));colormap(jet(nanmax(values)))
             end
         end
 
@@ -1386,10 +1451,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 figure(1031);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
 
                 %% Plot normalized excluded traces
-                plot_many_traces(smoothdata(normalize(bad),'gaussian',[20,0]),'','k')
+               %plot_many_traces(smoothdata(normalize(bad),'gaussian',[20,0]),'','k')
                 
                 %% Plot normalized excluded traces
-                plot_many_traces(bad, 1031, 'Color', [0.8,0.8,0.8]);
+              %  plot_many_traces(bad, 1031, 'Color', [0.8,0.8,0.8]);
                 
                 hold on; plot(ref/nanmax(ref),'r')
                 
@@ -1488,7 +1553,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.get_correlations();
 
             %% Dimensionality reduction
-            obj.get_dimensionality(false); % set to true for cross validation
+            obj.get_dimensionality(false,'','','pca'); % set to true for cross validation
 
             %% Optionally, if external variables need an update, do it here
             %obj.update_external_metrics(60)
@@ -1502,6 +1567,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Save figure and/or analysis
+            obj.auto_save_figures = true
+            obj.auto_save_analysis = true
             if obj.auto_save_figures
                 obj.save_figures();
             end

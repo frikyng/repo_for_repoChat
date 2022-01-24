@@ -23,7 +23,8 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
                            'compression'    , '2D'          ,...
                            'rendering_mode' , 'individual'      ,...
                            'rendering'      , false         ,...
-                           'ROIs'           , ROIs); 
+                           'ROIs'           , ROIs,...
+                           'z_score'        ,-5); 
     
 
 %     p.mask_method = 'none'
@@ -64,7 +65,7 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
                         %[temp, ~, ~, params] = load_experiment(p, 'data_folder', f{1});
                 end
                 current_data    = cat(4, current_data, results);
-                current_duration= current_duration + info.estimated_trial_duration;        
+                current_duration= current_duration + info.trial_duration;        
             end
             if iscell(current_data)
                 current_data = current_data{1}
@@ -79,7 +80,7 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
         header.ROIs = ROIs;
         header.trial_duration = sum(cell2mat(all_durations));
         header.duration = sum(cell2mat(all_durations));
-        header.time_range = [0, header.estimated_total_duration];
+        header.time_range = [0, header.duration];
         header.timepoints = size(data, 4);
         header.points_per_s = header.timepoints/header.duration;
         header.data_folder = data_folders{1};

@@ -101,6 +101,8 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
             else
                 subset_for_demo = trace_idx; % can change that to a fixed index to display only one trace                
                 
+                %demo = 2 * double(rec == 2); 
+                 
                 %% Adjust offset so both traces baselines are at 0     
                 if isempty(bsl_tp_current)
                     bsl_tp_current = prctile(representative_trace, 10);

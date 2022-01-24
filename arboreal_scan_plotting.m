@@ -182,7 +182,45 @@ classdef arboreal_scan_plotting < handle
 %             
 %         end
         
-        function plot_dimensionality_summary(obj, weights_to_show, weighted_averages)
+
+        function plot_cluster_tree(obj, tree_handle, map_handle, trace_handle)
+            if nargin < 2 || isempty(tree_handle)
+                tree_handle = figure(10200);tree_handle = gca();
+            end
+            if nargin < 3 || isempty(map_handle)
+                map_handle = figure(999);map_handle = gca();
+            end
+            if nargin < 4 || isempty(trace_handle)
+                trace_handle = figure(7777);trace_handle = gca();
+            end            
+            
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
+            colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
+
+            %% Display rearranged Loadings and Cluster limits    
+            cla(map_handle);
+            imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.cluster_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
+            axis(map_handle,'tight')
+            for el = 1:numel(unique(obj.dimensionality.cluster_idx))
+                start = find(obj.dimensionality.cluster_idx == el, 1, 'last');
+                if ~isempty(start)
+                    plot(map_handle, [0.5,obj.dimensionality.n_factors+0.5],[start,start],'w--','Linewidth',2);hold(map_handle, 'on')
+                end
+            end
+            title(map_handle, 'Factor/Loadings/Components');ylabel('ROI (sorted)')
+            
+            %% Display average weightings
+            cla(trace_handle);
+            rescaled_traces     = obj.rescaled_traces(:, obj.dimensionality.valid_trace_idx);
+            for gp = unique(obj.dimensionality.cluster_idx)'
+                plot(trace_handle, obj.t, nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2));hold(trace_handle, 'on')
+            end
+            title(trace_handle, 'Average traces per cluster');xlabel('Time (s)')
+        end
+           
+
+        function plot_factor_tree(obj, weights_to_show, weighted_averages, tree_handle, map_handle, trace_handle)
+            % rplace : plot_dimensionality_summary
             if nargin < 2 || isempty(weights_to_show) % number or list of factor to display
                 weights_to_show = 1:obj.dimensionality.n_factors;
             end
@@ -191,19 +229,46 @@ classdef arboreal_scan_plotting < handle
                 all_weights         = {}; weighted_averages   = [];
                 for w = weights_to_show
                     all_weights{w}          = obj.dimensionality.LoadingsPM(:,w)/sum(obj.dimensionality.LoadingsPM(:,w));
-                    weighted_averages(w, obj.dimensionality.mask) = nanmean(rescaled_traces(obj.dimensionality.mask,:)'.* all_weights{w}, 1);
+                    weighted_averages(w, :) = nanmean(rescaled_traces'.* all_weights{w}, 1);
                 end
             end
-            figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
-            figure(1017);cla();imagesc(obj.dimensionality.LoadingsPM(:,weights_to_show)); colorbar;set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('component');ylabel('ROI');
-            figure(1021);cla();
-            for w = weights_to_show
-                hold on; plot(obj.t(obj.dimensionality.mask), weighted_averages(w, obj.dimensionality.mask));
+            if nargin < 4 || isempty(tree_handle)
+                tree_handle = 10200;
             end
-            legend();set(gcf,'Color','w');
-            title('Weighted signal average per component')
+            if nargin < 5 || isempty(map_handle)
+                map_handle = figure(1017);map_handle = gca();
+            end
+            if nargin < 6 || isempty(trace_handle)
+                trace_handle = figure(7777);trace_handle = gca();
+            end  
+            
+            %% Plot strongest component per ROI
+            obj.plot_strongest_comp_tree('', tree_handle);
+            
+%             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
+%             colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
+
+
+            figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
+            
+            
+            %% Display rearranged Loadings and Cluster limits    
+            cla(map_handle);
+            imagesc(map_handle, obj.dimensionality.LoadingsPM(:,weights_to_show));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
+            %colorbar;set(gcf,'Color','w');
+            axis(map_handle,'tight')
+            title(map_handle, ['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);
+            ylabel('ROI');xlabel('component')
+
+            
+            %% Display average weightings
+            cla(trace_handle);
+            for w = weights_to_show
+                plot(trace_handle, obj.t, weighted_averages(w, :));hold(trace_handle, 'on')
+            end
+            title(trace_handle, 'Signal average using Loadings as weight');xlabel('Time (s)');
+            %legend();set(gcf,'Color','w');
         end
-        
     end
 end
 
