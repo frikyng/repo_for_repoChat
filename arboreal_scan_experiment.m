@@ -90,7 +90,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
             if isempty(all_recordings)
                 obj.updatable       = false;
-                warning('no extracted arboreal_scans found in this folder. extraction/re-extraction not available');
+                warning(['no extracted arboreal_scans found in the folder : ',[obj.source_folder,'/**/*-*-*_exp_*_*-*-*'],' . extraction/re-extraction not available']);
                 return
             else
                 obj.updatable       = true;
@@ -167,7 +167,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 %                 [obj.extracted_data_paths, new_order] = sort(obj.extracted_data_paths);
 %                 obj.arboreal_scans = obj.arboreal_scans(new_order);
             end
-
+            
             function add_tree(pos)
                 obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
@@ -436,7 +436,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         
 
         %% ########### ... ###################
-
+        
         function [raw_beh, downsampd_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig)
             %% Return the selected behaviour and corresponding timescale
             if nargin < 2 || isempty(type)
@@ -1069,7 +1069,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         %% ###################
-        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, weigthed_average)
+        
+        function factor_app(obj)
+            explore_factors(obj);
+        end
+        
+        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, clust_meth, clust_thr_or_n)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
             end
@@ -1082,22 +1087,31 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             elseif nargin < 3 || isempty(n_factors) && ~isfield(obj.dimensionality, 'n_factors') || (isfield(obj.dimensionality, 'n_factors') && isempty(obj.dimensionality.n_factors))
                 obj.dimensionality.n_factors = 5;                
             end
-            if nargin < 4 || isempty(timepoints)
+            if nargin < 4 || isempty(timepoints) || (ischar(timepoints) && contains(timepoints, 'full'))
                 timepoints                  = true(size(obj.timescale.global_timescale));
-            end
+                variable                      = 'full_traces'; 
+            elseif ischar(timepoints) && strcmpi(timepoints, 'peaks')
+            	timepoints     = vertcat(obj.event.peak_time{:});
+                 variable       = 'peaks';
+            elseif ischar(timepoints)
+                [timepoints, beh_sm, active_tp] = obj.get_activity_bout(timepoints, true, 5);
+                variable       = timepoints;
+            else
+                variable                      = 'manual selection'; 
+            end   
             if nargin < 5 || isempty(dim_red_type)
                 dim_red_type                  = 'pca';
             end
-            if nargin < 6 || isempty(weigthed_average)
-                weigthed_average              = true;
+            if nargin < 6 || isempty(clust_meth)
+                clust_meth                    = 'none';
+            end
+            if nargin < 7 || isempty(clust_thr_or_n)
+                clust_thr_or_n                    = 0;
             end
             
-            t_mode = 'peaks'
-            if strcmp(t_mode, 'peaks')
-            	timepoints     = vertcat(obj.event.peak_time{:});
-            elseif strcmp(t_mode, 'beh')
-                [timepoints, beh_sm, active_tp] = obj.get_activity_bout('BodyCam_Wheel', true, 5);
-            end            
+            obj.dimensionality.dim_red_type     = dim_red_type;
+            obj.dimensionality.variable         = variable;
+            
             data                = obj.rescaled_traces(timepoints,:);
             
             %rescaled_traces     = rescaled_traces - obj.binned_data.global_median;
@@ -1110,6 +1124,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Need to set it now
             obj.dimensionality.valid_trace_idx = valid_trace_idx;
 
+            
+            %data = data - nanmedian(data,2)
+            data = data - nanmean(data,2);
+            
+            
             %% Get single or multiple factor estimate
             if ~cross_validate
                 T = [];
@@ -1119,7 +1138,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 switch dim_red_type
                     case 'pca'
                         %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',obj.dimensionality.n_factors);
-                        [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data) - obj.binned_data.global_median(vertcat(obj.event.peak_time{:})),'NumComponents',obj.dimensionality.n_factors);
+                        [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data),'NumComponents',obj.dimensionality.n_factors);
+
+                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data) - obj.binned_data.global_median(vertcat(obj.event.peak_time{:})),'NumComponents',obj.dimensionality.n_factors);
 
                         %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)','NumComponents',obj.dimensionality.n_factors)
                         T = []
@@ -1133,25 +1154,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         [LoadingsPM, specVarPM, T, stats, F] = factoran(double(data), obj.dimensionality.n_factors,'rotate','varimax'); % varimax, quartimax
                 end
                 
-
-                %% If no weighted average, Find clusters from latent variables
-                if ~weigthed_average
-                    cluster_idx = kmeans_opt(LoadingsPM,ceil(sqrt(size(LoadingsPM, 1))),0.8,10);
-                    %idx = kmeans(LoadingsPM, obj.dimensionality.n_factors);
-
-                    %% Sort clusters by number of elements
-                    [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
-                    idx_sorted = NaN(size(cluster_idx));
-                    count = 1;
-                    for gp_idx = gp  
-                        idx_sorted(cluster_idx == gp_idx) = count;
-                        count = count + 1;
-                    end
-                    obj.dimensionality.cluster_idx = idx_sorted;
-                else
-                    obj.dimensionality.cluster_idx = [];
-                end
-
                 %% Store results
                 obj.dimensionality.LoadingsPM         = LoadingsPM;
                 obj.dimensionality.specVarPM          = specVarPM;
@@ -1160,23 +1162,28 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.dimensionality.F                  = F;                % components
                 obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
                 obj.dimensionality.mask               = timepoints;
+                
+                obj.dimensionality.cluster_idx        = [];
+                obj.dimensionality.clust_meth         = clust_meth;
+                obj.dimensionality.clust_thr_or_n     = clust_thr_or_n;
 
                 %% Plot weight-tree for each component
                 for comp = 1:obj.dimensionality.n_factors
                     obj.plot_dim_tree(comp);
                 end
+                
+                if obj.rendering
+                    obj.plot_factor_tree();      
+                end
 
                 %% Plot a map of tree weights by ROI number for each component
                 weighted_averages = obj.get_weight_map();
-                if obj.rendering
-                    obj.plot_factor_tree();
+                
+                %% If no weighted average, Find clusters from latent variables
+                if ~strcmp(clust_meth, 'none')
+                    obj.cluster_factors();
                 end
 
-                %% Plot clusters
-                obj.plot_cluster_tree();
-
-
-                    
 %                     %% To assign to strongest component
 %                     for row = 1:size(LoadingsPM,1)
 %                         [~, maxloc] = max(LoadingsPM(row, :));
@@ -1246,6 +1253,115 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
             end
         end
+        
+        function cluster_factors(obj)
+            if ~obj.dimensionality.clust_thr_or_n
+                obj.dimensionality.cluster_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
+                obj.dimensionality.sorted_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
+                return
+            end
+            max_n = ceil(sqrt(size(obj.dimensionality.LoadingsPM , 1))); %default            
+            max_n = obj.dimensionality.n_factors*2
+            
+            
+            if strcmp(obj.dimensionality.clust_meth, 'kmeans')
+                obj.dimensionality.clust_thr_or_n = 0.95
+                cluster_idx = kmeans_opt(obj.dimensionality.LoadingsPM, max_n, 0.95, 500);
+                %cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.n_factors*2);
+            elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical') % see https://fr.mathworks.com/help/stats/hierarchical-clustering.html
+                if isinf(obj.dimensionality.clust_thr_or_n)
+                    mean_v = [];
+                    for v = 1:20
+                        cluster_idx = clusterdata(obj.dimensionality.LoadingsPM, 'Linkage', 'ward', 'MAXCLUST', v);%, 'Criterion','distance' 'MAXCLUST', 40)
+                        figure();silhouette(obj.dimensionality.LoadingsPM,cluster_idx);
+                        a = silhouette(obj.dimensionality.LoadingsPM, cluster_idx);
+                        mean_v(v) = nanmean(a);
+                    end
+                    [~, obj.dimensionality.clust_thr_or_n] = nanmax(mean_v);
+                    fprintf(['Ideal number of clusters is ',num2str(obj.dimensionality.clust_thr_or_n), '\n'])
+                end
+                
+                
+                
+                cluster_idx = clusterdata(obj.dimensionality.LoadingsPM,'Linkage', 'ward', 'MAXCLUST', obj.dimensionality.clust_thr_or_n);%, 'Criterion','distance' 'MAXCLUST', 40)
+
+                figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
+%                 Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');
+%                 Z = linkage(Y,'ward');
+%                 figure();dendrogram(Z);
+%                 W = inconsistent(Z,3)
+
+%                 pause(0.1); drawnow
+%                 Y = pdist(obj.dimensionality.LoadingsPM ,'cityblock');
+%                 Z = linkage(Y,'average');
+%                 %c = cophenet(Z,Y); % cophenetic correlation coefficient
+%                 %I = inconsistent(Z)
+%                 %T = cluster(Z,'cutoff',obj.dimensionality.clust_thr_or_n)
+%                 T = cluster(Z,'maxclust',10);
+%                 cluster_idx = T;
+            elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
+                kD = pdist2(obj.dimensionality.LoadingsPM ,obj.dimensionality.LoadingsPM ,'euc','Smallest',5)
+                figure();
+                plot(sort(kD(end,:)));
+                title('k-distance graph')
+                xlabel('Points sorted with 50th nearest distances')
+                ylabel('50th nearest distances')
+                grid
+                thr = 1;
+                MIN_GP = 5
+                M = [];
+                L = 0.01:0.01:1
+                for thr = L
+                    thr = thr - thr/20;                           
+                    labels = dbscan(obj.dimensionality.LoadingsPM ,thr, MIN_GP, 'Distance', 'euclidean');
+                    M(end + 1) = numel(unique(labels))
+                end
+                [~, maxloc] = max(M);
+                L(maxloc)
+                labels = dbscan(obj.dimensionality.LoadingsPM ,L(maxloc),MIN_GP, 'Distance', 'euclidean');
+                labels = labels - min(labels)+ 1
+                col = lines(numel(unique(labels)));
+                labels_col = [labels, labels, labels];
+                count = 1;
+                for v = unique(labels)'
+                    subset = labels_col(:,1) == v;                            
+                    labels_col(subset, :) = repmat(col(count,:),sum(subset),1);
+                    count = count + 1;
+                end
+                figure();
+                scatter3(obj.dimensionality.LoadingsPM (:,1),obj.dimensionality.LoadingsPM (:,2),obj.dimensionality.LoadingsPM (:,3),20,labels_col)
+                %gscatter(obj.dimensionality.LoadingsPM (:,2),obj.dimensionality.LoadingsPM (:,3),labels);
+                title('epsilon = 2 and minpts = 50')
+                grid
+                cluster_idx = labels;
+            else
+                obj.dimensionality.cluster_idx = [];
+            end
+            
+            obj.dimensionality.cluster_idx = ones(size(obj.dimensionality.cluster_idx));
+            obj.dimensionality.sorted_idx   = 1:(numel(obj.dimensionality.cluster_idx));
+            
+            if ~strcmp(obj.dimensionality.clust_meth, 'none')
+                %% Sort clusters by number of elements
+                [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
+                a = unique(cluster_idx)';
+                gp = a(gp);
+                idx_sorted = NaN(size(cluster_idx));
+                count = 1;
+                for gp_idx = gp  
+                    idx_sorted(cluster_idx == gp_idx) = count;
+                    count = count + 1;
+                end
+                obj.dimensionality.cluster_idx = idx_sorted; % stored group ids (reordered by number of element)
+                [~, obj.dimensionality.sorted_idx] = sort(idx_sorted); % get ROI index to reorder the data by group
+
+                if obj.rendering
+                    %% Plot clusters
+                    obj.plot_cluster_tree();
+                end
+            end
+        end
+        
 
         function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle)
             if nargin < 2 || isempty(comp) || ~comp
@@ -1397,7 +1513,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
             end
 
-            THR_FOR_CONNECTION      = 0.2; % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
+            THR_FOR_CONNECTION      = 0.2 % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
             fprintf(['* Now detecting ROIs that are either,\n'...
                      '      - so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).\n',...
                      '      - are member of batch_params.excluded_branches \n',...
@@ -1458,7 +1574,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 
                 hold on; plot(ref/nanmax(ref),'r')
                 
-                regroup_traces(bad', 80, 'pca') 
+                %% Plot (if possible) the excluded traces
+                try
+                    regroup_traces(bad', 80, 'pca') 
+                end
                 
                 bad = bad - prctile(bad, 1);
                 %plot(smoothdata(bad./nanmax(bad),'gaussian',obj.filter_win),'r');hold on;
@@ -1553,7 +1672,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.get_correlations();
 
             %% Dimensionality reduction
-            obj.get_dimensionality(false,'','','pca'); % set to true for cross validation
+            try
+                obj.get_dimensionality(false,6,'','factoran',false,'peaks'); % set to true for cross validation
+            catch
+                warning('Not enough events availabl for factoran on peaks. Using full traces instead')
+                try
+                    obj.get_dimensionality(false,6,'','pca',false,'peaks'); % set to true for cross validation 
+                catch
+                    warning('Not enough events available for pca on peaks. Using full traces instead')
+                    obj.get_dimensionality(false,6,'','factoran',false,'full_traces'); % set to true for cross validation 
+                end
+            end
 
             %% Optionally, if external variables need an update, do it here
             %obj.update_external_metrics(60)
@@ -1567,7 +1696,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_figures = true
             obj.auto_save_analysis = true
             if obj.auto_save_figures
                 obj.save_figures();
