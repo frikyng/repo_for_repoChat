@@ -185,7 +185,7 @@ classdef arboreal_scan_plotting < handle
 
         function plot_cluster_tree(obj, tree_handle, map_handle, trace_handle)
             if nargin < 2 || isempty(tree_handle)
-                tree_handle = figure(10200);tree_handle = gca();
+                tree_handle = figure(10200);tree_handle = gcf();
             end
             if nargin < 3 || isempty(map_handle)
                 map_handle = figure(999);map_handle = gca();
@@ -194,16 +194,17 @@ classdef arboreal_scan_plotting < handle
                 trace_handle = figure(7777);trace_handle = gca();
             end            
             
+            tree_handle
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
             colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
 
             %% Display rearranged Loadings and Cluster limits    
             cla(map_handle);
-            imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.cluster_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
+            imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.sorted_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
             axis(map_handle,'tight')
             for el = 1:numel(unique(obj.dimensionality.cluster_idx))
-                start = find(obj.dimensionality.cluster_idx == el, 1, 'last');
-                if ~isempty(start)
+                start = find(obj.dimensionality.cluster_idx(obj.dimensionality.sorted_idx,:) == el, 1, 'last');
+                if ~isempty(start) && obj.dimensionality.clust_thr_or_n
                     plot(map_handle, [0.5,obj.dimensionality.n_factors+0.5],[start,start],'w--','Linewidth',2);hold(map_handle, 'on')
                 end
             end
