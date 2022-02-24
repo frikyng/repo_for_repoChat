@@ -57,8 +57,36 @@ classdef arboreal_scan_plotting < handle
             end
             figure_list = [1001:1035, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
+            
+        function plot_original_data(obj)
+            figure(1055);clf();plot(obj.t, obj.extracted_traces_conc,'Color',[0.9,0.9,0.9]); hold on
+            plot(obj.t, nanmean(obj.extracted_traces_conc,2),'r');            
+        end
+
+        function plot_median_traces(obj, rescaled) 
+            if nargin < 2 || isempty(rescaled)
+                rescaled = true;
+            end
+            %% Plot the mean trace for each bin  
+            if isempty(obj.binned_data)
+               warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')
+               return 
+            end            
+            traces = obj.binned_data.median_traces;
+            figure(1001);cla();plot(obj.t, traces); hold on;
+            legend(obj.binned_data.bin_legend); hold on;
+            if obj.is_rescaled
+                suffix = ' (rescaled)';
+            else
+                suffix = ' (raw)';
+            end
+            title(['median traces trace per group',suffix]);xlabel('time (s)');set(gcf,'Color','w');
+            if obj.is_rescaled
+                figure(1023);cla();plot(obj.t, traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
+            end
+        end
         
-        function plot_rescaling_info(obj)
+       function plot_rescaling_info(obj)
             n_gp = numel(obj.rescaling_info.individual_scaling{1});
             n_rec = numel(obj.rescaling_info.individual_scaling);
             figure(1012);cla();hold on;
@@ -82,26 +110,6 @@ classdef arboreal_scan_plotting < handle
             ax = gca;
             ax.YAxis(1).Color = 'r';
             ax.YAxis(2).Color = 'k';
-        end
-
-        function plot_median_traces(obj)            
-            %% Plot the mean trace for each bin  
-            if isempty(obj.binned_data)
-               warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')
-               return 
-            end            
-            traces = obj.binned_data.median_traces;
-            figure(1001);cla();plot(obj.t, traces); hold on;
-            legend(obj.binned_data.bin_legend); hold on;
-            if obj.is_rescaled
-                suffix = ' (rescaled)';
-            else
-                suffix = ' (raw)';
-            end
-            title(['median traces trace per group',suffix]);xlabel('time (s)');set(gcf,'Color','w');
-            if obj.is_rescaled
-                figure(1023);cla();plot(obj.t, traces - nanmean(traces,2));hold on;title('group traces median - overall median');xlabel('time (s)');set(gcf,'Color','w');
-            end
         end
         
         function plot_correlation_results(obj, cross_corr)
@@ -144,7 +152,6 @@ classdef arboreal_scan_plotting < handle
             %% Project correlation value onto the tree
             obj.plot_corr_tree();
         end
-        
         
         function plot_detected_events(obj)
             raw_med = nanmedian(obj.extracted_traces_conc, 2);raw_med = raw_med - prctile(raw_med,1); %% QQ CHCK WHAT@S THE THING USED IN DETTECT_EVETS
@@ -204,7 +211,7 @@ classdef arboreal_scan_plotting < handle
             axis(map_handle,'tight')
             for el = 1:numel(unique(obj.dimensionality.cluster_idx))
                 start = find(obj.dimensionality.cluster_idx(obj.dimensionality.sorted_idx,:) == el, 1, 'last');
-                if ~isempty(start) && obj.dimensionality.clust_thr_or_n
+                if ~isempty(start) && obj.dimensionality.N_clust
                     plot(map_handle, [0.5,obj.dimensionality.n_factors+0.5],[start,start],'w--','Linewidth',2);hold(map_handle, 'on')
                 end
             end
