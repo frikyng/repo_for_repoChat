@@ -68,6 +68,13 @@ spacer = 30;
 
 % get figure handles
 figureHandles = sort(get(0, 'Children'));
+ok = [];
+for fig_idx = 1:numel(figureHandles)
+    ok(fig_idx) = ~isprop(figureHandles(fig_idx), 'RunningAppInstance');
+end
+figureHandles = figureHandles(logical(ok));
+%filter out mlapp figures
+
 NFigures = numel(figureHandles);
 
 % if first argument is logical, only place all figures on top
