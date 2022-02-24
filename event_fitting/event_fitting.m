@@ -19,7 +19,7 @@ classdef event_fitting < handle
             
             %% Make sure events were detected
             if isempty(obj.event)
-                obj.detect_events();
+                obj.find_events();
             end
             
             traces                  = obj.binned_data.median_traces;
@@ -174,7 +174,7 @@ classdef event_fitting < handle
                 data                    = obj.binned_data.median_traces;
             end
             if nargin < 3 || isempty(peak_loc)
-                obj.events              = obj.detect_events();
+                obj.events              = obj.find_events();
                 peak_loc                = unique(sort(vertcat(obj.event.peak_time{obj.event.is_global})))';
             end
             if nargin < 4 || isempty(pre_peak_delay) 

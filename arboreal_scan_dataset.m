@@ -33,7 +33,7 @@ classdef arboreal_scan_dataset < handle
                    m = load(fname);  
 %                    test = m.obj;
 %                    close all
-%                    test.detect_events
+%                    test.find_events
 %                    test.rescale_traces      
 %                    %% CHECK 3,9,15    for low gain,
 %                    %% CHeck 10 for low offset          

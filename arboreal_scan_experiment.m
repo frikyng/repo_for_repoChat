@@ -26,9 +26,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         %% Analysis/extraction settings
         filter_win      = [0, 0];
         filter_type     = 'gaussian';
-        dim_red_type    = 'nnmf'
+        dim_red_type    = 'pca'
         peak_thr        = 2;
-        bad_ROI_thr     = 0.1;
+        bad_ROI_thr     = 0;
         cc_mode         = 'groups_peaks'; % or raw
         detrend         = false;
         is_rescaled     = false; % is set to True once you ran the rescaling step.
@@ -181,7 +181,38 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
         end
+        
+        function reset(obj)
+            %% Saving options
+            obj.demo                = 0;
+            obj.auto_save_analysis  = false;
+            obj.auto_save_figures   = false;
 
+            %% Analysis/extraction settings
+            obj.filter_win      = [0, 0];
+            obj.filter_type     = 'gaussian';
+            obj.dim_red_type    = 'pca';
+            obj.peak_thr        = 2;
+            obj.bad_ROI_thr     = 0;
+            obj.cc_mode         = 'groups_peaks'; % or raw
+            obj.detrend         = false;
+            obj.is_rescaled     = false; % is set to True once you ran the rescaling step.
+            obj.rescaling_method= 'by_trials';
+            obj.breakpoints     = []; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
+
+            %% All the fields computed in
+            obj.binned_data     = [];	% Defines how ROIs are grouped
+            obj.rescaling_info  = [];   % Defines how each ROi get rescaled to match the cell median
+            obj.event           = [];   % Event detection output (event times, amplitude, correlation etc....)
+            obj.variability     = [];   % Signal variability over time
+            obj.dimensionality  = [];   % Results of diemensionality reduction
+            obj.behaviours      = [];   % List of available behaviours
+            obj.spiketrains     = [];   % If available, spike inference results
+            obj.bad_ROI_list    = [];  % list of uncorrelated ROIs (following event detection)
+            obj.updatable       = [];   % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
+            obj.crosscorr       = [];   % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+        end
+        
         %% ########### GET METHODS ###################
 
         function updatable = get.updatable(obj)
@@ -216,6 +247,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         function set.breakpoints(obj, breakpoints)
             for rec = 1:numel(obj.arboreal_scans)
                 obj.arboreal_scans{rec}.batch_params.breakpoints = breakpoints;
+            end
+        end
+        
+        function set.bad_ROI_thr(obj, value)
+            if value <0 || value > 1
+                error('CutOff must be between 0 and 1')
+            else
+                obj.bad_ROI_thr = value;
+                a = dbstack(); 
+                if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting
+                    obj.find_bad_ROIs();
+                end
             end
         end
         
@@ -305,7 +348,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         
         
         function extracted_traces = get.extracted_traces(obj) % checked
-            tic
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
             
             %% If expe was interrupted signal gain changed, we fix it here
@@ -318,7 +360,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if any(obj.filter_win)
                 extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.filter_win), extracted_traces, 'UniformOutput', false);
             end
-            toc
         end
 
         function extracted_pop = get.extracted_pop(obj) % checked
@@ -422,13 +463,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)';
             end
         end
+
         
         function bad_ROI_list = get.bad_ROI_list(obj)
             bad_ROI_list = obj.bad_ROI_list;
             if ischar(bad_ROI_list) && strcmpi(bad_ROI_list, 'unset')
                 warning('Uncorrelated ROIs were never set. Detecting now. To ignore this set value to []')
                 %rendering = obj.rendering;obj.rendering = false;
-                obj.detect_events(); %find uncorrelated ROIs based on correlation
+                obj.find_events(); %find uncorrelated ROIs based on correlation
                 %obj.rendering = rendering;
                 bad_ROI_list = obj.bad_ROI_list;
             end
@@ -549,6 +591,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 [~, ~, beh] = obj.get_behaviours(current_type, false);
                 beh.value = beh.value - movmin(beh.value, [detrend_win, 0]);
                 beh_sm = smoothdata(beh.value, 'gaussian', smoothing);
+                beh_sm = nanmean(beh_sm,1);
                 %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
                 %thr = prctile(beh_sm(beh_sm > 0), 20);
                 current_thr = prctile(beh_sm,(100/thr)) + range(beh_sm)/(100/thr); % 5% of max
@@ -610,7 +653,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         %% #############################
 
-        function [tree, soma_location, tree_values, values] = plot_dist_tree(obj, bin)
+        function [tree, soma_location, tree_values, values] = plot_distance_tree(obj, bin)
             if nargin < 2 || isempty(bin)
                 bin = [];
             end
@@ -678,6 +721,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 3 || isempty(smoothing)
                 pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
                 smoothing               = [pk_width*2,0];
+            elseif numel(smoothing) == 1
+                smoothing = [smoothing, 0];
             end
 
             %% Set some flag
@@ -1070,11 +1115,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         %% ###################
         
-        function factor_app(obj)
+        function gui(obj)
             explore_factors(obj);
         end
         
-        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, clust_meth, clust_thr_or_n)
+        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, clust_meth, N_clust)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
             end
@@ -1095,6 +1140,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                  variable       = 'peaks';
             elseif ischar(timepoints)
                 [timepoints, beh_sm, active_tp] = obj.get_activity_bout(timepoints, true, 5);
+                1
+                timepoints = timepoints(2:2:end)
                 variable       = timepoints;
             else
                 variable                      = 'manual selection'; 
@@ -1105,9 +1152,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 6 || isempty(clust_meth)
                 clust_meth                    = 'none';
             end
-            if nargin < 7 || isempty(clust_thr_or_n)
-                clust_thr_or_n                    = 0;
+            if nargin < 7 || isempty(N_clust)
+                N_clust                    = 0;
             end
+            
+%             t = 1:numel(obj.global_median_raw);
+%             t_bap = [obj.event.t_win_no_overlap{:}];
+%             t_no_bap = ~ismember(t, t_bap);
+% 
+%             timepoints = find(t_no_bap);
             
             obj.dimensionality.dim_red_type     = dim_red_type;
             obj.dimensionality.variable         = variable;
@@ -1165,7 +1218,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 
                 obj.dimensionality.cluster_idx        = [];
                 obj.dimensionality.clust_meth         = clust_meth;
-                obj.dimensionality.clust_thr_or_n     = clust_thr_or_n;
+                obj.dimensionality.N_clust            = N_clust;
 
                 %% Plot weight-tree for each component
                 for comp = 1:obj.dimensionality.n_factors
@@ -1255,51 +1308,74 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function cluster_factors(obj)
-            if ~obj.dimensionality.clust_thr_or_n
+            if ~obj.dimensionality.N_clust
                 obj.dimensionality.cluster_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 obj.dimensionality.sorted_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 return
             end
-            max_n = ceil(sqrt(size(obj.dimensionality.LoadingsPM , 1))); %default            
-            max_n = obj.dimensionality.n_factors*2
             
+            if isinf(obj.dimensionality.N_clust)
+                R = 1:20;
+                if strcmp(obj.dimensionality.clust_meth, 'kmeans')
+                    eva = evalclusters(obj.dimensionality.LoadingsPM,'kmeans','silhouette','KList',R);
+                elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical')
+                    eva = evalclusters(obj.dimensionality.LoadingsPM,'linkage','silhouette','KList',R);
+                else
+                    eva = {};
+                    eva.OptimalK = inf;
+                    fprintf(['No auto auto-determinatiopn of the number of cluster\n'])
+                end
+                obj.dimensionality.N_clust = eva.OptimalK
+                fprintf(['Ideal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
+            end
             
             if strcmp(obj.dimensionality.clust_meth, 'kmeans')
-                obj.dimensionality.clust_thr_or_n = 0.95
-                cluster_idx = kmeans_opt(obj.dimensionality.LoadingsPM, max_n, 0.95, 500);
-                %cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.n_factors*2);
+                %cluster_idx = kmeans_opt(obj.dimensionality.LoadingsPM, max_n, 0.95, 500);
+                cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.N_clust);
             elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical') % see https://fr.mathworks.com/help/stats/hierarchical-clustering.html
-                if isinf(obj.dimensionality.clust_thr_or_n)
-                    mean_v = [];
-                    for v = 1:20
-                        cluster_idx = clusterdata(obj.dimensionality.LoadingsPM, 'Linkage', 'ward', 'MAXCLUST', v);%, 'Criterion','distance' 'MAXCLUST', 40)
-                        figure();silhouette(obj.dimensionality.LoadingsPM,cluster_idx);
-                        a = silhouette(obj.dimensionality.LoadingsPM, cluster_idx);
-                        mean_v(v) = nanmean(a);
-                    end
-                    [~, obj.dimensionality.clust_thr_or_n] = nanmax(mean_v);
-                    fprintf(['Ideal number of clusters is ',num2str(obj.dimensionality.clust_thr_or_n), '\n'])
-                end
-                
-                
-                
-                cluster_idx = clusterdata(obj.dimensionality.LoadingsPM,'Linkage', 'ward', 'MAXCLUST', obj.dimensionality.clust_thr_or_n);%, 'Criterion','distance' 'MAXCLUST', 40)
-
+                cluster_idx = clusterdata(obj.dimensionality.LoadingsPM,'Linkage', 'ward', 'MAXCLUST', obj.dimensionality.N_clust);%, 'Criterion','distance' 'MAXCLUST', 40)
                 figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
-%                 Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');
-%                 Z = linkage(Y,'ward');
-%                 figure();dendrogram(Z);
-%                 W = inconsistent(Z,3)
+                %                 Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');
+                %                 Z = linkage(Y,'ward');
+                %                 figure();dendrogram(Z);
+                %                 W = inconsistent(Z,3)
 
-%                 pause(0.1); drawnow
-%                 Y = pdist(obj.dimensionality.LoadingsPM ,'cityblock');
-%                 Z = linkage(Y,'average');
-%                 %c = cophenet(Z,Y); % cophenetic correlation coefficient
-%                 %I = inconsistent(Z)
-%                 %T = cluster(Z,'cutoff',obj.dimensionality.clust_thr_or_n)
-%                 T = cluster(Z,'maxclust',10);
-%                 cluster_idx = T;
+                %                 pause(0.1); drawnow
+                %                 Y = pdist(obj.dimensionality.LoadingsPM ,'cityblock');
+                %                 Z = linkage(Y,'average');
+                %                 %c = cophenet(Z,Y); % cophenetic correlation coefficient
+                %                 %I = inconsistent(Z)
+                %                 %T = cluster(Z,'cutoff',obj.dimensionality.N_clust)
+                %                 T = cluster(Z,'maxclust',10);
+                %                 cluster_idx = T;
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
+                MIN_GP = 3   
+%                 
+%                 [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
+%                 dist = nanmean(mD(:,2))
+%                 cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,dist*2,MIN_GP, 'Distance', 'euclidean');
+                %if isinf(obj.dimensionality.N_clust)                    
+%                     mean_v = [];
+%                     L = 0.01:0.01:1
+%                     [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
+%                     nanmean(mD(:,2))
+%                     
+%                     for v = L
+%                         %cluster_idx = clusterdata(obj.dimensionality.LoadingsPM, 'Linkage', 'ward', 'MAXCLUST', v);%, 'Criterion','distance' 'MAXCLUST', 40)
+%                         cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,v,MIN_GP, 'Distance', 'euclidean');
+%                         %labels = labels - min(labels)+ 1
+%                         %figure();silhouette(obj.dimensionality.LoadingsPM,cluster_idx);
+%                         a = silhouette(obj.dimensionality.LoadingsPM, cluster_idx);
+%                         mean_v(end+1) = nanmean(a);
+%                     end
+%                     [~, best] = nanmax(mean_v);
+%                     obj.dimensionality.N_clust = L(best);
+%                     cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,obj.dimensionality.N_clust,MIN_GP, 'Distance', 'euclidean');
+%                 %end
+%                 
+
+
+                
                 kD = pdist2(obj.dimensionality.LoadingsPM ,obj.dimensionality.LoadingsPM ,'euc','Smallest',5)
                 figure();
                 plot(sort(kD(end,:)));
@@ -1308,7 +1384,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 ylabel('50th nearest distances')
                 grid
                 thr = 1;
-                MIN_GP = 5
+                
                 M = [];
                 L = 0.01:0.01:1
                 for thr = L
@@ -1476,17 +1552,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
         end
 
-        function detect_events(obj, idx_filter, corr_window, thr_for_detection)
+        function find_events(obj, idx_filter, thr_for_detection, method)
             if nargin < 2 || isempty(idx_filter)
                 idx_filter = 1:obj.n_ROIs;
             elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
                 idx_filter = obj.ref.indices.somatic_ROIs;
             end
-            if nargin < 3 || isempty(corr_window)
-                corr_window = [];
-            end
-            if nargin < 4 || isempty(thr_for_detection)
+            if nargin < 3 || isempty(thr_for_detection)
                 thr_for_detection = 0.2;
+            end
+            if nargin < 4 || isempty(method)
+                method = 'corr';
             end
             
             fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])     
@@ -1495,36 +1571,37 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             raw_traces              = obj.extracted_traces_conc(:, idx_filter);
 
             %% Get original traces
-            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, 'corr', 0.2, corr_window, obj.rendering);
+            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering);
             %[obj.event]             = detect_events(raw_traces, obj.t, 'global_amp', 60, corr_window);
 
             %% Identify and log poorly correlated ROIs
-            obj.find_bad_ROIs(correlation_res.corr_results, correlation_res.comb, corr_window, idx_filter);
+            obj.find_bad_ROIs(correlation_res, idx_filter);
         end
 
-        function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, corr_results, comb, corr_window, ROIs)
-            if nargin < 4
-                corr_window = obj.get_ideal_corr_window();
-            end
-            if nargin < 5
+        function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, correlation_res, ROIs)
+            if nargin < 3 || isempty(ROIs)
                 ROIs = 1:obj.n_ROIs;
-            end
-            if nargin < 3
-                [corr_results, comb] = get_pairwise_correlations(ROIs, corr_window); % same as in detect_events
+            end            
+            if nargin < 2 || isempty(correlation_res)
+                warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY. RUNNING DEFAULT EVENT DETECTION')
+                raw_data = obj.extracted_traces_conc;
+                [events, correlation_res] = detect_events(raw_data(:, ROIs), obj.t, 'corr', 0.2, [], false, []); % no rendering here
+            else
+                events = obj.event;
             end
 
+            
             THR_FOR_CONNECTION      = 0.2 % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
             fprintf(['* Now detecting ROIs that are either,\n'...
                      '      - so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).\n',...
                      '      - are member of batch_params.excluded_branches \n',...
                      '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])  
-            THR_FOR_CONNECTION
             
             %% Show mean correlation with each ROI
             mean_corr_with_others   = [];
-            max_corr_for_cell       = max(obj.event.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
+            max_corr_for_cell       = max(events.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
             for key = 1:numel(ROIs)
-                corr_results_sub    = corr_results(obj.event.t_corr(obj.event.is_global), comb(:,2) == key | comb(:,1) == key);
+                corr_results_sub    = correlation_res.corr_results(events.t_corr(events.is_global), correlation_res.comb(:,2) == key | correlation_res.comb(:,1) == key);
                 corr_results_sub    = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
                 mean_corr           = nanmean(corr_results_sub,1);
                 mean_corr_with_others(key) = sum(mean_corr > THR_FOR_CONNECTION);
@@ -1533,18 +1610,24 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Normalize to 100%
             mean_corr_with_others = mean_corr_with_others / numel(mean_corr_with_others); % renormalize to max possible corr for this cell
             
-            figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
-            xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
+            if obj.rendering
+                figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
+                xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
+            end
             
             %% Renormalize to max possible corr for this cell
             mean_corr_with_others_norm = mean_corr_with_others / max(mean_corr_with_others); 
-            figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on; 
-            xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
+            if obj.rendering
+                figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on; 
+                xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
+            end
             
             %% Update class variables
-            bad_ROIs = mean_corr_with_others_norm < obj.bad_ROI_thr;
+            if obj.bad_ROI_thr ~= THR_FOR_CONNECTION
+                obj.bad_ROI_thr = THR_FOR_CONNECTION;
+            end            
+            bad_ROIs = mean_corr_with_others_norm < obj.bad_ROI_thr;            
             obj.bad_ROI_list = bad_ROIs; % below threshold% of max correlation
-            obj.bad_ROI_thr = THR_FOR_CONNECTION;
             bad_ROIs = find(bad_ROIs);
             
             %% ROIs that were manually excluded
@@ -1605,7 +1688,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %obj.bad_ROI_list = find(obj.bad_ROI_list); 
         end
 
-        function [corr_results, comb] = get_pairwise_correlations(idx_filter, corr_window)
+        function [corr_results, comb] = get_pairwise_correlations(obj, idx_filter, corr_window)
             if nargin < 2 || isempty(idx_filter)
                 idx_filter = 1:obj.n_ROIs;
             elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
@@ -1648,7 +1731,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.prepare_binning(condition);
 
             %% Find peaks based on amplitude AND correlation
-            obj.detect_events();
+            obj.find_events();
 
             %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
             obj.rescale_traces(); % note that signal rescaling is computed on peaks, not noise

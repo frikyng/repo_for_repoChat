@@ -636,9 +636,15 @@ Essentially, the analysis process consist in :
   - Do some dimensionality reduction analysis on each region or ROI
   - Correlate against behaviours
 
+> Note: The entire pipeline can be run
+>
+> * In command line step by step (see below)
+> * Automatically using `obj.process()` (see )
+> * step by step using a GUI
+
 #### Loading/object building 
 
-This function is typically controlled by the constructor, although you can update the object later if you changed the list of recordings, or if you chaged the extraction method (e.g. new post-hoc MC, different mask...)
+This function is typically controlled by the constructor, although you can update the object later if you changed the list of recordings, or if you changed the extraction method (e.g. new post-hoc MC, different mask...)
 
 ```matlab
 %% Case 1
@@ -659,7 +665,7 @@ obj = arboreal_scan_experiment(source_folder, '', 'path/to/settings.txt'');
 obj.update(); % Note that since this will affect the binned traces, all analysis need to be regenerated. All analysis fields will be cleared
 ```
 
-#### Analysis can be handled by `obj.process()`
+#### Automated analysis using `obj.process()`
 
 ```matlab
 %% Process the entire tree at once
@@ -671,6 +677,13 @@ obj.process({'depth',100}); % by depth, using bins of 100 um
 %% Process without generating figures
 obj.rendering = false;
 obj.process(...);
+```
+
+### GUI
+
+```matlab
+%% Start the GUI, then click on the options....
+obj.gui();
 ```
 
 #### Save the result
@@ -823,7 +836,7 @@ obj.plot_median_traces([20, 0]);    % median with a 20 point asymetrical smoothi
 
 You can detect large transients, and store they time of occurrence in `obj.event`. 
 
-This uses the `obj.detect_events()`. Event detection can be using either a peak_amplitude approach [TODO : TO PUT BACK], or an approach that looks at correlated signal variations across the tree (either all of it, or a selected region such as the peri somatic area. see `idx_filter` input).
+This uses the `obj.find_events()`. Event detection can be using either a peak_amplitude approach [TODO : TO PUT BACK], or an approach that looks at correlated signal variations across the tree (either all of it, or a selected region such as the peri somatic area. see `idx_filter` input).
 
 The default uses the following steps:
 
@@ -841,7 +854,7 @@ The default uses the following steps:
   - Original "raw" amplitude of the fluorescent signal is stored in `obj.event.peak_value`
   - The lower and upper time range of each event are stored in `obj.event.t_win` (as defined by the onset from/offset to baseline, or by the end/start of another surrounding event) 
 
-If you want to detect somatic events only, you can use `obj.detect_events('soma')` which will only use the ROIs located the closest to the soma (on primary branches). If there is no soma (e.g. L5 cell, then the most proximal segments will be used instead)
+If you want to detect somatic events only, you can use `obj.find_events('soma')` which will only use the ROIs located the closest to the soma (on primary branches). If there is no soma (e.g. L5 cell, then the most proximal segments will be used instead)
 
 
 
