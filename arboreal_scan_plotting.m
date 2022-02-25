@@ -219,13 +219,20 @@ classdef arboreal_scan_plotting < handle
             
             %% Display average weightings
             cla(trace_handle);
-            rescaled_traces     = obj.rescaled_traces(:, obj.dimensionality.valid_trace_idx);
-            for gp = unique(obj.dimensionality.cluster_idx)'
-                plot(trace_handle, obj.t, nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2));hold(trace_handle, 'on')
+            cluster_traces = obj.get_cluster_traces();
+            for gp = 1:size(cluster_traces, 1)
+                plot(trace_handle, obj.t, cluster_traces(gp,:));hold(trace_handle, 'on')
             end
-            title(trace_handle, 'Average traces per cluster');xlabel('Time (s)')
+            title(trace_handle, 'Average traces per cluster');xlabel('Time (s)');colororder(trace_handle, jet(obj.dimensionality.N_clust))
         end
-           
+        
+        function cluster_traces = get_cluster_traces(obj)
+            rescaled_traces     = obj.rescaled_traces(:, obj.dimensionality.valid_trace_idx);
+            cluster_traces      = [];
+            for gp = sort(unique(obj.dimensionality.cluster_idx))'
+                cluster_traces(gp,:) = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2);
+            end
+        end
 
         function plot_factor_tree(obj, weights_to_show, weighted_averages, tree_handle, map_handle, trace_handle)
             % rplace : plot_dimensionality_summary
@@ -272,7 +279,7 @@ classdef arboreal_scan_plotting < handle
             %% Display average weightings
             cla(trace_handle);
             for w = weights_to_show
-                plot(trace_handle, obj.t, weighted_averages(w, :));hold(trace_handle, 'on')
+                plot(trace_handle, obj.t, weighted_averages(w, :));hold(trace_handle, 'on');
             end
             title(trace_handle, 'Signal average using Loadings as weight');xlabel('Time (s)');
             %legend();set(gcf,'Color','w');

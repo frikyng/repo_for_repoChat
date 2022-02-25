@@ -666,7 +666,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         %         end
         
 
-        function animate_tree(obj, values, timepoints, ROIs, color_range)
+        function animate_experiment(obj, values, timepoints, ROIs, color_range)
             if nargin < 2 || isempty(values)
                 values = obj.rescaled_traces;
             end
