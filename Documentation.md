@@ -104,17 +104,17 @@ Create a .xlsx log file using available files. See “Create lab book” in the 
 SPREADSHEET_NAME = create_spreadsheet(TOP_FOLDER, '.xlsx')
 ```
 
-> Note : If you update an existing spreadsheet, see `*update_spreadsheet()*` documentation
+> Note : If you update an existing spreadsheet, see `update_spreadsheet()` documentation
 
 <u>2.2.     Complete the header info</u>
 
-You can (and should) fill it with header info, which can be done using fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME). This will go through every recording, load the hader, extrac some info and add it to the table
+You can (and should) fill it with header info, which can be done using `fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME)`. This will go through every recording, load the header, extract some info and add it to the table
 
  **3.**    **Identify good experiments. Delete the rest**
 
 <u>3.1.  Manual curation</u>
 
-Using the pre-filled lab-book, you can identify experiments that can be deleted easily (e.g. short “test” recordings, funny dwell times or patch size). It is recommended to go manually through every folder. However you can detect specific condition automatically. For example:
+Using the pre-filled lab-book, you can identify experiments that can be deleted easily (e.g. short “test” recordings, funny dwell times or patch size). It is recommended to go manually through every folder. However you can detect specific conditions automatically. For example:
 
 ```matlab
 data_folders = find_specific_condition(TOP_FOLDER, {'duration','<1', 'mode','Ribbon'})'  
@@ -166,13 +166,13 @@ The fields required in the spreadsheet are:
 
 You need to identify these values if you plan to use information using the tree morphology, as it will help locate the soma and connect branches with each other. There’s a GUI available to help you find those called ROI_Filter. You can call it directly from the microscope_controller or use the core functions in command line. See “Fixing tree using the toolbox” in the manual. Although you can create the settings.txt file manually, I recommend to put the values in some columns in your labbook and then generate a settings file automatically using get_setting_file_from_table
 
-è ADD note on script handles
+***ADD note on script handles
 
  
 
-4.2.  Once the spreadsheet updated, you can generate the batch setting file using get_setting_file_from_table(SPREADSHEET_NAME, TOP_FOLDER); 
+4.2.  Once the spreadsheet is updated, you can generate the batch setting file using `get_setting_file_from_table(SPREADSHEET_NAME, TOP_FOLDER);` 
 
-4.3.  You should verify
+4.3.  You should verify the settings.txt file is correct and properly formatted.
 
  
 
@@ -192,7 +192,7 @@ If you want to do a visual inspection of your data first, before diving into the
 
  
 
-**7.**    **Generate Global registration.** This is a very very long and tedious step. It should be done after deleting problematic recordings AND should be regenerated if you delete some recordings. However, have preregistered posthoc MC will speed up later batch analysis. In each data_folder, a file called auto_offsets.mat is generated.
+**7.**    **Generate Global registration.** This is a very very long and tedious step. It should be done after deleting problematic recordings AND should be regenerated if you delete some recordings. However, having preregistered posthoc MC will speed up later batch analysis. In each data_folder, a file called auto_offsets.mat is generated.
 
 If you want to generate at the same time registration values, thumbnails and masks, you can call:
 
@@ -210,7 +210,7 @@ Warning: This is an extremely long process. This should be done on a powerful PC
 
  
 
-**8.**    **Generate Global Thumbnails.** Thumbnails are convenient to browse data and know what the general content for a given recording is. They are essentially a “time projection” of the ribbon scan. The projection can be done with the curtain view (more useful, as it enables the visioning of all ROIs at their real resolution) or a realistic view (Which can be useful to have an image of the cell true shape). Several projection methods are available, although std, corr and max give the best results. Ideally, the projection should use the posthoc registred data for better sharpness. The typical pipeline generates individual masks, for each recording, but also a consensus_thumbnail using all similar recordings in a given experiment. Ideally, the global masks computed in the next step will use the global_thumbnail rather than the thumbnail of individual recordings.
+**8.**    **Generate Global Thumbnails.** Thumbnails are convenient to browse data and know what the general content for a given recording is. They are essentially a “time projection” of the ribbon scan. The projection can be done with the curtain view (more useful, as it enables viewing all ROIs at their real resolution) or a realistic view (which can be useful to have an image of the cell's true shape). Several projection methods are available, although std, corr and max give the best results. Ideally, the projection should use the posthoc registered data for better sharpness. The typical pipeline generates individual masks, for each recording, but also a consensus_thumbnail using all similar recordings in a given experiment. Ideally, the global masks computed in the next step will use the global_thumbnail rather than the thumbnail of individual recordings.
 
 To only generate / regenerate thumbnails for an experiment, use ….
 
