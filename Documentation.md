@@ -340,7 +340,7 @@ You can also specify an export path (default is pwd) and a non-default set of an
 
 To create an *arboreal_scan_experiment* object, simply type
 
-expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path');
+`expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path')`;
 
  
 
@@ -615,7 +615,7 @@ end
 
 # Analyse an experiment (arboreal_scan_experiment objects)
 
-Load an `arboreal_scan_experiment` object, that you have previously generated. This object regroups multiple `arboreal_scan` objects that shared the same tree structure. The loaded object is called "obj" by default.
+Load an `arboreal_scan_experiment` object, that you have previously generated. This object regroups multiple `arboreal_scan` objects that shared the same tree structure (i.e., it's the exact same set of branches and ROIs, not a subset or a different tracing of the same neuron) . The loaded object handle is called "obj" by default, although you can rename it.
 
 
 
@@ -623,12 +623,12 @@ Load an `arboreal_scan_experiment` object, that you have previously generated. T
 
 ## Processing pipeline
 
-Essentially, the analysis process consist in :
+Essentially, the recommended analysis process consist in :
 
-- Loading all the relevant arboreal_scan objects that come from the same cell into an arboreal_scan_experiment
-- Rescaling traces so you can compare dim and bright regions
-- Identify Global/Local events
-- Flag problematic/low quality/wrongly selected ROIs so they will be ignored
+- Building the object : Load all the relevant arboreal_scan objects that come from the same cell into an `arboreal_scan_experiment`.
+- Normalized data : Rescaling traces so you can compare dim and bright regions more easily.
+- Event detection : Identify Global/Local events using pairwise correlation across the tree, or a threshold on the averaged traces.
+- Filter data : Flag problematic/low quality/wrongly selected ROIs so they will be ignored in following analyses.
 - Regroup traces into "bins", i.e. regions that will be processed together (e.g. basolateral vs apical, or bins at some set distance from the soma)
 - Process data by bin or by ROI. Among these processing options you can
   - Analyse correlation or similarities between regions
@@ -644,26 +644,45 @@ Essentially, the analysis process consist in :
 
 #### Loading/object building 
 
-This function is typically controlled by the constructor, although you can update the object later if you changed the list of recordings, or if you changed the extraction method (e.g. new post-hoc MC, different mask...)
+This function is typically controlled by the constructor, although you can update the object later if you changed the list of recordings, or if you changed the extraction method (e.g. new post-hoc MC, different mask...).
 
 ```matlab
 %% Case 1
-%% To build the object from extracted arboreal_scans (recommanded)
+%% To build the object from extracted arboreal_scans (recommended)
 obj = arboreal_scan_experiment(source_folder); % where source_folder is a folder containing multiple extracted arboreal_scans 												   % objects (files can be in subfolders) 
+
+%% To build the object from extracted arboreal_scans and keep XxT data for each ROI (this will use much more memory)
+obj = arboreal_scan_experiment(source_folder, true); % 
+
 %% Case 2
 	%% To build the object from data_folders
 obj = arboreal_scan_experiment(source_folder); % In the absence of extracted arboreal_scan, The code will ask you if you want to process the data directly. Note that as for regular arboreal_scan extraction, the folder must follow the standard day/expe/data_folder structure, and there must be a settings.txt file indicating how to reconnect the tree. see arboreal_scan documentation for details
 
 	%% To build the object from data_folders using specific analysis_params
-obj = arboreal_scan_experiment(source_folder, analysis_params('smoothing', 20));
+obj = arboreal_scan_experiment(source_folder, '', analysis_params('smoothing', 20));
 
 	%% To build the object from data_folders using a custom settings.txt file
-obj = arboreal_scan_experiment(source_folder, '', 'path/to/settings.txt'');
+obj = arboreal_scan_experiment(source_folder, '', '', 'path/to/settings.txt'');
 
 %% Case 3
-%% To update the object if you added/removed arboreals scans
+%% To update the object with the same compression settings, if you added/removed arboreals scans, or if you changed something in the arboreal scan content (e.g. you added some external behavioural variables)
 obj.update(); % Note that since this will affect the binned traces, all analysis need to be regenerated. All analysis fields will be cleared
+
+%% To update the object with XxT data, because you didn't include it initially
+obj.update(true, true);
 ```
+
+If you moved the original data, or the extracted arboreal_scans objects (depending on what you used for extraction), there are a few operations that won't work anymore : 
+
+- re-extract data
+- Update the compression method
+- reload the original signal from the analyzed trees
+
+If the data was just moved to a different folder or hard drive, you can set the new location in `obj.update_folder`.
+
+
+
+
 
 #### Automated analysis using `obj.process()`
 
