@@ -7,9 +7,11 @@
 
 %% TO CHECK:
 % - loading from raw data
-% - Breakpoints not iintorucing artfacts
+% - Breakpoints not iintorucing artefacts
+% - Check if bheviours are fine
+% why are camera behaviours downsampled. Do we want that?
 
-classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting
+classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting & behaviours_analysis
     properties
         %% Extraction/Re-extraction Settings
         extraction_method = 'median'; % the 1D -> 0D compression method. If None, XxT data is kept, but this make the files heavier
@@ -48,7 +50,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         event                   % Event detection output (event times, amplitude, correlation etc....)
         variability             % Signal variability over time
         dimensionality          % Results of diemensionality reduction
-        behaviours              % List of available behaviours
         spiketrains             % If available, spike inference results
         bad_ROI_list     = 'unset';  % list of uncorrelated ROIs (following event detection)
         updatable               % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
@@ -662,9 +663,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             timescale.t_start_real      = t_start_real_posix - t_start_real_posix(1);
             timescale.datetime_start    = cellfun(@(x) x.header.recording_t_start, obj.arboreal_scans, 'UniformOutput', false);
             
-            timescale.real_timescale   = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
-            timescale.real_timescale   = cellfun(@(x, y) [y, x], timescale.real_timescale, num2cell(timescale.t_start_real), 'UniformOutput', false);
-            timescale.real_timescale   = cumsum(horzcat(timescale.real_timescale{:}));
+            %timescale.real_timescale   = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
+            timescale.real_timescale   = cellfun(@(x, y) [x+y], timescale.rec_timescale, num2cell(timescale.t_start_real), 'UniformOutput', false);
+            timescale.real_timescale   = horzcat(timescale.real_timescale{:});
         end
 
         function t = get.t(obj)
@@ -903,20 +904,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
 
-        function behaviours = get.behaviours(obj)            
-            behaviours                  = obj.behaviours;
-            behaviours.external_var     = obj.external_variables;
-            behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), behaviours.external_var);
-            behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), behaviours.external_var);
-            [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
-            behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
-            behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            for beh = 1:Max_var
-                behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)';
-            end
-        end
-
-        
         function bad_ROI_list = get.bad_ROI_list(obj)
             bad_ROI_list = obj.bad_ROI_list;
             if ischar(bad_ROI_list) && strcmpi(bad_ROI_list, 'unset')
@@ -960,179 +947,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
             
             extracted_traces = fix_gain_changes(obj, extracted_traces);
-        end
-        
-        
-        function [raw_beh, downsampd_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig)
-            %% Return the selected behaviour and corresponding timescale
-            if nargin < 2 || isempty(type)
-                type = 'encoder';
-            end
-            if nargin < 3 || isempty(rendering)
-                rendering = false;
-            end
-            %if nargin < 4 || isempty(detrend_sig)
-                detrend_sig = false;
-            %end            
-
-            downsampd_beh               = {};
-            concat_downsamp_beh.time    = [];
-            concat_downsamp_beh.value   = [];
-            temp = {};
-            type                        = obj.behaviours.types(contains(obj.behaviours.types, type));
-            if isempty(type)
-                raw_beh = {};
-                warning(['Type not detected. Valid behaviours are :\n', strjoin(obj.behaviours.types,'\n')]);
-                return
-            end
-            for beh = 1:numel(type)
-                raw_beh{beh}                     = arrayfun(@(x) x{1}.(type{beh}), obj.behaviours.external_var, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
-
-                temp.time  = [];
-                temp.value = [];
-                for rec = 1:numel(raw_beh{beh})                    
-                    %% If behaviour timescale is longer than recording, clip it
-                    if ~isempty(raw_beh{beh}{rec}.time)
-                        clipping_idx = find(raw_beh{beh}{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
-                        if ~isempty(clipping_idx)
-                            raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
-                            raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
-                        end
-                    end
-                        
-                    downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{beh}{rec}.time, obj.timescale.tp(rec));
-                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{beh}{rec}.value, obj.timescale.tp(rec));
-                    if isempty(downsampd_beh{beh}{rec}.time)
-                        downsampd_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
-                        downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
-                    end
-                if detrend_sig
-                    downsampd_beh{beh}{rec}.value = downsampd_beh{beh}{rec}.value - movmin(downsampd_beh{beh}{rec}.value, [20, 0]);
-                end
-
-                    %downsampd_beh{beh}{rec}.value = smoothdata(downsampd_beh{beh}{rec}.value, 'movmean', [5, 0]);
-
-                    temp.time = [temp.time, downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
-                    value = downsampd_beh{beh}{rec}.value;
-                    if size(value, 1) > 1 % if your behavioural metrics is made of multiple arrays
-                        value = nanmax(value, [], 1);
-                    end
-                    temp.value = [temp.value, value];
-                end
-
-                concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
-                concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
-
-            end
-
-            if rendering
-                figure(1026);clf();
-                for beh = 1:numel(type)
-                    subplot(numel(type),1,beh)
-                    for rec = 1:numel(raw_beh{beh})
-                        if ~isempty(downsampd_beh{beh}{rec}.time)                           
-                            plot(downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec), downsampd_beh{beh}{rec}.value);hold on;
-                        end
-                    end
-                end
-            end
-
-            function out = cellerror_empty(~,varargin)
-                out = {};
-                out.time = [];
-                out.value = [];
-            end
-        end
-
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing)
-            if nargin < 2 || isempty(beh_types)
-                beh_types = {'encoder'};
-            elseif ischar(beh_types)
-                beh_types = {beh_types};
-            end
-            if nargin < 3 || isempty(rendering)
-                rendering = false;
-            end
-            if nargin < 4 || isempty(smoothing)
-                smoothing = 1;
-            elseif ~any(smoothing)
-                smoothing(1) = 1;
-            end
-            if numel(smoothing) == 1
-                smoothing = [smoothing, 0];
-            end
-            thr = 10 % threshold in % of max
-            margin_duration = 3 %in sec
-            detrend_win = 100
-            
-            if numel(margin_duration) == 1
-                margin_duration = [margin_duration, margin_duration];
-            end
-
-            plts = {};
-            for idx = 1:numel(beh_types)
-                current_type = beh_types{idx};
-                [~, ~, beh] = obj.get_behaviours(current_type, false);
-                beh.value = beh.value - movmin(beh.value, [detrend_win, 0]);
-                beh_sm = smoothdata(beh.value, 'gaussian', smoothing);
-                beh_sm = nanmean(beh_sm,1);
-                %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
-                %thr = prctile(beh_sm(beh_sm > 0), 20);
-                current_thr = prctile(beh_sm,(100/thr)) + range(beh_sm)/(100/thr); % 5% of max
-
-                %% Define bouts
-                active_tp   = abs(beh_sm) > abs(current_thr);
-                [starts, stops] = get_limits(active_tp, beh_sm);
-
-                %% Add some pts before and after each epoch
-                dt = nanmedian(diff(obj.t));
-                for epoch = starts
-                    active_tp(max(1, epoch-round(margin_duration(1)*(1/dt))):epoch) = 1;
-                end
-                for epoch = stops
-                    active_tp(epoch:min(numel(active_tp), epoch+round(margin_duration(2)*(1/dt)))) = 1;
-                end
-                [starts, stops] = get_limits(active_tp, beh_sm); % update bouts edges now that we extended the range
-
-                if rendering
-                    figure(1027);hold on;
-                    if idx == 1
-                        clf();
-                    end
-                    plts{idx} = subplot(numel(beh_types),1,idx);hold on;
-                    title(strrep(current_type,'_','\_'))
-                    plot(obj.t, beh_sm);hold on;
-                    for el = 1:numel(starts)
-                        x = [starts(el),starts(el),stops(el),stops(el)];
-                        y = [0,nanmax(beh_sm),nanmax(beh_sm),0];
-                        patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
-                    end
-                end
-
-                bouts = sort([starts, stops]);
-            end
-
-            if rendering
-                linkaxes([plts{:}],'x');
-            end
-
-            function [starts, stops] = get_limits(active_tp, beh_sm)
-                if size(active_tp, 1) > 1
-                    active_tp = nanmean(active_tp, 1) > 0;
-                end
-                starts      = find(diff(active_tp) == 1);
-                stops       = find(diff(active_tp) == -1);
-                if any(starts)
-                    if starts(1) > stops(1)
-                        starts = [1, starts];
-                    end
-                    if stops(end) < starts(end)
-                        stops = [stops, size(beh_sm,2)];
-                    end
-                elseif all(active_tp)
-                    starts = 1; stops = size(beh_sm,2);
-                end
-            end
         end
 
         %% #############################
