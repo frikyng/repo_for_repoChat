@@ -223,13 +223,13 @@ classdef behaviours_analysis < handle
                 smoothing = [smoothing, 0];
             end
             
-            
-
             plts = {};
             for idx = 1:numel(beh_types)
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
-                beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
+                if any(obj.detrend_win)
+                    beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
+                end
                 beh_sm          = smoothdata(beh.value, 'gaussian', smoothing);
                 beh_sm          = nanmean(beh_sm,1);
                 %beh_sm         = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));

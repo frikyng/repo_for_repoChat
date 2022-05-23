@@ -113,7 +113,7 @@ classdef arboreal_scan_plotting < handle
             ax.YAxis(2).Color = 'k';
         end
         
-        function plot_correlation_results(obj, cross_corr)
+        function plot_correlation_results(obj, cross_corr)            
             if nargin < 2 || isempty(cross_corr)
                 cross_corr = obj.crosscorr;
             end

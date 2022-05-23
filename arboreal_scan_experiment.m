@@ -1212,14 +1212,130 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         %% #############################################
         
         function set.cc_mode(obj, cc_mode)
-        	if ~strcmp(obj.cc_mode,cc_mode)
-                obj.crosscorr = []; %if you change the cc mod, clear the previous correlation results
+            %% Set cross correlation mode
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.get_correlations(cc_mode)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   cc_mode (STR) - See Description for details - Optional - 
+            %           Default is your current obj.cc_mode value
+            %       update EXPE.cc_mode with existing value
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * Correlation is computed using:
+            %       - A reference trace (located at index 1)
+            %       - The data you want to correlate (individual ROI, 
+            %           OR binned data, see below)
+            %       - Optionally, you can append population data
+            %   * cc_mode is build by concatenating strings defining the
+            %   timepoints to use (all of them or a subset), the traces to  
+            %   use (all of them or the binned data), whether you want to 
+            %   use population data too and whether you want to use some 
+            %   behavioural metrics. for example : 
+            %      - 'groups_pop' : correlation between binned median
+            %        traces and population data using all timepoints 
+            %      - 'active' : correlation between all ROIs, using all
+            %      timepoints when cell is active (i.e. during bAPs)
+            %      - 'encoder_peaks' : correlation between all ROIS, only
+            %        at peak time, and using encoder as ref  
+            %      - 'encoder_peaks_refilter' : correlation between all 
+            %        ROIS, only at peak time, AND only when running speed
+            %        is high    
+            %      - '~encoder_peaks_refilter' : correlation between all 
+            %        ROIS, only at peak time, AND only when running speed
+            %        is low  
+            %   * The reference (located at index 1 of the matrix) is
+            %    either 
+            %       - The signal data during active behaviour IF you pass a
+            %       valid behaviour in CC mode (list available when typing
+            %       obj.behaviours.types)
+            %       - The averaged somatic data when available (as defined
+            %         by ref.indices.somatic_ROIs), or the nexus signal 
+            %         when somatic ROIS are not available
+            %   * Correlation matrix can be generated using the entire 
+            %     trace (default) or a subset of timepoints : 
+            %       - If cc_mode contains 'peaks', only the values at peak
+            %       times (as defined by event.fitting.peak_pos) are used
+            %       - If cc_mode contains 'active', all the timepoints
+            %       containing bAPs (as defined by event.fitting.t_win)
+            %       - If cc_mode contains 'quiet', all the timepoints
+            %       between bAPs (as defined by ~event.fitting.t_win)
+            %   * Correlation matrix can be generated using
+            %       - every ROIs (except for excluded ROIs, indicated in
+            %     ref.indices.valid_swc_rois)
+            %       - If cc_mode contains 'groups', using the median traces 
+            %       after categorical binning  (as defined by
+            %        binned_data.median_traces). Use the 
+            %   * To include population data, include 'pop' in cc_mode
+            %   * If a behaviour type is added, the reference won't be the
+            %   somatic average but the indicated behaviour for the same
+            %   timepoints
+            %   * If cc_mode contains refilter AND a valid behaviour, the
+            %   timepoints used will be refiltered to include only events 
+            %   during active behaviour (as defined by 
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
+        	if ~strcmp(obj.cc_mode, cc_mode)
+                obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
             end
+            
+            msg = '\n';
+            if contains(cc_mode, 'peaks')
+                msg = [msg, 'Correlation done using all peaks, '];
+            elseif contains(cc_mode, 'active')
+                msg = [msg, 'Correlation done using timepoints during active behaviour, '];
+            elseif contains(cc_mode, 'quiet')
+                msg = [msg, 'Correlation done using timepoints during quiet behaviour, '];             
+            else
+                msg = [msg, 'Correlation done using all timepoints, '];
+            end            
+            if contains(cc_mode, 'groups')
+                msg = [msg, 'Correlation done by groups using your bins, '];
+            else
+                msg = [msg, 'Correlation done between all ROIs, '];
+            end            
+            if contains(obj.cc_mode, 'pop')
+                msg = [msg, 'including population data'];
+            end
+            
+            fprintf([msg ,  '\n'])
             obj.cc_mode = cc_mode;
-        end
-        
+        end        
         
         function cross_corr = get_correlations(obj, cc_mode)
+            %% Returns cross correlation (and triggers computation if required)
+            % -------------------------------------------------------------
+            % Syntax:
+            %   cross_corr = EXPE.get_correlations(cc_mode)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   cc_mode (STR) - See Description for details - Optional - 
+            %       Default is [];
+            %       If provided, update EXPE.cc_mode. see set.cc_mode for
+            %       more details
+            % -------------------------------------------------------------
+            % Outputs:
+            %   crosscorr (NxN DOUBLE)
+            %       Cross correlation between ROIs OR groups based on
+            %       traces OR Peaks, depending on the settings. see
+            %       set.cc_mode doc for the deails
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022            
+            
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             end
@@ -1233,6 +1349,26 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function set_crosscorr(obj)
+            %% Compute cross correlation 
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.set_crosscorr()
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %       Cross correlation is computed between ROIs OR groups 
+            %       based on traces OR Peaks, depending on the settings. 
+            %       see set.cc_mode doc for the details
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
             mode = obj.cc_mode;
 
             %% Get signal time range
@@ -1250,44 +1386,74 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             mode = erase(mode, {'peaks','quiet','active'});
 
-            %% Get ref ROIs
-            somatic_ROIs = obj.ref.indices.somatic_ROIs;
-
             %% Get signal to use
             if contains(obj.cc_mode, 'groups')
-                signal = obj.binned_data.median_traces(tp,:);
-                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);
+                signal = obj.binned_data.median_traces;
             else% if contains(obj.cc_mode, 'ROIs')
-                signal = obj.rescaled_traces(tp,obj.ref.indices.valid_swc_rois);
-                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);
+                signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);                
             end
             mode = erase(mode, {'ROIs','groups'});
 
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
                 if isempty(obj.extracted_pop_conc)
-                    warning('No population data for this rcording')
+                    warning('No population data for this recording')
                     pop = [];
                 else
-                    pop = obj.extracted_pop_conc(tp,:);
+                    pop = obj.extracted_pop_conc;
                 end
             else
                 pop = [];
             end
-            mode = erase(mode, {'pop','_'});
+            mode = erase(mode, {'pop','_', 'refilter', '~'});
 
+            %% Get ref ROIs and trace
             beh = obj.behaviours.types(find(contains(obj.behaviours.types, mode)));
             if ~isempty(beh)
-                [~, ~, beh] = obj.get_behaviours(beh);
+                [~, ~, beh] = obj.get_behaviours(beh);                
+                if contains(obj.cc_mode, 'refilter')
+                    [~,~, active_tp] = obj.get_activity_bout('encoder', true);
+                    if contains(obj.cc_mode, '~')
+                        active_tp = ~active_tp;
+                    end
+                    tp               = find(ismember(tp, find(active_tp)));
+                end
                 ref         = beh.value(tp)';
+            else
+                somatic_ROIs= obj.ref.indices.somatic_ROIs;
+                ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2);
             end
 
-            variable    = [ref, signal, pop];
+            %% Build the arrays used for the correlation matrix
+            variable        = [ref, signal(tp, :)];
+            if ~isempty(pop)
+                variable = [variable, pop(tp,:)];
+            end
             obj.crosscorr   = corrcoef(variable,'Rows','Pairwise')';
         end
 
         function crosscorr = get.crosscorr(obj)
-            %% Add a few more check
+            %% Returns cross correlation (and triggers computation if required)
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.crosscorr()
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   crosscorr (NxN DOUBLE)
+            %       Cross correlation between ROIs OR groups based on
+            %       traces OR Peaks, depending on the settings. see
+            %       set.cc_mode doc for the details
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
             if isempty(obj.binned_data)
                 crosscorr = [];
                 return
