@@ -1,4 +1,4 @@
-function expe = fix_gain_changes(expe, extracted_traces)
+function extracted_traces = fix_gain_changes(expe, extracted_traces)
     temp        = vertcat(extracted_traces{:}); % get traces
     real_low    = 0;%nanmin(temp(:)); % real dark noise level (won't change if gain change)
     temp        = temp - real_low; % remove dark noise
