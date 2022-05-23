@@ -4,15 +4,15 @@
 
 To analyse signals from a single recording, the easy way is to use the `load_experiment()` function. This function enable the extraction of signals and various normalization, smoothing and masking options. 
 
-However, if you wish to integrate the 3D spatial structure in the analysis process, each signals need to be linked to its 3D location on the dendritic tree. This is handled using methods of an `arboreal_scan` object (see [here](#Analyse-a-recording-(arboreal_scan-objects))), which is essentially an object containing:
+However, if you wish to integrate the 3D spatial structure in the analysis process, signals need to be linked to their 3D location on the dendritic tree. This is handled using methods of an `arboreal_scan` object (see [here](#Analyse-a-recording-(arboreal_scan-objects))), which is essentially an object containing:
 
-- The extracted signal (as provided by load_experiment())
-- The tree structure and additional mophomtric informtion (e.g. soma location, depth etc...)
+- The extracted signal (as provided by `load_experiment()`)
+- The tree structure and additional morphometric information (e.g. soma location, depth etc...)
 - Aligned behavioural variables (e.g. camera, encoder etc...)
 
 If you wish to compare data across multiple successive recordings, the data from multiple (matching) `arboreal_scan`objects can be stored in an `arboreal_scan_experiment` object (see [here](Analyse-an-experiment-(arboreal_scan_experiment-objects))). This will help analyse data cross multiple behavioural conditions. If you need to pool multiple recordings, it will be essential to guarantee that all ROIs are matching each other from the beginning to the end of the experiments (i.e. same mask, no drift etc....). This requires a thorough curation of your data, as explained in the [Data Curation](#Curation) chapter
 
-Finally, to perform group data analysis across experiments, `arboreal_scan_experiment` objects can be regroups in an `arboreal_scan_dataset` object
+Finally, to perform group data analysis across experiments, `arboreal_scan_experiment` objects can be regrouped in an `arboreal_scan_dataset` object
 
 ## Curation
 
@@ -28,45 +28,41 @@ Finally, to perform group data analysis across experiments, `arboreal_scan_exper
 
 5 - Extraction of RAW Ca2+, using global registration and mask
 
-6 – Compression of each ROI data into a single line. This is 2-step process
+6 - Compression of each ROI into a single pixel time series. This is a 2-step process:
 
-\-    Max across the dendrite (mean would work, median would be bad)
+6a - Max across the dendrite (mean would work, median would be bad)
 
-\-    Median along the dendrite (Mean would work, max would work. Median removes most artifacts, max emphasize hotspots (and artifacts). Mean is usually close to median
+6b - Median along the dendrite (Mean would work, max would work. Median removes most artifacts, max emphasize hotspots (and artifacts). Mean is usually close to median
 
-7 - Data goes into an « arboreal_scan » object that also contains information about the tree morphology. Extraction info are stored too (masks, and other info). Behavioural data (encoder, MC log and Video motion indices for example) is stored too
+7 - Data goes into an « arboreal_scan » object that also contains information about the tree morphology. Extraction information (e.g. masks, and other info) and behavioural data (e.g. encoder, MC log and Video motion indices) are stored too.
 
 8 - Recordings are concatenated
 
-9 - Some analysis requires normalized data. For each ROI, we find a unique offset and scalar that scale all the bAPs amplitude to the cell median trace (ref_trace). Several options are possible here
+9 - Some analyses require normalized data. For each ROI, we find a unique offset and scalar that scales all the bAP amplitudes to the cell median trace (ref_trace). Several normalization options are possible:
 
-9a – For the offset -> computed on baseline
+9a - For the offset -> computed on baseline
 
-\-    Option 1 : Constant percentile subtraction (not used, 10th percentile would do)
+\- Option 1 : Constant percentile subtraction (not used, 10th percentile would do)
 
-\-    Option 2 : Custom optimisation that prevent over subtraction. I made one. 
+\- Option 2 : Custom optimisation that prevents over subtraction (used)
 
- 
+9b - For the scalar -> computed on peaks
 
-9b – For the scalar -> computed on peaks
+\- Option 1 : Simple linear regression between ROI_trace and ref_trace
 
-\-    Option 1 : Simple linear regression between ROI_trace and ref_trace
-
-\-    Option 2 : Custom optimisation function that
+\- Option 2 : Custom optimisation function (used)
 
  
 
 ### General process after data acquisition
 
-Store/backup data à create folder for analysis à cleanup unwanted data & build lab-book and settings file à Fix tree morphologies à extract calcium per ROI à Extract/analysis features from calcium signals (e.g. events) à meta-analysis on extracted features, per cell/experiment.
+Store/backup data and create top folder for analysis. Cleanup unwanted data & build lab-book and settings file. Fix tree morphologies and extract Ca2+ per ROI. Extract/analysis features from Ca2+ signals (e.g. events) and do meta-analysis on extracted features, per cell/experiment.
 
 For a script going through the different steps, see `Curation_Helper.m`
 
- 
+**1.**    **Select and organize folders**
 
-#### **1.**    **Select and organize folders**
-
-<u>1.1.   Backup you data</u>
+<u>1.1.   Backup your data</u>
 
 Put a copy of all experiments relevant to the study in the same folder. This folder will be called `“TOP_FOLDER”` in the following examples. THIS SHOULD BE A **COPY** OF YOUR ORIGINAL DATA. because the curation process will include the deletion of some recordings.
 
@@ -90,7 +86,7 @@ Experiment order is extracted from the folder timestamp, which is in the *hh-mm-
 
 >  Note : This will be improved in a future release, but for now, you need to handle it manually 
 
-Essentially, all you must do is to add 24 to the hour value for each *data_folder* passed midnight, and then move these recordings to the folder when it started. For example you started your experiment in *…/01-01-2020/experiment_3/* and then your recordings data_folders are […*]; 23-55-00 ; 23-59-00.* Then the next recording passed midnight and probably created a new *day_folder* and *experiment_folder* folder as *…/02-01-2020/experiment_1/* where *data_folder* names are now (for example) *00-00-01 ; 00-05-00* etc… . Select those, rename them *24-00-01 ; 24-05-00* etc… and move them to …*/01-01-2020/experiment_3/* Don’t forget to merge the content of the log too, and to update time tags of the log there too.
+You need to add 24 to the hour value for each *data_folder* beyond midnight, and then move these recordings to the correct/original *expe_folder*. For example you started your experiment in *…/01-01-2020/experiment_3/* and then your recording data_folders are *[*…*]; 23-55-00 ; 23-59-00.* Then the next recording passed midnight, which will create a new *day_folder* and *expe_folder* folder as *…/02-01-2020/experiment_1/* where *data_folder* names are now (for example) *00-00-01 ; 00-05-00* etc… . Select those, rename them to *24-00-01 ; 24-05-00* etc… and move them to …*/01-01-2020/experiment_3/*. Don’t forget to update the log: timestamp tags and content.
 
  **2.**    **Create a lab-book**
 
@@ -98,7 +94,7 @@ As it can be hard to see the big picture with many recordings, you can automatic
 
 <u>2.1.  Create a log from your raw data</u>
 
-Create a .xlsx log file using available files. See “Create lab book” in the manual. This will create an xlsx table with some key information using the header and some other information available in the data_folders
+Create a .xlsx log file using available files. See [Lab Book section](#Lab-Book) in the manual. This will create an xlsx table with some key information using the header and some other information available in the data_folders.
 
 ```matlab
 SPREADSHEET_NAME = create_spreadsheet(TOP_FOLDER, '.xlsx')
@@ -108,7 +104,7 @@ SPREADSHEET_NAME = create_spreadsheet(TOP_FOLDER, '.xlsx')
 
 <u>2.2.     Complete the header info</u>
 
-You can (and should) fill it with header info, which can be done using `fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME)`. This will go through every recording, load the header, extract some info and add it to the table
+You can (and should) fill it with header info, which can be done using `fill_specific_spreadsheet_column(TOP_FOLDER, SPREADSHEET_NAME)`. This will go through every recording, load the header, extract some info and add it to the table.
 
  **3.**    **Identify good experiments. Delete the rest**
 
@@ -134,37 +130,35 @@ batch_detect_mc_issues(TOP_FOLDER) ;` % for failed MC issues
 
 #### **4.**    **Create *settings* file for batch analysis**
 
-For later batch analysis (i.e. going through multiple recordings or across multiple experiments), only experiments listed in the file *settings.txt* will be used. This file contains summarized information about the tree morphology for each experiment, one line per experiment.
-
-Ideally, you want to list all your experiments. Line starting with # are ignored. See “Build your batch settings file” chapter. Essentially, in the *settings.txt* file you have multiples entries per line, separated by vertical bars (|).
+For later batch analysis (i.e. going through multiple recordings or across multiple experiments), only experiments listed in the file *settings.txt* will be used. You need to list here all experiments to be analysed. This file contains summarized information about the tree morphology for each experiment, one line per experiment. Each entry per line is separated by vertical bars (|). Lines starting with # are ignored. See how to build your [Batch Settings File](#Batch-settings-file) chapter. 
 
 <u>4.1.  Auto-Generate settings.txt</u>
 
 You can automatically generate the file using specific columns from your spreadsheet to get the required information. 
 
-> This means you need to complete your spreadsheet first, by going through each neuron and checking/fixing each Tree morphologies. See the [fix tree morphol](#) section to know how to do that
+> This means you need to complete your spreadsheet first, by going through each neuron and checking/fixing tree morphologies. See the [fix tree morphology](#) section to know how to do that
 
  
 
-The fields required in the spreadsheet are: 
+The fields required in the settings.txt file are: 
 
-1 – experiment path. 
+1 - experiment path
 
-2 - array of trials to use (0 or [] for all);
+2 - array of trials to use (0 or [] for all)
 
-3 - branch to connect to soma. If NaN, branch 1 is used as a start point; If [], the branch selector is opened interactively
+3 - branches that connect to soma. If NaN, branch 1 is used as a start point; If [], the branch selector is opened interactively
 
-4 - manual reconnections; [] or NaN to ignore; 
+4 - manual reconnections; [] or NaN to ignore
 
-5 - branch to exclude; [] or NaN to ignore.
+5 - branch to exclude; [] or NaN to ignore
 
-6 - pia position OR pia position and soma manual Z location. Soma location is useful if you didn’t trace an entire tree (maybe the soma is too dep) and need to estimate where the tree starts.
+6 - pia position OR pia position and soma manual Z location. Soma location is useful if you didn’t trace an entire tree (maybe the soma is too deep) and need to estimate where the tree starts.
 
 ​       If soma is NaN or not specified, value is obtained from the start point of branch 1.
 
 ​       If pia is [] or NaN, surface is set as the highest Z value of the tree.
 
-You need to identify these values if you plan to use information using the tree morphology, as it will help locate the soma and connect branches with each other. There’s a GUI available to help you find those called ROI_Filter. You can call it directly from the microscope_controller or use the core functions in command line. See “Fixing tree using the toolbox” in the manual. Although you can create the settings.txt file manually, I recommend to put the values in some columns in your labbook and then generate a settings file automatically using get_setting_file_from_table
+You need to specify these values if you plan to use tree morphology. There’s a GUI called ROI_Filter available to help you identify soma connected, manual reconnected, and excluded branches. You can call it directly from the microscope_controller or use the core functions in command line. See “Fixing tree using the toolbox” in the manual. Although you can create the settings.txt file manually, I recommend to put the values in some columns in your lab book and then generate a settings file automatically using `get_setting_file_from_table`
 
 ***ADD note on script handles
 
@@ -182,31 +176,25 @@ You need to identify these values if you plan to use information using the tree 
 
 batch_generate_lateral_projection(TOP_FOLDER,SETTINGS_FILE).
 
-Once done, chck ll these images and come back to the tree with incorrected morphology, fix the spreadsheet info, regenerate the settings file, and rerun the script for the problematic experiments (or for all experiments)
+Once done, check all images and come back to the trees with incorrect morphology, fix the spreadsheet info, regenerate the settings file, and rerun the script for the problematic experiments (or for all experiments).
 
  
 
 **6.**    **(Optional) Quickly Generate thumbnails** 
 
-If you want to do a visual inspection of your data first, before diving into the time consuming steps that follows, consider using batch_generate_experiment_thumbnails(TOP_FOLDER, channel). Note that this step requires Imagej and miji. Look for information about setting up miji in the documentation (you have a couple .jar files to copy when you first set it up). This step is included into batch_generate_consensus_dendritic_mask but running it standalone, without MC is faster and will help identify bad recordings, lost MC, off-centred cells etc….
+If you want to do a visual inspection of your data first, before diving into the time consuming steps that follow, consider using `batch_generate_experiment_thumbnails(TOP_FOLDER, channel)`. Note that this step requires Imagej and Miji. Look for information about setting up Miji in the documentation (you have a couple .jar files to copy when you first set it up). This step is included in the `batch_generate_consensus_dendritic_mask` function but running it standalone, without MC, is faster and will help identify bad recordings (e.g. lost MC, off-centred cells etc.). 
 
- 
 
-**7.**    **Generate Global registration.** This is a very very long and tedious step. It should be done after deleting problematic recordings AND should be regenerated if you delete some recordings. However, having preregistered posthoc MC will speed up later batch analysis. In each data_folder, a file called auto_offsets.mat is generated.
 
-If you want to generate at the same time registration values, thumbnails and masks, you can call:
+**7.**    **Generate Global registration.** This is a very long and tedious step. It should be done after deleting problematic recordings AND should be regenerated if you delete some recordings. However, having preregistered posthoc MC will speed up later batch analysis. In each data_folder, a file called auto_offsets.mat is generated.
 
-batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})
+If you want to generate at the same time registration values, thumbnails, and masks, you can call:
 
- 
+`batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})`
 
-This will process all the Ribbon scan of same resolution. Among this it will choose the largest group. For the second largest group, you would pick {'Ribbon',2}. If you have partial scan of the tree, the largest homogeneous group of partial scan can be selected with {'Ribbon',’partial’,1} etc…
+This will process all Ribbon scans of same resolution. The function will choose the largest group (i.e. if the majority of the cell-wide recordings were LD, then {'Ribbon',1} will auto-detect these). For the second largest group, you would pick {'Ribbon',2}. If you have partial scans of the tree, the largest homogeneous group of partial scans can be selected with {'Ribbon',’partial’,1} etc…
 
- 
-
-Warning: This is an extremely long process. This should be done on a powerful PC with a lot or RAM (eg 20-core, 32-64GB RAM). It may take 1 hr or more per experiment! 
-
- 
+Warning: This is an extremely long process. This should be done on a powerful PC with a lot or RAM (e.g. 20-core, 32-64GB RAM). It may take 1 hr or more per experiment! 
 
  
 
@@ -214,55 +202,51 @@ Warning: This is an extremely long process. This should be done on a powerful PC
 
 To only generate / regenerate thumbnails for an experiment, use ….
 
-This process can be integrated in the batch_generate_consensus_dendritic_mask function. The generation of the thumbnail is controlled by the 4th input of
+This process can be integrated in the `batch_generate_consensus_dendritic_mask function`. The generation of the thumbnail is controlled by the 4th input of
 
-batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})
-
- 
-
-**9.**    **Generate Global masks.** Masks are useful to filter out non-dendritic signals (for example, other neurons). As for global registration, this step can be pretty long to do, however you can do the processing once, and reload them later on. Global masks are not done on a data_folder-by-data folder basis, but we use a concatenation of all your recordings to find the best mask. If you already computed the consensus_thumbnail and want to generate/regenerate masks, you can use 
+`batch_generate_consensus_dendritic_mask(TOP_FOLDER, true, true, true, true, {'Ribbon',1})`
 
  
 
-batch_show_cell_mask('D:\Curated Data\', 'thin_mask');
+**9.**    **Generate Global masks.** Masks are useful to filter out non-dendritic signals (for example, other neurons). As for global registration, this step can be pretty long to do, however you can do the processing once, and reload them later on. Global masks are not done on a data_folder-by-data folder basis, but we use a concatenation of all your recordings to find the best mask. If you already computed the consensus_thumbnail and want to generate/regenerate masks, you can use:
 
- 
+`batch_show_cell_mask('D:\Curated Data\', 'thin_mask');`
 
-You could actually compute the mask on any image, including image you would have pre-processed externally, providing the resolution matches the recording. This could be useful if for example only one recording was enabling the identification of the dendrites position, while the global mask or the other recordings were to dim. The mask computed on the optimal recording could then be propagated to the other data_folders. Using a single mask for all recordings is only reasonable if :
+You could actually compute the mask on any image, including an image you would have pre-processed externally, providing the resolution matches the recording. This could be useful when only one recording enables the identification of dendrite position (e.g. very little activity across the experiment), while the global mask or the other recordings were too dim. The mask computed on the optimal recording could then be propagated to the other data_folders. Using a single mask for all recordings is only reasonable if :
 
 \-     Your sample is perfectly still across recordings.
 
-\-     You computed global registration, and always reload registrated data using the global registration values
+\-     You computed global registration, and always reload registered data using the global registration values
 
-è TRY TO GET RID OF THE BIOINFORMATIC TOOLBOX REQUIREMENT FOR MASKS
+TRY TO GET RID OF THE BIOINFORMATIC TOOLBOX REQUIREMENT FOR MASKS
 
  
 
-**10.**  **Generate Mean Calcium trace.** Before loading the data for analysis, you may want to check if there is no other undetected issue. This could be a bleaching issue, a poorly corrected MC etc… You can fenerate a single image using the first branch of your recording. This is done for recordings of similar shape (see find_homognenous_cases). If required, you overlay the encoder or log. You can also overlay the type of task from the log, and the trigger location
+**10.**  **Generate Mean Calcium trace.** Before loading the data for analysis, you may want to check for additional issues (e.g. bleaching, poor MC etc…). You can generate a time series using the first branch of your neuron across recordings of similar shape (see `find_homognenous_cases`). You can also superimpose the encoder, behavioral task epoch (listed in the lab book), and trigger location. 
 
-[table, ~] = read_xlsx_columns(‘xlsx log path.xlsx','','A','L',1);
+`[table, ~] = read_xlsx_columns(‘xlsx log path.xlsx','','A','L',1);`
 
-batch_generate_experiment_mean_trace('D:\Curated Data\',2, 1, true, table)
+`batch_generate_experiment_mean_trace('D:\Curated Data\',2, 1, true, table)`
+
+
 
 **11.**  **Additional controls**
 
-Once all these extraction steps are done, there are a few additional control functions possible
+Once all of these extraction steps are complete, there are a few additional control functions that:
 
 \-     Test if all files were extracted
 
-test_global_processing_files(expe_folder, settings_file_path)
+`test_global_processing_files(expe_folder, settings_file_path)`
 
 \-     Test the amount of posthoc MC (this will show if there was some drift)
 
-test_global_processing(expe_folder, settings_file_path)
-
- 
+`test_global_processing(expe_folder, settings_file_path)`
 
  
 
 **12.**  Check the extraction for undetected issues. You can generate a power point with one slide per cell to screen the dataset. 
 
-12.1.           The ppt generator will look for specific images from the previous steps. This includes
+12.1.  The PPT generator will look for specific images from the previous steps. This includes:
 
 \-     Global thumbnail + mask in curtain view. If not available, just the global thumbnail. See “Generate Global masks”
 
@@ -272,131 +256,87 @@ test_global_processing(expe_folder, settings_file_path)
 
 \-     Stack Z, X and Y projection with the tree shape and the interpolated soma location overlaid. See “Generate Tree projection figures”
 
-\-     The mean calcium trace for the trial. If available, you can add markers for triggers and experiment type. See 
+\-     The mean calcium trace for the trial. If available, you can add markers for triggers and experiment type. See...
 
- 
 
-**13.**  **Extract calcium transients and generate \*arboreal_scan\* objects.** Values per ROI for each data_folder are extracted and stored in an *arboreal_scan* object that can be used later to plot some results (see section XXX) or for meta analysis. This is a tree-simplification step. If you change the way you signal is extracted from a given ROI, (e.g. different masks, different registration or averaging method), you will have to regenerate those. For each recording, an *arboreal_scan*.mat object is created. 
 
- 
+**13.**  **Extract calcium transients and generate \*arboreal_scan\* objects.** Values per ROI for each data_folder are extracted and stored in an *arboreal_scan* object that can be used later to plot some results (see section XXX) or for meta analysis. This is a tree-simplification step. If you change the way your signal is extracted from a given ROI (e.g. different masks, different registration or averaging method), you will have to regenerate the *arboreal_scan* object. For each recording, an *arboreal_scan*.mat object is created. 
 
-13.1.           Arboreal scan object
+13.1.  Arboreal scan object
 
-If you want to use the default extraction settings for a given data folder (channel 2, no filtering, non-partial etc… see *process_ribbon_scan.m* default values), you can type directly:
+If you want to use the default extraction settings for a given data folder (channel 2, no filtering, non-partial etc… see *process_ribbon_scan.m* default values), you can type directly: 
 
- 
+`process_ribbon_scan(‘Some/data/folder’)`
 
-process_ribbon_scan(‘Some/data/folder’). 
+13.2.  Extract all *arboreal_scan* objects for one or several experiments
 
- 
+You most likely don’t want to analyse just a single data_folder but recordings from one or several experiments. You can use batch processing functions for that. For a single experiment, use `batch_process_ribbon_scan('Some/expe/folder')`
 
-13.2.           Extract all arboreal scan objects for one or several experiments
-
-You most likely don’t one a single data_folder but recordings from one or several experiments. You can use batch processing functions for that.
-
-For a single experiment, use *batch_process_ribbon_scan*
-
-batch_process_ribbon_scan('Some/expe/folder')
-
- 
-
-For multiple experiments, use *meta_batch_process_ribbon_scan*
-
-meta_batch_process_ribbon_scan({'Some/expe/folder/ , Another/expe/folder/'})
-
- 
+For multiple experiments, use `meta_batch_process_ribbon_scan({'Some/expe/folder/ , Another/expe/folder/'})`
 
 OR
 
- 
+`meta_batch_process_ribbon_scan('Top/Folder')`
 
-meta_batch_process_ribbon_scan('Top/Folder')
+13.3.  Input control
 
- 
+If the settings file is not in your top folder, you need to specify it or your tree morphologies will be incorrect. 
 
-13.3.           Input control
+`meta_batch_process_ribbon_scan('Top/Folder/', ‘Path/to/settings.txt)`
 
- 
+You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *process_ribbon_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used.  
 
-If the settings file is not in your top folder, you need to specify it or your tree morphologies will be incorrect
 
- 
 
-meta_batch_process_ribbon_scan('Top/Folder/', ‘Path/to/settings.txt)
+**14.**  **Generate \*arboreal_scan_experiment\* objects.** the *arboreal_scan_experiment* object enables computing features across recordings (e.g. event detection, cross-correlation, factor analysis etc…). and plotting figures per neuron. 
 
- 
+14.1.  To create an *arboreal_scan_experiment* object for single experiment:
 
-You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *process_ribbon_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used
+`expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path');`
 
- 
+ To fill the fields automatically (using default binning by steps of 100um), use 
 
-**14.**  **Generate \*arboreal_scan_experiment\* objects.** the *arboreal_scan_experiment* object enable computing features across experiment (eg. event detection, coross correlation, factor analysis etc…). and plotting figures per neuron.
+`expe.process();`
 
- 
+However, you may want to set the correct binning method (see `arboreal_scan.get_ROI_groups())`.
 
-14.1.           *Arboreal_scan_experiment* object for single experiment
+This processing pipeline loads multiple recordings and rescales traces with each other. It then detects and extract bAPs, performs multiple operations on event correlation, distribution etc… Dimensionality analysis is done too. Figures can be saved in the export folder using `expe.save()` for the meta_analysis step. 
 
- 
+14.2.  *Arboreal_scan_experiment* objects for multiple experiments:
 
-To create an *arboreal_scan_experiment* object, simply type
+Use a loop:
 
-expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path');
+`top_export_folder = '…/extracted_arboreal_scans/';`
 
- 
+`fold = dir([top_export_folder,'/*-*-*_exp_*']);`
 
-To fill the fields automatically (using default binning by steps of 100um), use 
+`fold = fold([fold.isdir]);`
 
-expe.process();
+`for idx = 1:numel(fold)`
 
- 
+` expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);`
 
-However, you may want to set the correct binning method (see arboreal_scan.get_ROI_groups()).
+`expe.process();`
 
- 
+`expe.save(true);`
 
-This processing pipeline load multiple recordings and rescale traces with each other. It then detects and extract baps, perform multiple operation on event correlation, distribution etc… Dimensionality analysis is done too. Figures can be saved in the export folder (expe.save()) for the meta_analysis step
+`close all`
 
- 
+`end`
 
-14.2.           *Arboreal_scan_experiment* object for multiple experiment
 
- 
 
-Just Use a tiny for loop
+**15.**  **Meta analysis**. You can later reuse the extracted features from each tree to build figures. To analyse individual trees after the meta analysis extraction step, reload summary.mat. Then use `results.plot_dim_tree(neuron_id, 1)`. 
 
-top_export_folder = '…/extracted_arboreal_scans/';
+To do some meta analysis across all the trees:
 
-fold = dir([top_export_folder,'/*-*-*_exp_*']);
+`results.plot_gallery ('dim')` % can use ‘dim’, ‘dist’, or ‘corr’
 
-fold = fold([fold.isdir]);
 
-for idx = 1:numel(fold)
-
-  expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
-
-  expe.process();
-
-  expe.save(true);
-
-  close all
-
-end
-
- 
-
- 
-
-**15.**  **Meta analysis**. You can later reuse the extracted features from each tree to build figures. To analyse individual trees after the meta analysis extraction step, reload summary.mat. then results.plot_dim_tree(neuron_id, 1)
-
- 
-
-To do some meta analysis across all the trees, 
-
-Results.plot_gallery ('dim') % use ‘dim’, ‘dist’, ‘corr’
 
 **16.**  You can select a range of trees or change the projection dimension.
 
- 
+
 
 
 
@@ -417,7 +357,7 @@ This will be the doc for the Arboreal_Scan objects
 ```matlab
 data_folder = 'D:\Curated Data\2019-10-03\experiment_5\20-36-43' 
 
-%% Create the arboreal_scan object for data foldr
+%% Create the arboreal_scan object for data folder
 a_s = arboreal_scan(data_folder);
 
 %% Prepare tree information. 
@@ -434,6 +374,8 @@ a_s.prepare_extraction(data_folder);
 %% Save
 a_s.save();
 ```
+
+
 
 ##  Basic Use
 
@@ -455,9 +397,9 @@ a_s.plot_dist_tree(); hold on;a_s.plot_population();
 
 ## Different types of tree
 
-ALSO BELONG TO MAIN DOC
+ALSO BELONGS TO MAIN DOC
 
-Different tree are generated throughout the acquisition / analysis process. Unless indicated, all these trees use the original Z-stack coordinates (i.e. stack X-Y pixels size and plane spacing for Z- pixel size). They can all be converted in microns using information from the acquisition header. see `rescale_tree() `for the rescaling formula.
+Different trees are generated throughout the acquisition / analysis process. Unless indicated, all these trees use the original Z-stack coordinates (i.e. stack X-Y pixels size and plane spacing for Z- pixel size). They can all be converted to microns using information from the acquisition header. See `rescale_tree() `for the rescaling formula.
 
 ### Files
 
@@ -475,7 +417,7 @@ Different tree are generated throughout the acquisition / analysis process. Unle
 
 ### Header fields
 
-The header contains additional (or duplicated) fields. tree coordinates are stored in Trees objects, although the matrix corresponding to the .swc file can always be obtained in the `trees{1}.table` field. 
+The header contains additional (or duplicated) fields. Tree coordinates are stored in Trees objects, although the matrix corresponding to the .swc file can always be obtained in the `trees{1}.table` field.
 
 - `header.structure_reference` contains the path of the original file that was used for the segmentation, at the time of acquisition. The folder may have been deleted, however the corresponding .swc file remains available in each data_folder
 
@@ -648,7 +590,7 @@ This function is typically controlled by the constructor, although you can updat
 
 ```matlab
 %% Case 1
-%% To build the object from extracted arboreal_scans (recommanded)
+%% To build the object from extracted arboreal_scans (recommended)
 obj = arboreal_scan_experiment(source_folder); % where source_folder is a folder containing multiple extracted arboreal_scans 												   % objects (files can be in subfolders) 
 %% Case 2
 	%% To build the object from data_folders
@@ -834,13 +776,13 @@ obj.plot_median_traces([20, 0]);    % median with a 20 point asymetrical smoothi
 
 ## Event Detection
 
-You can detect large transients, and store they time of occurrence in `obj.event`. 
+You can detect large transients, and store their time of occurrence in `obj.event`. 
 
 This uses the `obj.find_events()`. Event detection can be using either a peak_amplitude approach [TODO : TO PUT BACK], or an approach that looks at correlated signal variations across the tree (either all of it, or a selected region such as the peri somatic area. see `idx_filter` input).
 
 The default uses the following steps:
 
-- Pairwise correlations between each pair of ROI are computed, using a moving correlation window (see `corr_window` input). If no window_side is given, the size is set as the average event width (as found by the native matlab `findpeaks` function, which returns here the width at half prominence of all events that are 2x signal RMS).
+- Pairwise correlations between each pair of ROIs are computed, using a moving correlation window (see `corr_window` input). If no window_side is given, the size is set as the average event width (as found by the native matlab `findpeaks` function, which returns here the width at half prominence of all events that are 2x signal RMS).
 
 - The average of all these Pairwise correlations is created, and indicate how correlated is the signal across the tree. A value of 1 indicates that an event covaried across every ROI of the tree, while a value of 0 suggest completely random variations (e.g. no activity). As some regions may be belonging to other neurons, the maximum may not reach 1. Therefore, the result is renormalized to the maximal values
 
