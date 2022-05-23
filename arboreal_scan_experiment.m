@@ -1249,9 +1249,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %        is low  
             %   * The reference (located at index 1 of the matrix) is
             %    either 
-            %       - The signal data during active behaviour IF you pass a
-            %       valid behaviour in CC mode (list available when typing
-            %       obj.behaviours.types)
+            %       - The behaviour data IF you pass a valid behaviour
+            %         in obj.cc_mode (list available when typing
+            %         obj.behaviours.types). Timepoint filtering applies (eg.
+            %         if you asked for 'encoder_peaks', the ref is the
+            %         encoder data at peak times only)
             %       - The averaged somatic data when available (as defined
             %         by ref.indices.somatic_ROIs), or the nexus signal 
             %         when somatic ROIS are not available
@@ -1268,14 +1270,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %     ref.indices.valid_swc_rois)
             %       - If cc_mode contains 'groups', using the median traces 
             %       after categorical binning  (as defined by
-            %        binned_data.median_traces). Use the 
+            %        binned_data.median_traces). 
             %   * To include population data, include 'pop' in cc_mode
             %   * If a behaviour type is added, the reference won't be the
             %   somatic average but the indicated behaviour for the same
             %   timepoints
             %   * If cc_mode contains refilter AND a valid behaviour, the
             %   timepoints used will be refiltered to include only events 
-            %   during active behaviour (as defined by 
+            %   during active behaviour (as defined by get_activity_bout)
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -1405,18 +1407,26 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 pop = [];
             end
-            mode = erase(mode, {'pop','_', 'refilter', '~'});
+            mode = erase(mode, {'pop', 'refilter', '~'});
 
             %% Get ref ROIs and trace
-            beh = obj.behaviours.types(find(contains(obj.behaviours.types, mode)));
-            if ~isempty(beh)
-                [~, ~, beh] = obj.get_behaviours(beh);                
+            if contains(mode, obj.behaviours.types)
+                to_test = [];
+                for el = obj.behaviours.types
+                    if contains(mode, el{1})
+                        to_test(end+1) = 1;
+                    else
+                        to_test(end+1) = 0;                   
+                    end
+                end
+                beh_name = obj.behaviours.types{find(to_test)};
+                [~, ~, beh] = obj.get_behaviours(beh_name);                
                 if contains(obj.cc_mode, 'refilter')
-                    [~,~, active_tp] = obj.get_activity_bout('encoder', true);
+                    [~,~, active_tp] = obj.get_activity_bout(beh_name, true);
                     if contains(obj.cc_mode, '~')
                         active_tp = ~active_tp;
                     end
-                    tp               = find(ismember(tp, find(active_tp)));
+                    tp               = tp(ismember(tp, find(active_tp)));
                 end
                 ref         = beh.value(tp)';
             else
@@ -1425,11 +1435,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Build the arrays used for the correlation matrix
+%             signal = signal - nanmean(signal,2);
             variable        = [ref, signal(tp, :)];
             if ~isempty(pop)
                 variable = [variable, pop(tp,:)];
             end
-            obj.crosscorr   = corrcoef(variable,'Rows','Pairwise')';
+                        
+            cc   = corrcoef(variable,'Rows','Pairwise')';
+            obj.crosscorr = cc;
+%                         [S,Q] = genlouvain(double(cc),[],[],1);
+%                         [a,b] = sort(S);
+%                         figure(1008);clf();imagesc(cc(b,b))
+            %             obj.ref.plot_value_tree(S(2:end),'','','','',124,'ddd','lines')
         end
 
         function crosscorr = get.crosscorr(obj)
