@@ -1,12 +1,20 @@
+
 %% TO DO :
 % - improve update system when changing folder.
 % - enable loading if we just have a folder with arboreal_scans objects
 % - add warning if source folde ris the actual raw experiment
+% - add doc to load_Several_Experiment
 
-classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting
+%% TO CHECK:
+% - loading from raw data
+% - Breakpoints not iintorucing artefacts
+% - Check if bheviours are fine
+% why are camera behaviours downsampled. Do we want that?
+
+classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting & behaviours_analysis
     properties
         %% Extraction/Re-extraction Settings
-        extraction_method = 'median'; % the 1D -> 0D compression method
+        extraction_method = 'median'; % the 1D -> 0D compression method. If None, XxT data is kept, but this make the files heavier
         source_folder           % The folder where individual arboreal_scans were located when you built the object
         update_folder     = ''; % If you need to update the arboral_scans, but the orginal path changed, set the folder containing the new files here
         extracted_data_paths    % The original location of the individual arboreal_scans when you built the object
@@ -42,15 +50,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         event                   % Event detection output (event times, amplitude, correlation etc....)
         variability             % Signal variability over time
         dimensionality          % Results of diemensionality reduction
-        behaviours              % List of available behaviours
         spiketrains             % If available, spike inference results
         bad_ROI_list     = 'unset';  % list of uncorrelated ROIs (following event detection)
-        updatable               % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
+        updatable               % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
         crosscorr               % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
     end
 
     properties (Dependent = true, Transient = true)
-        updated_path            % If update_folder is used, the updated filpath
+        updated_data_path            % If update_folder is used, the updated filpath
         extracted_traces        % Concatenated version of each obj.arboral_scan.simple_data
         extracted_pop           % Concatenated version of each obj.arboral_scan.simple_pop_data
         extracted_traces_conc   % Concatenated version of extracted_traces
@@ -70,10 +77,59 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
     end
 
     methods
-        function obj = arboreal_scan_experiment(source_folder, varargin)
+        function obj = arboreal_scan_experiment(source_folder, keep_2D, varargin)
+            %% arboreal_scan_experiment Constructor
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE = 
+            %   arboreal_scan_experiment(source_folder, keep_2D, varargin)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   source_folder (STR)
+            %       Path to the raw or extracted recordings. It can be :
+            %           * a folder containing extracted arboreal_scans
+            %             objects (recommended)
+            %           * an experiment folder, in which case data will be
+            %             extracted using additional varargin
+            %   keep_2D (BOOL) - Optional, default is False
+            %       If true, the full_data field is kept for each ROI. Not
+            %       that this will considerably increase the object size.
+            %   varargin
+            %       When passing an experiment folder, varargin{1} can 
+            %       contain the analysis_params to use for extraction, and 
+            %       varargin{2} the path to a settings.txt file
+            % -------------------------------------------------------------
+            % Outputs:
+            %   obj (arboreal_scan_experiment object)
+            %       arboreal_scan_experiment object handle, that contains
+            %       individual SIMPLIFIED arboreal_scans (see extra Notes),
+            %       and built-in analysis features.
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * You can build the object from RAW data every time, but it
+            %   is recommended to do it in two steps, in particular if you
+            %   have several experiment to process.
+            %   * arboreal_scan_experiment objects also contains the
+            %   arboreal_scan objects used for extraction BUT to reduce
+            %   the file size, each ROI data is compressed into a single 
+            %   1xT time serie, while it is a XxT Timeseries in the
+            %   arboreal_scan object. The compression is done using 
+            %   obj.extraction_method. To keep XxT data, set Keep_2D = true
+            %   * See Documentation for examples
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             if nargin < 1
                 return
             end
+            if nargin < 2 || isempty(keep_2D)                
+                keep_2D = false;
+            end
+            
             %% Fix paths
             obj.source_folder       = parse_paths(source_folder);
 
@@ -82,18 +138,48 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
 
             %% Load arboreal scans
-            obj.update(true, varargin);
+            obj.update(true, keep_2D, varargin);
         end
 
         function extracted_data_paths = list_sources(obj)
+            %% Return the location of the original data used for extraction
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_data_paths = EXPE.list_sources
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_data_paths (1 x N CELL ARRAY of CHAR)
+            %       Each cell contains the path to the original data sued
+            %       for extraction
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * If data is not available at the original location and not
+            %   available at the updated location (if obj.update_folder is
+            %   non empty), a warning message is printed. In the absence of
+            %   the original data, you cannot :
+            %       - re-extract data
+            %       - Update the compression method,
+            %       - reload the original signal from the analyzed trees
+            %   Other analyses should work properly
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             %% List available arboreal scans
-            all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
-            if isempty(all_recordings)
-                obj.updatable       = false;
-                warning(['no extracted arboreal_scans found in the folder : ',[obj.source_folder,'/**/*-*-*_exp_*_*-*-*'],' . extraction/re-extraction not available']);
-                return
+            if isempty(obj.update_folder) % normal case
+                all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
             else
-                obj.updatable       = true;
+                all_recordings          = dir([obj.update_folder,'/**/*-*-*_exp_*_*-*-*']);
+            end
+            if isempty(all_recordings)
+                warning(['Original arboreal_scans not found in : ',[obj.source_folder,'/**/*-*-*_exp_*_*-*-*'],' . extraction/re-extraction not available. If you moved the files to a new top folder, change obj.update_folder accordingly']);
+                extracted_data_paths= obj.extracted_data_paths;
+                return
             end
             all_recordings          = all_recordings(~[all_recordings(:).isdir]);
             all_recordings          = all_recordings(~(arrayfun(@(x) strcmp(x.name, '.'), all_recordings) | arrayfun(@(x) strcmp(x.name, '..'), all_recordings)));
@@ -102,16 +188,45 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             extracted_data_paths    = cellfun(@(x) parse_paths(x), cellstr(names)', 'UniformOutput', false);
         end
 
-        function update(obj, bypass, varargin)
-            if nargin < 2 || isempty(bypass) || ~bypass
-                quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESS DATA. Continue?','Update?','Yes','No','No');
+        function update(obj, bypass, keep_2D, varargin)
+            %% Update the arboreal scans
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.update(bypass, keep_2D, varargin)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   bypass (BOOL) - Optional - default is False
+            %       If true, update is done without a prompt (this is used
+            %       by the constructor for example when you build the obj)
+            %   keep_2D (BOOL) - Optional, default is False
+            %       If true, the full_data field is kept for each ROI. Not
+            %       that this will considerably increase the object size.
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * Note that all analyses will be cleared. Do this only if
+            %   you added / removed some recordings, or fundamentally
+            %   changed something in the extracted arboreal_scans. 
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
+            if nargin < 2 || isempty(keep_2D)                
+                keep_2D = false;
+            end
+            if nargin < 3 || isempty(bypass) || ~bypass
+                quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESSED DATA. Continue?','Update?','Yes','No','No');
             else
                 quest = 'Yes';
             end
 
             if strcmp(quest, 'Yes')
                 obj.extracted_data_paths= list_sources(obj);
-                if isempty(obj.extracted_data_paths)
+                if isempty(obj.extracted_data_paths) % extract from RAW
                     quest = questdlg('Do you want to try to extract arboreal_scans? If yes, you will be able to select the export folder in the next step','Extract?','Yes','No','No');
                     if strcmp(quest, 'Yes')
                         fold = parse_paths(uigetdir(pwd, 'Export folder'));
@@ -123,10 +238,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                             end
                         end
 
-                        err = meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params,fold);
+                        err = meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params, fold);% QQ PLEASE CHECK IF THIS STILL WORKS
                         if isempty(err{1})
                             obj.source_folder       = fold;
-                            obj.update(true);
+                            obj.update(true,keep_2D);
                         else
                             error('Error detected during extraction. Check that the settings.txt file is present in the top_folder or manually indicated, and that it contains the correct paths')
                         end
@@ -135,44 +250,27 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     end
                 end
                 obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
-                for field = {'arboreal_scans','binned_data', 'rescaling_info','event', 'variability','dimensionality'}
+                
+                %% Clear all fields
+                obj.reset();
+                for field = {'arboreal_scans','binned_data','rescaling_info','event','variability','dimensionality'}
                     obj.(field{1}) = {};
                 end
-
-%                 %% Update arboreal_scan objects. Identify recordings that changed
-%                 obj.extracted_data_paths = cellfun(@(x) parse_paths(x), obj.extracted_data_paths, 'UniformOutput', false); %temporary
-%                 new_list = obj.list_sources();
-%                 old_list_clean = erase(obj.extracted_data_paths, find_common_path(obj.extracted_data_paths));
-%                 new_list_clean = erase(new_list, parse_paths(obj.source_folder));
-%                 added          = ~ismember(new_list_clean, old_list_clean);
-%                 deleted        = ~ismember(old_list_clean, new_list_clean);
-%
-%                 %% Clear deleted trees
-%                 obj.arboreal_scans(deleted)         = [];
-%                 obj.need_update(deleted)            = [];
-%                 obj.extracted_data_paths(deleted)   = [];
-
-                %% Update required trees first (bc idx are from before the detection of new trees)
+                
+                %% Rebuild from extracted arboreal_scans
                 for el = fliplr(find(obj.need_update))
-                    add_tree(el);
+                    add_tree(el, keep_2D);
                 end
-%
-%                 %% Add new trees
-%                 for el = new_list(added)
-%                     obj.extracted_data_paths{end+1} = el{1};
-%                     add_tree(numel(obj.extracted_data_paths));
-%                 end
-%
-%                 %% Sort trees by name
-%                 [obj.extracted_data_paths, new_order] = sort(obj.extracted_data_paths);
-%                 obj.arboreal_scans = obj.arboreal_scans(new_order);
             end
             
-            function add_tree(pos)
+            function add_tree(pos, keep_2D)
+                %% INTERNAL FUNCTION THAT LOADS THE ARBOREAL_SCAN OBJECT
                 obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
                     obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
-                    obj.arboreal_scans{pos}.full_data               = []; % clear full data.
+                    if ~keep_2D
+                        obj.arboreal_scans{pos}.full_data           = []; % clear full data to save space.
+                    end
                     obj.arboreal_scans{pos}.population_data         = []; % clear population_data.
                     obj.need_update(pos)                            = false;
                 else
@@ -183,6 +281,23 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function reset(obj)
+            %% Reset all analyzed fields
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.reset()
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             %% Saving options
             obj.demo                = 0;
             obj.auto_save_analysis  = false;
@@ -198,7 +313,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.detrend         = false;
             obj.is_rescaled     = false; % is set to True once you ran the rescaling step.
             obj.rescaling_method= 'by_trials';
-            obj.breakpoints     = []; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
+            obj.breakpoints     = []; % if you had a disruptive event during the experiment, a first scaling is done with large blocks
 
             %% All the fields computed in
             obj.binned_data     = [];	% Defines how ROIs are grouped
@@ -208,25 +323,68 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.dimensionality  = [];   % Results of diemensionality reduction
             obj.behaviours      = [];   % List of available behaviours
             obj.spiketrains     = [];   % If available, spike inference results
-            obj.bad_ROI_list    = [];  % list of uncorrelated ROIs (following event detection)
-            obj.updatable       = [];   % If arboreal_scan are still available, you could update the arboral_scan_experiment compression
+            obj.bad_ROI_list    = [];   % list of uncorrelated ROIs (following event detection)
+            obj.updatable       = [];   % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
             obj.crosscorr       = [];   % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
         end
         
         %% ########### GET METHODS ###################
 
         function updatable = get.updatable(obj)
-            updatable = cellfun(@(x) ~isempty(obj.updated_path), obj.extracted_data_paths);
+            %% Get method for the updatable field
+            % -------------------------------------------------------------
+            % Syntax:
+            %   updatable = obj.updatable
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   updatable (1xN BOOL)
+            %   List of source folders that exist, and can be updated if
+            %   required
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
+            updatable = cellfun(@(x) ~isfolder(x), obj.updated_data_path); % which is either the extracted data path or the updated one
         end
 
-        function updated_path = get.updated_path(obj)
+        function updated_data_path = get.updated_data_path(obj)
+            %% Get method for the updatable field
+            % -------------------------------------------------------------
+            % Syntax:
+            %   updated_data_path = obj.updated_data_path
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   updatable (1xN CELL ARRAY OF CHAR)
+            %   List of update folders if obj.update_folder was provided,
+            %   or the original extracted_data_paths if not. 
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * This doesn't tell you if the folder is valid. Use
+            %   obj.updatable for that.
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             if isempty(obj.update_folder)
-                updated_path = obj.extracted_data_paths;
+                updated_data_path = obj.extracted_data_paths;
             else
-                updated_path = cellfun(@(x) get_fname(x), obj.extracted_data_paths, 'uni', false);
+                updated_data_path = cellfun(@(x) get_fname(x), obj.extracted_data_paths, 'uni', false);
             end
 
             function fname = get_fname(in)
+                %% INTERNAL FUNCTION
                 [~, in_name, in_ext] = fileparts(in);
                 fname = [in_name,in_ext];
                 replacement = dir([obj.update_folder,'/**/',fname]);
@@ -237,22 +395,95 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function breakpoints = get.breakpoints(obj)
+            %% Get breakpoints from the batch_params field
+            % -------------------------------------------------------------
+            % Syntax:
+            %   breakpoints = obj.breakpoints
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   breakpoints (1xN CELL ARRAY OF CHAR)
+            %   List of breakpoints if any
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * Breakpoints can be manually provided to indicate abrupt
+            %   changes in the experiment signal, which are usually caused
+            %   by change in data acquisition variables, such as PMT gain,
+            %   water level, or if you interrupted and restarted the
+            %   experiment.
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             if isfield(obj.batch_params, 'breakpoints') && ~isempty(obj.batch_params.breakpoints)
-                breakpoints = obj.batch_params.breakpoints;%find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.extracted_data_paths));
+                breakpoints = obj.batch_params.breakpoints; %find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.updated_data_path));
             else
                 breakpoints = [];
             end
         end
         
         function set.breakpoints(obj, breakpoints)
+            %% Update breakpoints if not initially provided
+            % -------------------------------------------------------------
+            % Syntax:
+            %   obj.breakpoints = breakpoints;
+            % -------------------------------------------------------------
+            % Inputs:
+            %   breakpoints (1xN CELL ARRAY OF CHAR)
+            %   Numerical list of experiment number that interrupted the
+            %   experiment. for example obj.breakpoints = [2,6,9];
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * Breakpoints can be manually provided to indicate abrupt
+            %   changes in the experiment signal, which are usually caused
+            %   by change in data acquisition variables, such as PMT gain,
+            %   water level, or if you interrupted and restarted the
+            %   experiment.
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             for rec = 1:numel(obj.arboreal_scans)
-                obj.arboreal_scans{rec}.batch_params.breakpoints = breakpoints;
+                obj.arboreal_scans{rec}.batch_params.breakpoints = sort(breakpoints);
             end
         end
         
         function set.bad_ROI_thr(obj, value)
-            if value <0 || value > 1
-                error('CutOff must be between 0 and 1')
+            %% Defines the exclusion threshold based on correlation
+            % This defines the lowest acceptable correlation coefficient
+            % between one ROI and the rest of the tree.
+            % -------------------------------------------------------------
+            % Syntax:
+            %   obj.bad_ROI_thr = bad_ROI_thr;
+            % -------------------------------------------------------------
+            % Inputs:
+            %   bad_ROI_thr (0 > FLOAT > 1)
+            %   Minimal correlation coefficient between one ROI and the
+            %   rest of the tree to be considered part of the tree
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            %
+            % See also : find_bad_ROIs
+            
+            if value < 0 || value > 1
+                error('Cutoff must be between 0 and 1')
             else
                 obj.bad_ROI_thr = value;
                 a = dbstack(); 
@@ -262,92 +493,29 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
-        function extracted_traces = fix_changes_in_gain(obj,extracted_traces)
-        	temp        = vertcat(extracted_traces{:}); % get traces
-            real_low    = 0;%nanmin(temp(:)); % real dark noise level (won't change if gain change)
-            temp        = temp - real_low; % remove dark noise
-            tp_start    = cumsum([1, obj.timescale.tp]); % pt start of trials
-            breakpoints_idx = find(cellfun(@(x) ~isempty(obj.breakpoints) && contains(x, obj.breakpoints),obj.extracted_data_paths));
-            blocks      = [1, breakpoints_idx, numel(extracted_traces)+1]; % pt range of the blocks
-            pts         = [1,tp_start(breakpoints_idx),size(temp,1)+1]; % pt start of blocks
-            bsl_value   = [];
-            slope_gain  = {};
-            
-            for block_idx = 1:(numel(pts)-1)
-                tmp_traces = temp(pts(block_idx):pts(block_idx+1)-1,:);
-                
-                %% Fix slop first since we'll fix the gain later
-                local_tp        = size(tmp_traces,1);
+        function extracted_traces = get.extracted_traces(obj)
+            %% Get extracted traces from individual arboreal_scans
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_traces = obj.extracted_traces;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_traces (1xN CELL ARRAY of TxROI SINGLE)
+            %   Original traces (detrended and smoothed if required) from
+            %   the tree
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %  * If obj.detrend > 0, detrending is performed here
+            %  * If filter_win  > 0, time smoothing is done here
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
 
-                if obj.detrend
-                    if any(isnan(tmp_traces(:)))
-                        tmp_traces  = fillmissing(tmp_traces,'movmean',5);
-                        to_use      = ~all(isnan(tmp_traces), 1);
-                    else
-                        to_use      = true(1,size(tmp_traces, 2));
-                    end
-                    
-%                     %% Get slope for current trace
-%                     p = polyfit(repmat(1:local_tp,sum(to_use),1),movmin(tmp_traces(:,to_use),50)',1);
-%                     slope = (local_tp*p(1)) ./ nanmean(tmp_traces(:)); % slope in percent
-%                     slope_gain{block_idx} = linspace(-slope/2,slope/2,local_tp); 
-                    
-%                     x = 1:local_tp;
-%                     a = nanmean(movmin(tmp_traces(:,to_use),50),2);
-%                     out = fit(x',a,'a + b*log(c - x)','Lower',[0,1,numel(a)],'Upper',[max(a),100,numel(a)*2]);toc
-%                     slope_gain{block_idx} = out.a + out.b*log(out.c-x);
-%                     %slope_gain{block_idx}(slope_gain{block_idx} < nanmin(a)) = nanmin(a);
-%                     slope_gain{block_idx} = slope_gain{block_idx} ./ mean(slope_gain{block_idx}) - 1;;
-
-                    if islogical(obj.detrend)
-                        poly_order = 1;
-                    else
-                        poly_order = obj.detrend;
-                    end
-                    x = 1:local_tp;
-                    p = polyfit(repmat(x,sum(to_use),1),movmin(tmp_traces(:,to_use),[300, 0])',poly_order);
-                   % figure(555);cla();plot(nanmean(movmin(tmp_traces(:,to_use),300)')); hold on;plot(x, polyval(p,x))
-                    slope_gain{block_idx} = polyval(p,x);
-                    slope_gain{block_idx} = slope_gain{block_idx} ./ nanmean(slope_gain{block_idx}) - 1;
-                    
-                    
-%                     out = fit(x',a,'a + b*log(c - x)','Lower',[0,1,numel(a)],'Upper',[max(a),100,numel(a)*2]);toc
-%                     slope_gain{block_idx} = out.a + out.b*log(out.c-x);
-%                     %slope_gain{block_idx}(slope_gain{block_idx} < nanmin(a)) = nanmin(a);
-%                     slope_gain{block_idx} = slope_gain{block_idx} ./ mean(slope_gain{block_idx}) - 1;;
-
-
-                    %% Temporarily corect the block
-                   
-                    tmp_traces = tmp_traces - tmp_traces.* slope_gain{block_idx}';
-
-                    %% Reslice per trial
-                    slope_gain{block_idx} = mat2cell(slope_gain{block_idx},1, obj.timescale.tp(blocks(block_idx):(blocks(block_idx+1)-1)));
-                end
-                if ~isempty(breakpoints_idx)
-                    bsl_value = [bsl_value; prctile(tmp_traces,1)];
-                end
-            end
-            
-            %% Get scaling if gain fix is required
-            if ~isempty(breakpoints_idx)
-                scaling     = bsl_value .\ bsl_value(1,:); % normalize to first group;
-            end
-            
-            %% Now apply correction per trial
-            for block_idx = 1:(numel(pts)-1)
-                trial_idx                     = (blocks(block_idx)):(blocks(block_idx+1)-1);
-                if obj.detrend
-                    extracted_traces(trial_idx)   = cellfun(@(x, y) x - x.*y', extracted_traces(trial_idx),slope_gain{block_idx}, 'uni',false);
-                end
-                if ~isempty(breakpoints_idx)
-                    extracted_traces(trial_idx)   = cellfun(@(x) (x.*scaling(block_idx,:)), extracted_traces(trial_idx), 'uni',false);
-                end
-            end
-        end
-        
-        
-        function extracted_traces = get.extracted_traces(obj) % checked
             extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
             
             %% If expe was interrupted signal gain changed, we fix it here
@@ -355,30 +523,126 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
             end
 
-            %extracted_traces = cellfun(@(x, y) x - y, extracted_traces,obj.rescaling_info.individual_offset, 'UniformOutput', false);
-            
+            %% Time smoothing if required
             if any(obj.filter_win)
                 extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.filter_win), extracted_traces, 'UniformOutput', false);
             end
         end
 
         function extracted_pop = get.extracted_pop(obj) % checked
+            %% Get population signal from individual arboreal_scans
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_pop = obj.extracted_pop;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_pop (1xN CELL ARRAY of TxROI SINGLE)
+            %   Original traces (detrended and smoothed if required) from
+            %   the population recording
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %  * If filter_win  > 0, time smoothing is done here
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             extracted_pop = cellfun(@(x) x.simple_pop_data, obj.arboreal_scans, 'UniformOutput', false);
             if obj.detrend
                 extracted_pop = cellfun(@(x) x - prctile(x, 1), extracted_pop, 'UniformOutput', false);
             end
         end
 
-        function extracted_traces_conc = get.extracted_traces_conc(obj) % checked
+        function extracted_traces_conc = get.extracted_traces_conc(obj)
+            %% All traces from the tree concatenated
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_traces_conc = obj.extracted_traces_conc;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_traces_conc (TxROI SINGLE)
+            %   Original traces (detrended and smoothed if required) from
+            %   the tree recording, concatenated
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
+            %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
-        function extracted_pop_conc = get.extracted_pop_conc(obj) % checked
+        function extracted_pop_conc = get.extracted_pop_conc(obj)
+            %% All traces from the population concatenated
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_pop_conc = obj.extracted_pop_conc;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_pop_conc (TxROI SINGLE)
+            %   Original traces (detrended and smoothed if required) from
+            %   the population recording, concatenated
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             extracted_pop_conc = vertcat(obj.extracted_pop{:});
-            % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',[100,0])', '', 'norm_method','dF/F0','percentile',10)')
+            % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
         function timescale = get.timescale(obj)
+            %% Return timescale strcuture, with loads of timing info
+            % -------------------------------------------------------------
+            % Syntax:
+            %   timescale = obj.timescale;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   timescale (STRUCT)
+            %   Timescale information with the following fields:
+            %       * sr : sampling rate per recording
+            %       * time_source : source of timescale. Most accurate is
+            %           "encoder" any in ({'command','computed','encoder'})
+            %       * tp : timepoints per recording  
+            %       * durations : duration per recording in seconds, based
+            %           on time_source estimate
+            %       * rec_timescale : 1xT timescale for each recording
+            %       * global_timescale : 1xT timescale, for all recordings
+            %           concatenated, ignoring any gap between recordings.
+            %       * t_start_nogap : t start for each recording
+            %       * datetime_start : real start time of each recording
+            %       * real_timescale : 1xT timescale, for all recordings
+            %           concatenated, including gaps between recordings.
+            %       * t_start_real : t start for each recording, with start 
+            %           of experiment at 0 
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
+            
             %% Prepare timescale for each recording and concatenated timescale
             timescale                   = {};
             timescale.sr                = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
@@ -394,18 +658,85 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             timescale.global_timescale  = cumsum(horzcat(timescale.global_timescale{:}));
             timescale.t_start_nogap     = cellfun(@(x) x(end), timescale.rec_timescale);
             timescale.t_start_nogap     = cumsum([0, timescale.t_start_nogap(1:end-1) + timescale.sr(1:end-1)]);
-            timescale.t_start_real      = [];  % QQ to do
+            
+            t_start_real_posix          = cellfun(@(x) posixtime(x.header.recording_t_start), obj.arboreal_scans);
+            timescale.t_start_real      = t_start_real_posix - t_start_real_posix(1);
+            timescale.datetime_start    = cellfun(@(x) x.header.recording_t_start, obj.arboreal_scans, 'UniformOutput', false);
+            
+            %timescale.real_timescale   = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
+            timescale.real_timescale   = cellfun(@(x, y) [x+y], timescale.rec_timescale, num2cell(timescale.t_start_real), 'UniformOutput', false);
+            timescale.real_timescale   = horzcat(timescale.real_timescale{:});
         end
 
-        function t = get.t(obj) % checked
+        function t = get.t(obj)
+            %% Quick handle for global_timescale
+            % -------------------------------------------------------------
+            % Syntax:
+            %   timescale = obj.timescale;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   t (1xT DOUBLE)
+            %       equivalent to obj.timescale.global_timescale. Use it to 
+            %       simplify your code
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             t = obj.timescale.global_timescale;
         end
 
-        function ref = get.ref(obj)  % checked
+        function ref = get.ref(obj)
+            %% Quick handle for the first arboreal_scan
+            % -------------------------------------------------------------
+            % Syntax:
+            %   ref = obj.ref;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   ref (arboreal_scan object)
+            %       equivalent to obj.arboreal_Scan{1}. Use it to simplify
+            %       your code
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             ref = obj.arboreal_scans{1};
         end
 
-        function batch_params = get.batch_params(obj) % checked
+        function batch_params = get.batch_params(obj) 
+            %% Quick handle for the batch_paramns of the first arboreal_scan
+            % -------------------------------------------------------------
+            % Syntax:
+            %   batch_params = obj.batch_params;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   batch_params (STRUCT)
+            %       equivalent to obj.arboreal_Scan{1}.batch_params. Use it
+            %       to simplify your code
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             batch_params = obj.ref.batch_params;
             if ~isfield(batch_params, 'breakpoints')
                 batch_params.breakpoints = [];
@@ -413,24 +744,124 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
-        function n_ROIs = get.n_ROIs(obj) % checked
+        function n_ROIs = get.n_ROIs(obj)
+            %% Total Number of ROIs in the tree
+            % -------------------------------------------------------------
+            % Syntax:
+            %   n_ROIs = obj.n_ROIs;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   n_ROIs (INT)
+            %       Number of ROIs in the tree alone
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             n_ROIs = size(obj.ref.simple_data,2);
         end
 
-        function n_ROIs = get.n_pop_ROIs(obj) % checked
-            n_ROIs = size(obj.ref.population_data,2);
+        function n_pop_ROIs = get.n_pop_ROIs(obj)
+            %% Total Number of ROIs in the population
+            % -------------------------------------------------------------
+            % Syntax:
+            %   n_pop_ROIs = obj.n_pop_ROIs;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   n_pop_ROIs (INT)
+            %       Number of ROIs in the population recording
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
+            n_pop_ROIs = size(obj.ref.population_data,2);
         end
         
-        function logs = get.logs(obj) % checked
+        function logs = get.logs(obj)
+            %% Individual arboreal scan logs (the comments you wrote
+            % during the recording !)
+            % -------------------------------------------------------------
+            % Syntax:
+            %   logs = obj.logs;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   logs (1xN CELL ARRAY OF CHAR)
+            %       Number of ROIs in the population recording
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             logs = cellfun(@(x) x.log, obj.arboreal_scans, 'Uniformoutput', false); % vertcat(obj.logs{:})
         end
 
         function f_handle = get.default_handle(obj)
+            %% Default handle used when you click on a tree
+            % -------------------------------------------------------------
+            % Syntax:
+            %   f_handle = obj.f_handle;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   f_handle (FUNCTION HANDLE)
+            %       This determine what happens when you click on one of
+            %       the trees after doing all the meta analysis. Default
+            %       handle enable you to reload the original Ribbon data
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            %
+            % See also : load_several_experiments
+            
             use_mask = false;
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
         end
 
-        function global_median_raw = get.global_median_raw(obj) % checked
+        function global_median_raw = get.global_median_raw(obj)
+            %% Median trace of all non-excluded RAW data
+            % -------------------------------------------------------------
+            % Syntax:
+            %   global_median_raw = obj.global_median_raw;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   global_median_raw (Tx1 SINGLE)
+            %       median RAW signal
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             global_median_raw = obj.extracted_traces_conc;
             global_median_raw(:, obj.bad_ROI_list) = [];
             global_median_raw = nanmedian(global_median_raw, 2);
@@ -447,24 +878,32 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function external_variables = get.external_variables(obj)
+            %% Return all external variables from original arboreal scans
+            % -------------------------------------------------------------
+            % Syntax:
+            %   external_variables = obj.external_variables;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   external_variables (1xN STRUCT of external variables)
+            %       Each external variable is a structure with a "value" 
+            %       and a "time" field. Value can have more than one column
+            %       (eg : X,Y,Z values for 3dMC, multiple ROIs for Motion
+            %       index...)
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+            
             %failed_encoder = cellfun(@(x) ~numel(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
             external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
 
-        function behaviours = get.behaviours(obj)
-            behaviours                  = obj.behaviours;
-            behaviours.external_var     = obj.external_variables;
-            behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), behaviours.external_var);
-            behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), behaviours.external_var);
-            [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
-            behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
-            behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            for beh = 1:Max_var
-                behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)';
-            end
-        end
-
-        
         function bad_ROI_list = get.bad_ROI_list(obj)
             bad_ROI_list = obj.bad_ROI_list;
             if ischar(bad_ROI_list) && strcmpi(bad_ROI_list, 'unset')
@@ -479,176 +918,35 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         %% ########### ... ###################
         
-        function [raw_beh, downsampd_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig)
-            %% Return the selected behaviour and corresponding timescale
-            if nargin < 2 || isempty(type)
-                type = 'encoder';
-            end
-            if nargin < 3 || isempty(rendering)
-                rendering = false;
-            end
-            %if nargin < 4 || isempty(detrend_sig)
-                detrend_sig = false;
-            %end            
-
-            downsampd_beh               = {};
-            concat_downsamp_beh.time    = [];
-            concat_downsamp_beh.value   = [];
-            temp = {};
-            type                        = obj.behaviours.types(contains(obj.behaviours.types, type));
-            if isempty(type)
-                raw_beh = {};
-                warning(['Type not detected. Valid behaviours are :\n', strjoin(obj.behaviours.types,'\n')]);
-                return
-            end
-            for beh = 1:numel(type)
-                raw_beh{beh}                     = arrayfun(@(x) x{1}.(type{beh}), obj.behaviours.external_var, 'UniformOutput', false, 'ErrorHandler', @cellerror_empty);
-
-                temp.time  = [];
-                temp.value = [];
-                for rec = 1:numel(raw_beh{beh})                    
-                    %% If behaviour timescale is longer than recording, clip it
-                    if ~isempty(raw_beh{beh}{rec}.time)
-                        clipping_idx = find(raw_beh{beh}{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
-                        if ~isempty(clipping_idx)
-                            raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
-                            raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
-                        end
-                    end
-                        
-                    downsampd_beh{beh}{rec}.time     = interpolate_to(raw_beh{beh}{rec}.time, obj.timescale.tp(rec));
-                    downsampd_beh{beh}{rec}.value    = interpolate_to(raw_beh{beh}{rec}.value, obj.timescale.tp(rec));
-                    if isempty(downsampd_beh{beh}{rec}.time)
-                        downsampd_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
-                        downsampd_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
-                    end
-                if detrend_sig
-                    downsampd_beh{beh}{rec}.value = downsampd_beh{beh}{rec}.value - movmin(downsampd_beh{beh}{rec}.value, [20, 0]);
-                end
-
-                    %downsampd_beh{beh}{rec}.value = smoothdata(downsampd_beh{beh}{rec}.value, 'movmean', [5, 0]);
-
-                    temp.time = [temp.time, downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
-                    value = downsampd_beh{beh}{rec}.value;
-                    if size(value, 1) > 1 % if your behavioural metrics is made of multiple arrays
-                        value = nanmax(value, [], 1);
-                    end
-                    temp.value = [temp.value, value];
-                end
-
-                concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
-                concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
-
-            end
-
-            if rendering
-                figure(1026);clf();
-                for beh = 1:numel(type)
-                    subplot(numel(type),1,beh)
-                    for rec = 1:numel(raw_beh{beh})
-                        if ~isempty(downsampd_beh{beh}{rec}.time)                           
-                            plot(downsampd_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec), downsampd_beh{beh}{rec}.value);hold on;
-                        end
-                    end
-                end
-            end
-
-            function out = cellerror_empty(~,varargin)
-                out = {};
-                out.time = [];
-                out.value = [];
-            end
-        end
-
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing)
-            if nargin < 2 || isempty(beh_types)
-                beh_types = {'encoder'};
-            elseif ischar(beh_types)
-                beh_types = {beh_types};
-            end
-            if nargin < 3 || isempty(rendering)
-                rendering = false;
-            end
-            if nargin < 4 || isempty(smoothing)
-                smoothing = 1;
-            elseif ~any(smoothing)
-                smoothing(1) = 1;
-            end
-            if numel(smoothing) == 1
-                smoothing = [smoothing, 0];
-            end
-            thr = 10 % threshold in % of max
-            margin_duration = 3 %in sec
-            detrend_win = 100
+        function extracted_traces = fix_changes_in_gain(obj, extracted_traces)
+            %% Rescale gain changes between pairs of breakpoints
+            % by correcting changes in F0 if obj.detrend > 0
+            % -------------------------------------------------------------
+            % Syntax:
+            %   extracted_traces = EXPE.fix_changes_in_gain(extracted_traces);
+            % -------------------------------------------------------------
+            % Inputs:
+            %   extracted_traces (1xN CELL ARRAY of TxROI SINGLE)
+            %   Original traces, for each N recording extracted from each
+            %   arboreal_scan.simple_data field
+            % -------------------------------------------------------------
+            % Outputs:
+            %   extracted_traces (1xN CELL ARRAY of TxROI SINGLE)
+            %   Original traces rescaled between each breakpoints to
+            %   minimize change of baseline signal.
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %  * see fix_gain_changes() for methodology. Briefly, signal is
+            %  rescaled for each ROI, between each pair of breakpoints to
+            %  correct for linear change of F0 (eg from water drying out)
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
             
-            if numel(margin_duration) == 1
-                margin_duration = [margin_duration, margin_duration];
-            end
-
-            plts = {};
-            for idx = 1:numel(beh_types)
-                current_type = beh_types{idx};
-                [~, ~, beh] = obj.get_behaviours(current_type, false);
-                beh.value = beh.value - movmin(beh.value, [detrend_win, 0]);
-                beh_sm = smoothdata(beh.value, 'gaussian', smoothing);
-                beh_sm = nanmean(beh_sm,1);
-                %beh_sm = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
-                %thr = prctile(beh_sm(beh_sm > 0), 20);
-                current_thr = prctile(beh_sm,(100/thr)) + range(beh_sm)/(100/thr); % 5% of max
-
-                %% Define bouts
-                active_tp   = abs(beh_sm) > abs(current_thr);
-                [starts, stops] = get_limits(active_tp, beh_sm);
-
-                %% Add some pts before and after each epoch
-                dt = nanmedian(diff(obj.t));
-                for epoch = starts
-                    active_tp(max(1, epoch-round(margin_duration(1)*(1/dt))):epoch) = 1;
-                end
-                for epoch = stops
-                    active_tp(epoch:min(numel(active_tp), epoch+round(margin_duration(2)*(1/dt)))) = 1;
-                end
-                [starts, stops] = get_limits(active_tp, beh_sm); % update bouts edges now that we extended the range
-
-                if rendering
-                    figure(1027);hold on;
-                    if idx == 1
-                        clf();
-                    end
-                    plts{idx} = subplot(numel(beh_types),1,idx);hold on;
-                    title(strrep(current_type,'_','\_'))
-                    plot(obj.t, beh_sm);hold on;
-                    for el = 1:numel(starts)
-                        x = [starts(el),starts(el),stops(el),stops(el)];
-                        y = [0,nanmax(beh_sm),nanmax(beh_sm),0];
-                        patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
-                    end
-                end
-
-                bouts = sort([starts, stops]);
-            end
-
-            if rendering
-                linkaxes([plts{:}],'x');
-            end
-
-            function [starts, stops] = get_limits(active_tp, beh_sm)
-                if size(active_tp, 1) > 1
-                    active_tp = nanmean(active_tp, 1) > 0;
-                end
-                starts      = find(diff(active_tp) == 1);
-                stops       = find(diff(active_tp) == -1);
-                if any(starts)
-                    if starts(1) > stops(1)
-                        starts = [1, starts];
-                    end
-                    if stops(end) < starts(end)
-                        stops = [stops, size(beh_sm,2)];
-                    end
-                elseif all(active_tp)
-                    starts = 1; stops = size(beh_sm,2);
-                end
-            end
+            extracted_traces = fix_gain_changes(obj, extracted_traces);
         end
 
         %% #############################
@@ -914,14 +1212,130 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         %% #############################################
         
         function set.cc_mode(obj, cc_mode)
-        	if ~strcmp(obj.cc_mode,cc_mode)
-                obj.crosscorr = []; %if you change the cc mod, clear the previous correlation results
+            %% Set cross correlation mode
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.get_correlations(cc_mode)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   cc_mode (STR) - See Description for details - Optional - 
+            %           Default is your current obj.cc_mode value
+            %       update EXPE.cc_mode with existing value
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * Correlation is computed using:
+            %       - A reference trace (located at index 1)
+            %       - The data you want to correlate (individual ROI, 
+            %           OR binned data, see below)
+            %       - Optionally, you can append population data
+            %   * cc_mode is build by concatenating strings defining the
+            %   timepoints to use (all of them or a subset), the traces to  
+            %   use (all of them or the binned data), whether you want to 
+            %   use population data too and whether you want to use some 
+            %   behavioural metrics. for example : 
+            %      - 'groups_pop' : correlation between binned median
+            %        traces and population data using all timepoints 
+            %      - 'active' : correlation between all ROIs, using all
+            %      timepoints when cell is active (i.e. during bAPs)
+            %      - 'encoder_peaks' : correlation between all ROIS, only
+            %        at peak time, and using encoder as ref  
+            %      - 'encoder_peaks_refilter' : correlation between all 
+            %        ROIS, only at peak time, AND only when running speed
+            %        is high    
+            %      - '~encoder_peaks_refilter' : correlation between all 
+            %        ROIS, only at peak time, AND only when running speed
+            %        is low  
+            %   * The reference (located at index 1 of the matrix) is
+            %    either 
+            %       - The signal data during active behaviour IF you pass a
+            %       valid behaviour in CC mode (list available when typing
+            %       obj.behaviours.types)
+            %       - The averaged somatic data when available (as defined
+            %         by ref.indices.somatic_ROIs), or the nexus signal 
+            %         when somatic ROIS are not available
+            %   * Correlation matrix can be generated using the entire 
+            %     trace (default) or a subset of timepoints : 
+            %       - If cc_mode contains 'peaks', only the values at peak
+            %       times (as defined by event.fitting.peak_pos) are used
+            %       - If cc_mode contains 'active', all the timepoints
+            %       containing bAPs (as defined by event.fitting.t_win)
+            %       - If cc_mode contains 'quiet', all the timepoints
+            %       between bAPs (as defined by ~event.fitting.t_win)
+            %   * Correlation matrix can be generated using
+            %       - every ROIs (except for excluded ROIs, indicated in
+            %     ref.indices.valid_swc_rois)
+            %       - If cc_mode contains 'groups', using the median traces 
+            %       after categorical binning  (as defined by
+            %        binned_data.median_traces). Use the 
+            %   * To include population data, include 'pop' in cc_mode
+            %   * If a behaviour type is added, the reference won't be the
+            %   somatic average but the indicated behaviour for the same
+            %   timepoints
+            %   * If cc_mode contains refilter AND a valid behaviour, the
+            %   timepoints used will be refiltered to include only events 
+            %   during active behaviour (as defined by 
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
+        	if ~strcmp(obj.cc_mode, cc_mode)
+                obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
             end
+            
+            msg = '\n';
+            if contains(cc_mode, 'peaks')
+                msg = [msg, 'Correlation done using all peaks, '];
+            elseif contains(cc_mode, 'active')
+                msg = [msg, 'Correlation done using timepoints during active behaviour, '];
+            elseif contains(cc_mode, 'quiet')
+                msg = [msg, 'Correlation done using timepoints during quiet behaviour, '];             
+            else
+                msg = [msg, 'Correlation done using all timepoints, '];
+            end            
+            if contains(cc_mode, 'groups')
+                msg = [msg, 'Correlation done by groups using your bins, '];
+            else
+                msg = [msg, 'Correlation done between all ROIs, '];
+            end            
+            if contains(obj.cc_mode, 'pop')
+                msg = [msg, 'including population data'];
+            end
+            
+            fprintf([msg ,  '\n'])
             obj.cc_mode = cc_mode;
-        end
-        
+        end        
         
         function cross_corr = get_correlations(obj, cc_mode)
+            %% Returns cross correlation (and triggers computation if required)
+            % -------------------------------------------------------------
+            % Syntax:
+            %   cross_corr = EXPE.get_correlations(cc_mode)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   cc_mode (STR) - See Description for details - Optional - 
+            %       Default is [];
+            %       If provided, update EXPE.cc_mode. see set.cc_mode for
+            %       more details
+            % -------------------------------------------------------------
+            % Outputs:
+            %   crosscorr (NxN DOUBLE)
+            %       Cross correlation between ROIs OR groups based on
+            %       traces OR Peaks, depending on the settings. see
+            %       set.cc_mode doc for the deails
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022            
+            
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             end
@@ -935,6 +1349,26 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function set_crosscorr(obj)
+            %% Compute cross correlation 
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.set_crosscorr()
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %       Cross correlation is computed between ROIs OR groups 
+            %       based on traces OR Peaks, depending on the settings. 
+            %       see set.cc_mode doc for the details
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
             mode = obj.cc_mode;
 
             %% Get signal time range
@@ -952,44 +1386,74 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             mode = erase(mode, {'peaks','quiet','active'});
 
-            %% Get ref ROIs
-            somatic_ROIs = obj.ref.indices.somatic_ROIs;
-
             %% Get signal to use
             if contains(obj.cc_mode, 'groups')
-                signal = obj.binned_data.median_traces(tp,:);
-                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);
+                signal = obj.binned_data.median_traces;
             else% if contains(obj.cc_mode, 'ROIs')
-                signal = obj.rescaled_traces(tp,obj.ref.indices.valid_swc_rois);
-                ref    = nanmean(obj.rescaled_traces(tp, somatic_ROIs),2);
+                signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);                
             end
             mode = erase(mode, {'ROIs','groups'});
 
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
                 if isempty(obj.extracted_pop_conc)
-                    warning('No population data for this rcording')
+                    warning('No population data for this recording')
                     pop = [];
                 else
-                    pop = obj.extracted_pop_conc(tp,:);
+                    pop = obj.extracted_pop_conc;
                 end
             else
                 pop = [];
             end
-            mode = erase(mode, {'pop','_'});
+            mode = erase(mode, {'pop','_', 'refilter', '~'});
 
+            %% Get ref ROIs and trace
             beh = obj.behaviours.types(find(contains(obj.behaviours.types, mode)));
             if ~isempty(beh)
-                [~, ~, beh] = obj.get_behaviours(beh);
+                [~, ~, beh] = obj.get_behaviours(beh);                
+                if contains(obj.cc_mode, 'refilter')
+                    [~,~, active_tp] = obj.get_activity_bout('encoder', true);
+                    if contains(obj.cc_mode, '~')
+                        active_tp = ~active_tp;
+                    end
+                    tp               = find(ismember(tp, find(active_tp)));
+                end
                 ref         = beh.value(tp)';
+            else
+                somatic_ROIs= obj.ref.indices.somatic_ROIs;
+                ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2);
             end
 
-            variable    = [ref, signal, pop];
+            %% Build the arrays used for the correlation matrix
+            variable        = [ref, signal(tp, :)];
+            if ~isempty(pop)
+                variable = [variable, pop(tp,:)];
+            end
             obj.crosscorr   = corrcoef(variable,'Rows','Pairwise')';
         end
 
         function crosscorr = get.crosscorr(obj)
-            %% Add a few more check
+            %% Returns cross correlation (and triggers computation if required)
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.crosscorr()
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   crosscorr (NxN DOUBLE)
+            %       Cross correlation between ROIs OR groups based on
+            %       traces OR Peaks, depending on the settings. see
+            %       set.cc_mode doc for the details
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
             if isempty(obj.binned_data)
                 crosscorr = [];
                 return
@@ -1043,7 +1507,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         function get_spike_trains(obj)
             %% Use ML spike to get a spike train estimate
             if ~exist('spk_autocalibration.m','file') || ~exist('fn_getfile.m','file')
-                error('You need to download the "bricks" and "ml_sikes" toolboxes, and add thn to the path')
+                error('You need to download the "bricks" and "ml_spikes" toolboxes, and add then to the path')
             end
 
             %% Formatting calcium. It seems that signal need to be normalized
@@ -1540,7 +2004,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             for rec = 1:numel(obj.arboreal_scans)
                 obj.arboreal_scans{rec}.extraction_method = new_method;
                 if isempty(obj.arboreal_scans{rec}.simple_data)
-                    temp = load(obj.extracted_data_paths{rec});
+                    temp = load(obj.updated_data_path{rec});
                     obj.arboreal_scans{rec}.simple_data = temp.obj.simple_data;
                     clear temp;
                 end

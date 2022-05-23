@@ -60,6 +60,7 @@ classdef arboreal_scan_plotting < handle
             
         function plot_original_data(obj)
             figure(1055);clf();plot(obj.t, obj.extracted_traces_conc,'Color',[0.9,0.9,0.9]); hold on
+            hold on;title('Original Data and average');set(gcf, 'Color', 'w')
             plot(obj.t, nanmean(obj.extracted_traces_conc,2),'r');            
         end
 
@@ -112,7 +113,7 @@ classdef arboreal_scan_plotting < handle
             ax.YAxis(2).Color = 'k';
         end
         
-        function plot_correlation_results(obj, cross_corr)
+        function plot_correlation_results(obj, cross_corr)            
             if nargin < 2 || isempty(cross_corr)
                 cross_corr = obj.crosscorr;
             end
