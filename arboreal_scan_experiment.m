@@ -1238,25 +1238,24 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %      - 'groups_pop' : correlation between binned median
             %        traces and population data using all timepoints 
             %      - 'active' : correlation between all ROIs, using all
-            %      timepoints when cell is active (i.e. during bAPs)
-            %      - 'encoder_peaks' : correlation between all ROIS, only
-            %        at peak time, and using encoder as ref  
-            %      - 'encoder_peaks_refilter' : correlation between all 
+            %        timepoints when cell is active (i.e. during bAPs)
+            %      - 'peaks' : correlation between all ROIS, only
+            %        at peak time.
+            %      - 'encoder_peaks' : correlation between all 
             %        ROIS, only at peak time, AND only when running speed
             %        is high    
-            %      - '~encoder_peaks_refilter' : correlation between all 
+            %      - '~encoder_peaks' : correlation between all 
             %        ROIS, only at peak time, AND only when running speed
             %        is low  
             %   * The reference (located at index 1 of the matrix) is
             %    either 
-            %       - The behaviour data IF you pass a valid behaviour
-            %         in obj.cc_mode (list available when typing
-            %         obj.behaviours.types). Timepoint filtering applies (eg.
-            %         if you asked for 'encoder_peaks', the ref is the
-            %         encoder data at peak times only)
             %       - The averaged somatic data when available (as defined
             %         by ref.indices.somatic_ROIs), or the nexus signal 
             %         when somatic ROIS are not available
+            %       - The behaviour data if you specify 'behref', AND IF 
+            %         you pass a valid behaviour in obj.cc_mode (list 
+            %         available when typing obj.behaviours.types). eg : 
+            %         '~encoder_peaks_behref'
             %   * Correlation matrix can be generated using the entire 
             %     trace (default) or a subset of timepoints : 
             %       - If cc_mode contains 'peaks', only the values at peak
@@ -1272,12 +1271,40 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       after categorical binning  (as defined by
             %        binned_data.median_traces). 
             %   * To include population data, include 'pop' in cc_mode
-            %   * If a behaviour type is added, the reference won't be the
-            %   somatic average but the indicated behaviour for the same
-            %   timepoints
-            %   * If cc_mode contains refilter AND a valid behaviour, the
-            %   timepoints used will be refiltered to include only events 
-            %   during active behaviour (as defined by get_activity_bout)
+            % -------------------------------------------------------------
+            % Example - How To 
+            %
+            % * Get correlations across all ROIs
+            %   EXPE.get_correlations(''); % Rejected ROIs appear in gray
+            %
+            % * Get correlations across all ROIs
+            %   EXPE.get_correlations('groups');
+            %
+            % * Get correlations across all ROIs, only at peak time
+            %   EXPE.get_correlations('peaks');
+            %
+            % * Get correlations across binned traces, only at peak time
+            %   EXPE.get_correlations('peaks_groups');
+            %
+            % * Get correlations only when the cell is active
+            %   EXPE.get_correlations('active');
+            %
+            % * Get correlations only when the mouse is running (all
+            %   timepoints when running)
+            %   EXPE.get_correlations('encoder');
+            %
+            % * Get correlations only when the mouse is running (only peak 
+            %   times when running)
+            %   EXPE.get_correlations('encoder_peaks');
+            %
+            % * Get correlations only when the mouse is NOT running (only 
+            %   peak  times when not running)
+            %   EXPE.get_correlations('~encoder_peaks');
+            %
+            % * Get correlations only when the mouse is running (all
+            %   timepoints when running), but use the behaviour as a ref
+            %   for correlation (instead of the somatic data)
+            %   EXPE.get_correlations('encoder_behref');
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -1289,27 +1316,44 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
             end
             
-            msg = '\n';
-            if contains(cc_mode, 'peaks')
-                msg = [msg, 'Correlation done using all peaks, '];
-            elseif contains(cc_mode, 'active')
-                msg = [msg, 'Correlation done using timepoints during active behaviour, '];
-            elseif contains(cc_mode, 'quiet')
-                msg = [msg, 'Correlation done using timepoints during quiet behaviour, '];             
-            else
-                msg = [msg, 'Correlation done using all timepoints, '];
-            end            
+            original_cc_mode = cc_mode;
+            msg = '\n\t'; 
             if contains(cc_mode, 'groups')
-                msg = [msg, 'Correlation done by groups using your bins, '];
+                msg = [msg, 'Correlation done by group median, using your current binning, '];
             else
                 msg = [msg, 'Correlation done between all ROIs, '];
-            end            
+            end         
+            cc_mode = erase(cc_mode, 'groups');
             if contains(obj.cc_mode, 'pop')
-                msg = [msg, 'including population data'];
+                msg = [msg, 'including population data.'];
+            end
+            cc_mode = erase(cc_mode, 'pop');
+            if contains(cc_mode, 'behref')
+                msg = [msg, '\n\tReference trace is indicated behaviour, at the indicated timpoints. '];
+            else
+                msg = [msg, '\n\tReference trace is the somatic signal average, at the indicated timpoints. '];
+            end
+            cc_mode = erase(cc_mode, 'behref');            
+            if contains(cc_mode, 'peaks')
+                msg = [msg, '\n\tCorrelation computed using data at peak time only, '];
+            elseif contains(cc_mode, 'active')
+                msg = [msg, '\n\tCorrelation computed using timepoints when the cell is active (i.e. during bAPs), '];
+            elseif contains(cc_mode, 'quiet')
+                msg = [msg, '\n\tCorrelation computed using timepoints when the cell is quiet (i.e. between bAPs), '];             
+            else
+                msg = [msg, '\n\tCorrelation done using all timepoints, '];
+            end       
+            cc_mode = erase(cc_mode, {'peaks', 'active', 'quiet', '_',' '});
+            if ~isempty(cc_mode)
+                if contains(cc_mode, '~')
+                    msg = [msg, ' WHEN "',erase(cc_mode, '~'),'" behaviour IS NOT ongoing.'];
+                else
+                    msg = [msg, ' WHEN "',cc_mode,'" behaviour IS ongoing.'];
+                end
             end
             
             fprintf([msg ,  '\n'])
-            obj.cc_mode = cc_mode;
+            obj.cc_mode = original_cc_mode;
         end        
         
         function cross_corr = get_correlations(obj, cc_mode)
@@ -1350,7 +1394,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
-        function set_crosscorr(obj)
+        function tp = set_crosscorr(obj)
             %% Compute cross correlation 
             % -------------------------------------------------------------
             % Syntax:
@@ -1359,6 +1403,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Inputs:
             % -------------------------------------------------------------
             % Outputs:
+            %   tp(1 x N INT)
+            %       The timepoints used based on your fitlering criteria
             % -------------------------------------------------------------
             % Extra Notes:
             %       Cross correlation is computed between ROIs OR groups 
@@ -1407,9 +1453,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 pop = [];
             end
-            mode = erase(mode, {'pop', 'refilter', '~'});
+            mode = erase(mode, {'pop', '~'});
 
             %% Get ref ROIs and trace
+            somatic_ROIs= obj.ref.indices.somatic_ROIs;
+            ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
             if contains(mode, obj.behaviours.types)
                 to_test = [];
                 for el = obj.behaviours.types
@@ -1420,23 +1468,32 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     end
                 end
                 beh_name = obj.behaviours.types{find(to_test)};
-                [~, ~, beh] = obj.get_behaviours(beh_name);                
-                if contains(obj.cc_mode, 'refilter')
-                    [~,~, active_tp] = obj.get_activity_bout(beh_name, true);
-                    if contains(obj.cc_mode, '~')
-                        active_tp = ~active_tp;
-                    end
-                    tp               = tp(ismember(tp, find(active_tp)));
+                
+                %% Get behaviour boutsd
+                [~, ~, beh] = obj.get_behaviours(beh_name); 
+                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true);
+                
+                %% Invert if required
+                if contains(obj.cc_mode, '~')
+                    active_tp = ~active_tp;
                 end
-                ref         = beh.value(tp)';
-            else
-                somatic_ROIs= obj.ref.indices.somatic_ROIs;
-                ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2);
+                
+                %% Valid tp are either (in)active behaviour, or peaks during behaviours
+                if contains(obj.cc_mode, 'peaks')
+                    tp = tp(ismember(tp, find(active_tp)));
+                else
+                    tp = active_tp;
+                end
+                
+                %% Now get ref (somatic ROIs or directly the behaviour data)
+                if contains(mode, 'behref')
+                    ref         = beh.value';
+                end
             end
 
             %% Build the arrays used for the correlation matrix
 %             signal = signal - nanmean(signal,2);
-            variable        = [ref, signal(tp, :)];
+            variable        = [ref(tp, :), signal(tp, :)];
             if ~isempty(pop)
                 variable = [variable, pop(tp,:)];
             end
@@ -1489,7 +1546,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
 
-            if size(cc, 1) == numel(obj.binned_data.bin_legend)
+            if contains(obj.cc_mode,'groups')%size(cc, 1) == numel(obj.binned_data.bin_legend)
                 %% Identify valid set of traces
                 valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
 

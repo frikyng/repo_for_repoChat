@@ -117,8 +117,8 @@ classdef arboreal_scan_plotting < handle
             if nargin < 2 || isempty(cross_corr)
                 cross_corr = obj.crosscorr;
             end
-            imAlpha=ones(size(cross_corr));
-            imAlpha(isnan(cross_corr))=0;
+            imAlpha                     = ones(size(cross_corr));
+            imAlpha(isnan(cross_corr))  = 0;
             figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
             set(gca,'color',0.8*[1 1 1]);
             caxis([0,1]); hold on;xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
