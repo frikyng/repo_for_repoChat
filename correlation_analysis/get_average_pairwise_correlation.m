@@ -1,15 +1,23 @@
 
-% condition == 1 --> all TP
-% condition == 2 --> bAPs
-% condition == 3 --> btween bAPs
 
-function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_correlation(current_expe, corr_results, data_sm, rendering, condition, corr_results_rand)
-    
 
+function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_correlation(current_expe, corr_results, data_sm, rendering, condition, corr_results_rand, references)
     if nargin < 4 || isempty(rendering)
         rendering = true;        
     end
-    
+    if nargin < 5 || isempty(condition)
+        % condition == 1 --> all TP
+        % condition == 2 --> bAPs
+        % condition == 3 --> btween bAPs
+        condition = 1;        
+    end
+    if nargin < 6 || isempty(corr_results_rand)
+        corr_results_rand = [];        
+    end
+    if nargin < 7 || isempty(references)
+        references = 1:size(data_sm,2);        
+    end
+        
     comb                        = nchoosek(1:size(data_sm,2),2);
 
    % use_global_events = cond > 1;
@@ -28,9 +36,19 @@ function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_corr
 
     %% Show mean correlation againt all other ROIs
     n_high_corr = [];
-    for key = 1:size(data_sm,2)
-        corr_results_sub    = corr_results(:, comb(:,2) == key | comb(:,1) == key);
-        corr_results_sub    = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
+    full_range = 1:size(data_sm,2);
+    for key = references
+        if iscell(key)
+            corr_results_sub    = NaN(size(data_sm));
+            for el = full_range(~ismember(full_range, key{1}))
+                corr_results_sub(:,el) = nanmean(corr_results(:, (comb(:,2) == el | comb(:,1) == el) & (any(comb(:,2) == key{1},2) | any(comb(:,1) == key{1},2))),2);
+            end
+            key = 1;
+        else
+            corr_results_sub        = corr_results(:, comb(:,2) == key | comb(:,1) == key);
+            corr_results_sub    = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
+        end
+
         mean_corr           = nanmean(corr_results_sub,1);
         if condition < 3
             n_high_corr(key) = sum(mean_corr > max_corr/2);
@@ -60,10 +78,9 @@ function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_corr
                 % tp = 711;
                 % current_expe.ref.plot_value_tree(corr_results_sub(tp,:))
             %% FOR AN ANIMATION WITH ALL TP
-            current_expe.animate_tree(corr_results_sub,3350,'',[0,1])
+            current_expe.ref.animate_tree(corr_results_sub,1:size(corr_results_sub, 1),'',[0,1])
             title(num2str(key))
             pause(1)
-            %animate_tree(current_expe, corr_results_sub, '', '', ['correlation with ROI ',num2str(key)])
         end
     end
     
