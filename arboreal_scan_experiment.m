@@ -757,6 +757,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       Number of ROIs in the tree alone
             % -------------------------------------------------------------
             % Extra Notes:
+            %   This should match obj.ref.indices.n_tree_ROIs
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -780,6 +781,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       Number of ROIs in the population recording
             % -------------------------------------------------------------
             % Extra Notes:
+            %   This should match obj.ref.indices.n_pop_ROIs
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -1384,6 +1386,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
+            else
+                fprintf('Using current obj.cc_mode\n')
             end
 
             %% Get CC (and build the correlation matrix if the settings changed)
@@ -1492,7 +1496,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Build the arrays used for the correlation matrix
-%             signal = signal - nanmean(signal,2);
+           %  signal = signal - nanmean(signal,2);
             variable        = [ref(tp, :), signal(tp, :)];
             if ~isempty(pop)
                 variable = [variable, pop(tp,:)];
@@ -1500,10 +1504,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         
             cc   = corrcoef(variable,'Rows','Pairwise')';
             obj.crosscorr = cc;
-%                         [S,Q] = genlouvain(double(cc),[],[],1);
-%                         [a,b] = sort(S);
-%                         figure(1008);clf();imagesc(cc(b,b))
-            %             obj.ref.plot_value_tree(S(2:end),'','','','',124,'ddd','lines')
         end
 
         function crosscorr = get.crosscorr(obj)
@@ -1537,16 +1537,33 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             crosscorr = obj.crosscorr;
         end
 
-        function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc)
+        function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc, ref_column)
             if nargin < 2 || isempty(cc)
-                cc = obj.crosscorr(2:end,2:end);
+                cc = obj.crosscorr;
                 if contains(obj.cc_mode,'pop')
                     pop_sz = size(obj.extracted_pop_conc,2);
                     cc = cc(1:(end-pop_sz),1:(end-pop_sz));
                 end
+            end  
+            if nargin < 3
+                ref_column = [];
+            end
+            
+            %% Erase diagonal
+            cc(1:size(cc,1)+1:end)= NaN;
+            
+            %% Remove "ref" row/column when you pass a matrix with one row per ROI
+            if (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1))
+                cc = cc(2:end,2:end);
+            end
+            
+            %% If no ref were provided, we will use the average correlation
+            if isempty(ref_column)
+                ref_column = 1:size(cc,1);
             end
 
-            if contains(obj.cc_mode,'groups')%size(cc, 1) == numel(obj.binned_data.bin_legend)
+            %%
+            if contains(obj.cc_mode,'groups')
                 %% Identify valid set of traces
                 valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
 
@@ -1556,24 +1573,35 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 if ~isempty(cc)
                     for gp = 1:numel(obj.binned_data.groups)
                         roi_of_gp           = obj.binned_data.groups{gp};
-                        roi_of_gp = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
-                        v_of_gp             = cc(valid_gp(1),gp);
+                        %roi_of_gp           = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
+                        v_of_gp             = cc(ref_column,gp);
                         ROIs_list           = [ROIs_list, roi_of_gp];
-                        mean_bin_cc         = [mean_bin_cc, repmat(v_of_gp, 1, numel(roi_of_gp))];
+                        mean_bin_cc         = [mean_bin_cc, repmat(nanmean(v_of_gp), 1, numel(roi_of_gp))];
                     end
                 end
             else
                 ROIs_list   = obj.ref.indices.valid_swc_rois;
                 mean_bin_cc = cc(:,1);
             end
-
-            %% Map CC values on the tree
-            if contains(obj.cc_mode, 'group')
-                ROIs_list = obj.binned_data.groups;
-            end
+            
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
             caxis([0,1]);
             col = colorbar; col.Label.String = 'Spatial correlation between ROIs/groups with soma';
+            
+%             
+%             [S,Q] = genlouvain(double(cc),[],[],1);
+%             [a,b] = sort(S);
+%             figure(1008);clf();imagesc(cc(b,b))
+%             obj.ref.plot_value_tree(S,'','','','',124,'ddd','lines');
+%             R = unique(S);
+%             colorbar('Ticks',R);
+%             caxis([nanmin(R)-0.5, nanmax(R)+0.5])
+%             colormap(lines(numel(unique(S))));
+%             
+%             figure(125);clf();
+%             for community = R'
+%                 plot(nanmean(obj.extracted_traces_conc(:,S == community),2)); hold on;                
+%             end
         end
 
         %% ###################
