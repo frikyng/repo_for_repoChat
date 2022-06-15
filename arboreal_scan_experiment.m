@@ -85,7 +85,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   arboreal_scan_experiment(source_folder, keep_2D, varargin)
             % -------------------------------------------------------------
             % Inputs:
-            %   source_folder (STR)
+            %   source_folder (STR) - Optional - Default is current folder
             %       Path to the raw or extracted recordings. It can be :
             %           * a folder containing extracted arboreal_scans
             %             objects (recommended)
@@ -123,8 +123,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
             
-            if nargin < 1
-                return
+            if nargin < 1 || isempty(source_folder)    
+                source_folder = pwd;
             end
             if nargin < 2 || isempty(keep_2D)                
                 keep_2D = false;
@@ -516,7 +516,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
-            extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
+            if isempty(obj.ref.full_data)
+                extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
+            else
+                extracted_traces = cellfun(@(x)  squeeze(cat(1, x.full_data{:})), obj.arboreal_scans, 'UniformOutput', false);
+                extracted_traces = cellfun(@(x) x(:,:,1)', extracted_traces, 'UniformOutput', false);
+            end
             
             %% If expe was interrupted signal gain changed, we fix it here
             if ~isempty(obj.breakpoints) || obj.detrend
@@ -765,7 +770,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
             
-            n_ROIs = size(obj.ref.simple_data,2);
+            if isempty(obj.ref.full_data)
+                n_ROIs = size(obj.ref.simple_data,2);
+            else
+                n_ROIs = sum(obj.ref.header.res_list(:,1));
+            end
         end
 
         function n_pop_ROIs = get.n_pop_ROIs(obj)
@@ -914,6 +923,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.find_events(); %find uncorrelated ROIs based on correlation
                 %obj.rendering = rendering;
                 bad_ROI_list = obj.bad_ROI_list;
+            end
+            
+            %% If analyzing every pixel, convert bad ROIs to bad pixels
+            if ~isempty(obj.ref.full_data)
+                bad_ROI_list = obj.get_voxel_for_ROI(bad_ROI_list');
             end
         end
         
@@ -1076,6 +1090,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 rescaled_traces = rescaled_traces ./ obj.rescaling_info.scaling;
             end
         end
+        
+        function pxl_list = get_voxel_for_ROI(obj, ROIs)            
+            pxl_list = [];
+            res_list = obj.ref.header.res_list(:,1);
+            pxls = [cumsum(res_list) - res_list(1) + 1;  sum(res_list)];
+            for el = 1:numel(ROIs)
+                pxl_list = [pxl_list, pxls(ROIs(el)):(pxls(ROIs(el)+1)-1)];
+            end
+        end
 
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled)
             if (nargin < 2 || isempty(use_rescaled) || use_rescaled) && ~isempty(obj.rescaling_info)
@@ -1090,6 +1113,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             all_traces_per_bin = cell(1, numel(obj.binned_data.groups));
             for gp = 1:numel(obj.binned_data.groups)
                 columns                     = ismember(obj.binned_data.readmap, obj.binned_data.groups{gp}) & ~ismember(obj.binned_data.readmap, obj.bad_ROI_list);
+                if ~isempty(obj.ref.full_data)
+                     columns = obj.get_voxel_for_ROI(find(columns));
+                end
+                
                 all_traces_per_bin{gp}      = nanmedian(traces(:,columns), 2);
             end
 
