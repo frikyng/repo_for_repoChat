@@ -224,7 +224,7 @@ classdef arboreal_scan_plotting < handle
             for gp = 1:size(cluster_traces, 1)
                 plot(trace_handle, obj.t, cluster_traces(gp,:));hold(trace_handle, 'on')
             end
-            title(trace_handle, 'Average traces per cluster');xlabel('Time (s)');colororder(trace_handle, jet(obj.dimensionality.N_clust))
+            title(trace_handle, 'Average traces per cluster');xlabel('Time (s)');colororder(trace_handle, jet(gp))
         end
         
         function cluster_traces = get_cluster_traces(obj)
