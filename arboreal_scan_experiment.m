@@ -1492,70 +1492,27 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
-        function tp = set_crosscorr(obj)
-            %% Compute cross correlation 
-            % -------------------------------------------------------------
-            % Syntax:
-            %   EXPE.set_crosscorr()
-            % -------------------------------------------------------------
-            % Inputs:
-            % -------------------------------------------------------------
-            % Outputs:
-            %   tp(1 x N INT)
-            %       The timepoints used based on your fitlering criteria
-            % -------------------------------------------------------------
-            % Extra Notes:
-            %       Cross correlation is computed between ROIs OR groups 
-            %       based on traces OR Peaks, depending on the settings. 
-            %       see set.cc_mode doc for the details
-            % -------------------------------------------------------------
-            % Author(s):
-            %   Antoine Valera.
-            %--------------------------------------------------------------
-            % Revision Date:
-            %   13/05/2022
-            
-            mode = obj.cc_mode;
-
-            %% Get signal time range
-            tp_of_events        = sort(unique([obj.event.t_win{:}]));
-            if contains(obj.cc_mode, 'peaks') %% event time
-                tp          = obj.event.fitting.peak_pos;% could be using obj.event.fitting.pre_correction_peaks
-            elseif contains(obj.cc_mode, 'quiet') %% low corr window
-                tp              = true(1,size(obj.binned_data.median_traces,1));
+        function [tp, beh, mode] = get_tp_for_condition(obj, mode)
+            %% Get signal time range     
+            tp          = true(1,size(obj.binned_data.median_traces,1));
+            using_peaks = false;
+            if contains(mode, 'peaks') %% event time
+                tp              = ~tp;
+                tp(obj.event.fitting.peak_pos) = true;% could be using obj.event.fitting.pre_correction_peaks
+                using_peaks     = true;
+            elseif contains(mode, 'quiet') %% low corr window
+                tp_of_events    = sort(unique([obj.event.t_win{:}]));                
                 tp(tp_of_events)= false;
-            elseif contains(obj.cc_mode, 'active') %% high corr window
-                tp              = false(1,size(obj.binned_data.median_traces,1));
+            elseif contains(mode, 'active') %% high corr window
+                tp_of_events    = sort(unique([obj.event.t_win{:}]));
+                tp              = ~tp;
                 tp(tp_of_events)= true;
-            else %% all tp
-                tp    = deal(1:size(obj.rescaled_traces,1));
+            else
+                %% keep all tp
             end
             mode = erase(mode, {'peaks','quiet','active'});
 
-            %% Get signal to use
-            if contains(obj.cc_mode, 'groups')
-                signal = obj.binned_data.median_traces;
-            else% if contains(obj.cc_mode, 'ROIs')
-                signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);                
-            end
-            mode = erase(mode, {'ROIs','groups'});
-
-            %% Add population signal if needed
-            if contains(obj.cc_mode, 'pop')
-                if isempty(obj.extracted_pop_conc)
-                    warning('No population data for this recording')
-                    pop = [];
-                else
-                    pop = obj.extracted_pop_conc;
-                end
-            else
-                pop = [];
-            end
-            mode = erase(mode, {'pop', '~'});
-
-            %% Get ref ROIs and trace
-            somatic_ROIs= obj.ref.indices.somatic_ROIs;
-            ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
+            beh      = {};
             if contains(mode, obj.behaviours.types)
                 to_test = [];
                 for el = obj.behaviours.types
@@ -1572,25 +1529,88 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 [~, ~, active_tp] = obj.get_activity_bout(beh_name, true);
                 
                 %% Invert if required
-                if contains(obj.cc_mode, '~')
+                if contains(mode, '~')
                     active_tp = ~active_tp;
                 end
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
-                if contains(obj.cc_mode, 'peaks')
-                    tp = tp(ismember(tp, find(active_tp)));
+                if using_peaks
+                    tp = tp & active_tp;
                 else
                     tp = active_tp;
                 end
-                
-                %% Now get ref (somatic ROIs or directly the behaviour data)
-                if contains(mode, 'behref')
-                    ref         = beh.value';
+            end
+            mode = erase(mode, {'~'}); %% qq could also remove behaviours
+        end
+        
+        function tp = set_crosscorr(obj, cc_mode)
+            %% Compute cross correlation 
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.set_crosscorr(cc_mode)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   cc_mode (STR) - See Description for details - Optional - 
+            %       Default is [];
+            %       If provided, update EXPE.cc_mode. see set.cc_mode for
+            %       more details
+            % -------------------------------------------------------------
+            % Outputs:
+            %   tp(1 x N INT)
+            %       The timepoints used based on your fitlering criteria
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %       Cross correlation is computed between ROIs OR groups 
+            %       based on traces OR Peaks, depending on the settings. 
+            %       see set.cc_mode doc for the details
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   13/05/2022
+            
+            if nargin > 1
+                obj.cc_mode = cc_mode; % change cc mode
+            else
+                fprintf('Using current obj.cc_mode\n')
+            end
+            
+            %% Get signal to use
+            if contains(obj.cc_mode, 'groups')
+                signal = obj.binned_data.median_traces;
+            else% if contains(obj.cc_mode, 'ROIs')
+                signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);                
+            end
+            %signal = signal - nanmean(signal,2);
+            mode = erase(mode, {'ROIs','groups'});
+            
+            %% Get ref ROIs and trace
+            somatic_ROIs= obj.ref.indices.somatic_ROIs;
+            ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
+            
+            %% Add population signal if needed
+            if contains(obj.cc_mode, 'pop')
+                if isempty(obj.extracted_pop_conc)
+                    warning('No population data for this recording')
+                    pop = [];
+                else
+                    pop = obj.extracted_pop_conc;
                 end
+            else
+                pop = [];
+            end
+            mode = erase(mode, {'pop', '~'});
+
+            %% Get timepoints base on filter
+            [tp, beh, mode] = obj.get_tp_for_condition(mode);
+            
+            %% Update ref if we want directly the behaviour data instead of the somatic ROIs
+            if ~isempty(beh) && contains(mode, 'behref')
+                ref         = beh.value';
             end
 
-            %% Build the arrays used for the correlation matrix
-           %  signal = signal - nanmean(signal,2);
+            %% Build the arrays used for the correlation matrix            
             variable        = [ref(tp, :), signal(tp, :)];
             if ~isempty(pop)
                 variable = [variable, pop(tp,:)];
