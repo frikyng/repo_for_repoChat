@@ -43,6 +43,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         default_handle
         rescaling_method= 'by_trials';
         breakpoints     = []; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
+        use_hd_data     = false;
 
         %% All the fields computed in
         binned_data             % Defines how ROIs are grouped
@@ -516,7 +517,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
-            if isempty(obj.ref.full_data)
+            if ~obj.use_hd_data
                 extracted_traces = cellfun(@(x) x.simple_data, obj.arboreal_scans, 'UniformOutput', false);
             else
                 extracted_traces = cellfun(@(x)  squeeze(cat(1, x.full_data{:})), obj.arboreal_scans, 'UniformOutput', false);
@@ -584,6 +585,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
             
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
+            extracted_traces_conc(isinf(extracted_traces_conc))    = NaN;
             %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
@@ -770,7 +772,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
             
-            if isempty(obj.ref.full_data)
+            if ~obj.use_hd_data
                 n_ROIs = size(obj.ref.simple_data,2);
             else
                 n_ROIs = sum(obj.ref.header.res_list(:,1));
@@ -926,9 +928,48 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             
             %% If analyzing every pixel, convert bad ROIs to bad pixels
-            if ~isempty(obj.ref.full_data)
+            if obj.use_hd_data
                 bad_ROI_list = obj.get_voxel_for_ROI(bad_ROI_list');
             end
+        end
+        
+ 
+        function set.use_hd_data(obj, use_hd_data)
+            %% Set use_hd_data variable. This changes the data used for computations
+            % -------------------------------------------------------------
+            % Syntax:
+            %   external_variables = obj.external_variables;
+            % -------------------------------------------------------------
+            % Inputs:
+            %   use_hd_data (BOOL)
+            %       if true, and if obj.ref.full_data is present, set
+            %       obj.use_hd_data to true.
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * if obj.use_hd_data is true, all voxels are used for
+            %   computation instead of one value per ROI. This is possible
+            %   only if the arboreal scan_experiment contains the full_data
+            %   (which is not the default extraction behaviour, as it makes 
+            %   the files much larger). if you intend to use it, you need 
+            %   to build your objects using the keep_2D flag :
+            %   arboreal_scan_experiment('',true) 
+            %   * Using use_hd_data makes the computations significantly
+            %   slower. 
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   17/06/2022
+            
+            obj.use_hd_data = false;
+            if ~isempty(obj.ref.full_data) && use_hd_data
+                obj.use_hd_data = true;
+            elseif isempty(obj.ref.full_data) && use_hd_data
+                warning('unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object. Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).')
+            end  
         end
         
 
@@ -1041,30 +1082,55 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Set some flag
             obj.is_rescaled             = false;
-            invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
+            if ~obj.use_hd_data
+                invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
 
-            %% Get traces to rescale and Filter out excluded ROIs so they don't mess up the scaling process
-            if strcmp(obj.rescaling_method, 'global')
-                traces                   = obj.extracted_traces_conc;
-                traces(:,invalid)          = NaN;
-            elseif contains(obj.rescaling_method, 'by_trials')
-                traces                      = obj.extracted_traces;
-                for idx = 1:numel(traces)
-                    traces{idx}(:,invalid) = NaN;
+                %% Get traces to rescale and Filter out excluded ROIs so they don't mess up the scaling process
+                if strcmp(obj.rescaling_method, 'global')
+                    traces                   = obj.extracted_traces_conc;
+                    traces(:,invalid)          = NaN;
+                elseif contains(obj.rescaling_method, 'by_trials')
+                    traces                      = obj.extracted_traces;
+                    for idx = 1:numel(traces)
+                        traces{idx}(:,invalid) = NaN;
+                    end
+                else
+                    error('rescaling method not valid, use "global" or "by_trials"')
                 end
-            else
-                error('rescaling method not valid, use "global" or "by_trials"')
-            end
 
-            %% Now rescale
-            if strcmp(obj.rescaling_method, 'global')
-                [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
+                %% Now rescale
+                if strcmp(obj.rescaling_method, 'global')
+                    [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
+                    obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
+                    obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
+                elseif contains(obj.rescaling_method, 'by_trials')
+                    t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
+                    t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
+                    [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
+                end                
+            else
+                obj.bad_ROI_list            = [];
+                traces                   = obj.extracted_traces_conc;
+                bsl                      = mode(traces);
+                temp                     = sort(traces, 1);
+                for idx = 1:size(traces, 2)
+                    obj.rescaling_info.offset(idx) = NaN;
+                    if ~all(isnan(temp(:,idx)))
+                        obj.rescaling_info.offset(idx) = 100* find(temp(:,idx) > bsl(idx), 1, 'first') / size(traces, 1);
+                        traces(:, idx)                   = traces(:, idx)  - prctile(traces(:, idx) , obj.rescaling_info.offset(idx), 1);
+                    end
+                end
+
+                
+                ref                      = nanmedian(traces, 2);
+                ref                      = ref - prctile(ref, 5);
+                for idx = 1:size(traces, 2)
+                    valid = ~isnan(traces(:,idx));
+                    obj.rescaling_info.scaling(idx) = 1/(traces(valid,idx) \ ref(valid));
+                end
+                obj.rescaling_info.scaling = obj.rescaling_info.scaling';
                 obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
                 obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
-            elseif contains(obj.rescaling_method, 'by_trials')
-                t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
-                t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
-                [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
             end
 
             obj.is_rescaled = true;
@@ -1113,7 +1179,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             all_traces_per_bin = cell(1, numel(obj.binned_data.groups));
             for gp = 1:numel(obj.binned_data.groups)
                 columns                     = ismember(obj.binned_data.readmap, obj.binned_data.groups{gp}) & ~ismember(obj.binned_data.readmap, obj.bad_ROI_list);
-                if ~isempty(obj.ref.full_data)
+                if obj.use_hd_data
                      columns = obj.get_voxel_for_ROI(find(columns));
                 end
                 
@@ -1420,6 +1486,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Get CC (and build the correlation matrix if the settings changed)
             cross_corr = obj.crosscorr;
             
+            %% Show tree if required
             if obj.rendering
                 obj.plot_correlation_results(cross_corr);
             end
@@ -1730,7 +1797,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 variable                      = 'full_traces'; 
             elseif ischar(timepoints) && strcmpi(timepoints, 'peaks')
             	timepoints     = vertcat(obj.event.peak_time{:});
-                 variable       = 'peaks';
+                variable       = 'peaks';
             elseif ischar(timepoints)
                 [timepoints, beh_sm, active_tp] = obj.get_activity_bout(timepoints, true, 5);
                 1
@@ -1921,7 +1988,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.dimensionality.N_clust = eva.OptimalK
                 fprintf(['Ideal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
             end
-            
+
             if strcmp(obj.dimensionality.clust_meth, 'kmeans')
                 %cluster_idx = kmeans_opt(obj.dimensionality.LoadingsPM, max_n, 0.95, 500);
                 cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.N_clust);
