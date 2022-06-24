@@ -1,20 +1,29 @@
 
-% %% LoAD OBJECT
-% %load('C:\Users\vanto\Documents\MATLAB\extracted_arboreal_scans 2\arboreal_scans_thin_mask.mat')
-% obj = arboreal_scan_experiment('C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans_2\extracted_arboreal_scans\2019-11-05_exp_3',true)
-% 
-% %% Define wether to use HD data or LD data
-% obj.use_hd_data = false;
-% 
-% %% Quick processing to have proper event detection. This is required for filtering based on activity
-% obj.prepare_binning({'depth',50});
-% obj.find_events();
-% obj.rescale_traces();
-% obj.set_median_traces();
-% obj.compute_similarity();
+% Load OBJECT when already correct
+%% load('C:\Users\vanto\Documents\MATLAB\extracted_arboreal_scans 2\arboreal_scans_thin_mask.mat')
+
+%% Rebuild object with HD data in it 
+obj = arboreal_scan_experiment('C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans_2\extracted_arboreal_scans\2019-11-05_exp_3',true)
+
+%% ####### run once #######
+%% run once to get event time from low D
+%% Define wether to use HD data or LD data
+obj.use_hd_data = false;
+
+%% Quick processing to have proper event detection. This is required for filtering based on activity
+obj.prepare_binning({'depth',50});
+obj.find_events();
+obj.rescale_traces();
+obj.set_median_traces();
+obj.compute_similarity();
 
 %% Define wether to use HD data or LD data
 obj.use_hd_data = true;
+try
+    obj.rescale_traces(); %% run twice .. to fix
+end
+obj.rescale_traces(); %% run once
+%% ##############
 
 %% Define key Phate parameters
 N_Dim = 9
@@ -27,8 +36,8 @@ end
 
 %% list behaviours to test ('' for all timepoints)
 %conditions = {'', 'active', 'quiet',  'encoder', '~encoder', 'BodyCam_L_whisker', '~BodyCam_L_whisker','BodyCam_L_whisker','~BodyCam_L_whisker','BodyCam_Trunk','~BodyCam_Trunk','EyeCam_L_forelimb','EyeCam_R_forelimb'}
-conditions = {'', 'encoder', '~encoder'};%, 'encoder_peaks', '~encoder_peaks', 'encoder_active', '~encoder_active'}
-conditions = {'encoder', '~encoder', 'quiet', 'active'};
+% conditions = {'', 'encoder', '~encoder'};%, 'encoder_peaks', '~encoder_peaks', 'encoder_active', '~encoder_active'}
+% conditions = {'encoder', '~encoder', 'quiet', 'active'};
 conditions = {''}
 
 %% List of typical conditions.
@@ -57,7 +66,7 @@ if obj.use_hd_data
 end
 
 %% select signal source (RAW or rescaled traces)
-source = obj.rescaled_traces;%obj.extracted_traces_conc;%
+source_signal = obj.rescaled_traces;
 %source_signal = obj.extracted_traces_conc;
 
 %% Don't keep any Inf values, if any (only happens in HD case, occasionally)
@@ -135,18 +144,19 @@ for el = 1:numel(conditions)
     kd_sorted = sort(kD(:))';
     slope = (kd_sorted(end) - kd_sorted(1)) / numel(kd_sorted);
     [~, minloc] = min(kd_sorted - ((1:numel(kd_sorted)) * slope));
-    epsilon = kd_sorted(minloc)  ;
+    epsilon = kd_sorted(minloc)*2;
     
-%     suggested = test_epsilon(obj, Y_PHATE_3D, current_signal, all_ROIs, valid_ROIs);
-% 
-%     epsilon = 6
+    %% Uncomment to see how clustering evolve with epsilon
+    %     suggested = test_epsilon(obj, Y_PHATE_3D, current_signal, all_ROIs, valid_ROIs); 
+    %     epsilon = 6
 
-    
+    %% Show clusters, push on tree, show traces
     phate_figure(obj, Y_PHATE_3D, epsilon, source_signal(tp,:), Fig_count, signal_indices);
     hold on;sgtitle(['Cluster for condition : ',strrep(conditions{el},'_','\_')])
     
-    
-    loc = get_phate_on_events(Y_PHATE_3D, 3, current_signal, 0.5) % half max phate
+    %% Rerun phate along time
+    which_phate = 3
+    loc = get_phate_on_events(Y_PHATE_3D, which_phate, current_signal, 0.5) % half max phate
 
     %% Hierarchical clustering for reference    
     %     figure(Fig_count + 1000);clf();

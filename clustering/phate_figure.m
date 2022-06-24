@@ -57,9 +57,9 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     s3 = subplot(2,2,[3,4]);
     title('median traces per group')
     for gp = unique(cluster_idx(valid_points)')
-        if sum(cluster_idx == gp) > 50
+       % if sum(cluster_idx == gp) > 50
             plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
-        end
+        %end
     end
 
 end
