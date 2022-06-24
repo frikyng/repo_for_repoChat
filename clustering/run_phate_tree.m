@@ -1,6 +1,17 @@
 
-%% LoAD OBJECT
-%load('C:\Users\vanto\Documents\MATLAB\extracted_arboreal_scans 2\arboreal_scans_thin_mask.mat')
+% %% LoAD OBJECT
+% %load('C:\Users\vanto\Documents\MATLAB\extracted_arboreal_scans 2\arboreal_scans_thin_mask.mat')
+% obj = arboreal_scan_experiment('C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans_2\extracted_arboreal_scans\2019-11-05_exp_3',true)
+% 
+% %% Define wether to use HD data or LD data
+% obj.use_hd_data = false;
+% 
+% %% Quick processing to have proper event detection. This is required for filtering based on activity
+% obj.prepare_binning({'depth',50});
+% obj.find_events();
+% obj.rescale_traces();
+% obj.set_median_traces();
+% obj.compute_similarity();
 
 %% Define wether to use HD data or LD data
 obj.use_hd_data = true;
@@ -18,7 +29,7 @@ end
 %conditions = {'', 'active', 'quiet',  'encoder', '~encoder', 'BodyCam_L_whisker', '~BodyCam_L_whisker','BodyCam_L_whisker','~BodyCam_L_whisker','BodyCam_Trunk','~BodyCam_Trunk','EyeCam_L_forelimb','EyeCam_R_forelimb'}
 conditions = {'', 'encoder', '~encoder'};%, 'encoder_peaks', '~encoder_peaks', 'encoder_active', '~encoder_active'}
 conditions = {'encoder', '~encoder', 'quiet', 'active'};
-conditions = {'active'}
+conditions = {''}
 
 %% List of typical conditions.
 %% type obj.behaviours.types' to get valid entries
@@ -40,45 +51,49 @@ conditions = {'active'}
 %% ## ! ## This introduces temporal correlation
 obj.filter_win = [10, 0];
 
-%% select signal source (RAW or rescaled traces)
-%source = obj.rescaled_traces;;%obj.extracted_traces_conc;%
-source_signal = obj.extracted_traces_conc;
-
-%% Don't keep any Inf values, if any (only happens in HD case, occasionally)
-source_signal(isinf(source_signal)) = NaN;
-
 %% If using all voxels, remove bad_ROIs_list field because it is designed for full segments
 if obj.use_hd_data    
     obj.bad_ROI_list = [];
 end
 
+%% select signal source (RAW or rescaled traces)
+source = obj.rescaled_traces;%obj.extracted_traces_conc;%
+%source_signal = obj.extracted_traces_conc;
+
+%% Don't keep any Inf values, if any (only happens in HD case, occasionally)
+source_signal(isinf(source_signal)) = NaN;
+
 Fig_count = 1000;
 
 %% Flag ROIs that have NaN vaues at one point as they may mess up later computations
 bad_ROI_list                    = find(any(isnan(source_signal),1));
+bad_ROI_list(bad_ROI_list > obj.n_ROIs) = [];
 signal_indices                  = true(1, obj.n_ROIs); %% ROIs or voxels, depending on the data source
 signal_indices(bad_ROI_list)    = false;
 signal_indices                  = find(signal_indices);
 
+    
 %% Now, for each condition, classify and cluster the data
 for el = 1:numel(conditions)
     %% Get timpoints for current behavioural condition
     tp = obj.get_tp_for_condition(conditions{el});
     
     %% Get signal
-    current_signal = double(source_signal);
+    current_signal = double(source_signal(:, 1:obj.n_ROIs));
    
     %% Filter out unrequired timepoints
     current_signal(~tp, :) = NaN;
     
     %% Filter out bad ROIs/voxels
     current_signal(:, bad_ROI_list) = NaN; 
-    
+
     %% Remove Nans
     all_ROIs        = 1:size(current_signal, 2);
-    valid_ROIs      = ~all(isnan(current_signal),1);
+    valid_ROIs      = ~any(isnan(current_signal),1);
+    all_ROIs(all_ROIs > obj.n_ROIs) = [];
+    all_ROIs(all_ROIs > obj.n_ROIs) = [];
     current_signal  = current_signal(:,valid_ROIs);
-    current_signal  = current_signal(~all(isnan(current_signal),2),:);
+    current_signal  = current_signal(~any(isnan(current_signal),2),:);
     
     %% Define if we will extract infor along space or time
     if strcmp(analysis_mode, 'space')
@@ -102,17 +117,17 @@ for el = 1:numel(conditions)
 
     %% PHATE 3D
     Y_PHATE_3D = phate(current_signal, 'ndim', N_Dim, 't', []);
-    close(gcf); figure(Fig_count + 3000); title('Phate first 3 dimensions scatter plot')
+    close(gcf); figure(Fig_count + 3000);clf(); title('Phate first 3 dimensions scatter plot')
     scatter3(Y_PHATE_3D(:,1), Y_PHATE_3D(:,2), Y_PHATE_3D(:,3), 30); hold on;
 
 
     %% Display Phates on tree
     n_row = floor(sqrt(size(Y_PHATE_3D, 2)));
     n_col = ceil(sqrt(size(Y_PHATE_3D, 2)));
-    figure(Fig_count + 2000);
+    figure(Fig_count + 2000);clf()
     for dim = 1:size(Y_PHATE_3D, 2)
         sub = subplot(n_row,n_col,dim);
-        obj.ref.plot_value_tree(split_values_per_voxel(Y_PHATE_3D(:,dim), obj.ref.header.res_list(:,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',sub,'curved','viridis');
+        obj.ref.plot_value_tree(split_values_per_voxel(Y_PHATE_3D(:,dim), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',sub,'curved','viridis');
     end
 
     %% (h)DBScan  clustering      

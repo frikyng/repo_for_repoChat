@@ -49,7 +49,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
         %obj.ref.plot_value_tree(cluster_idx, find(~all(isnan(signal),2)),'','','',s2,'classic','jet');
     else
         %% FOR HD tree
-        values = split_values_per_voxel(cluster_idx, obj.ref.header.res_list(:,1), ROIs);
+        values = split_values_per_voxel(cluster_idx, obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), ROIs);
         obj.ref.plot_value_tree(values, '','','cluster tree (one value per voxel)','',s2,'curved',current_cmap);
     end
    
@@ -57,7 +57,9 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     s3 = subplot(2,2,[3,4]);
     title('median traces per group')
     for gp = unique(cluster_idx(valid_points)')
-        plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
+        if sum(cluster_idx == gp) > 50
+            plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
+        end
     end
 
 end

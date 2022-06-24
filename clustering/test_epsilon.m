@@ -49,8 +49,8 @@
         current_ep = current_ep + 1;
     end
     
-%     figure();plot(v1); hold on;
-%     plot(v2)
+     figure();plot(range(1:numel(v2)), v1); hold on;
+     plot(range(1:numel(v2)), v2)
     suggested = knee_pt(range(1:numel(v2)), v1);
  end
 

@@ -17,7 +17,8 @@ function cluster_idx = get_phate_on_events(Y_PHATE_3D, phates_idx, current_signa
     
     data_subset = current_signal(loc(sorted_L > max(sorted_L) * frac),:); % loc(end-100:end)
     T_PHATE_3D = phate(data_subset', 'ndim', 9, 't', []);
-    %figure();scatter3(T_PHATE_3D(:,1), T_PHATE_3D(:,2), T_PHATE_3D(:,3), 30, 'filled'); hold on;
+%     sub_PHATE_3D = phate(data_subset, 'ndim', 3, 't', []);
+%     figure();scatter3(sub_PHATE_3D(:,1), sub_PHATE_3D(:,2), sub_PHATE_3D(:,3), 30, 'filled'); hold on;
     
     
 %     kD = pdist2(T_PHATE_3D,T_PHATE_3D,'euc','Smallest',5);
@@ -33,7 +34,7 @@ function cluster_idx = get_phate_on_events(Y_PHATE_3D, phates_idx, current_signa
         title(num2str(ep))
     end
     
-    cluster_idx     = dbscan(T_PHATE_3D , 7.3, 10); 
+    cluster_idx     = dbscan(T_PHATE_3D , 12, 10); 
     [gp, n_in_gp, ic ] = unique(cluster_idx);
     thr_color = jet(numel(gp));
     thr_color = thr_color(randperm(numel(gp), numel(gp)), :);
@@ -48,7 +49,12 @@ function cluster_idx = get_phate_on_events(Y_PHATE_3D, phates_idx, current_signa
     end
 
     f = figure();%scatter3(T_PHATE_3D(:,1), T_PHATE_3D(:,2), T_PHATE_3D(:,3), 30, C, 'filled'); hold on;
+    ax1 = subplot(2,1,1);
     plot(1:size(current_signal, 2), nanmean(data_subset),'k'); hold on;
     %thr_color(thr_color > 1) = 2;
     sc = scatter(1:size(current_signal, 2), nanmean(data_subset), 30, thr_color, 'filled'); hold on
+    ax2 = subplot(2,1,2);
+    plot(data_subset');
+    linkaxes([ax1, ax2],'xy')
+    
 end

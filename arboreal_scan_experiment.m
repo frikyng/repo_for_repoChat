@@ -775,7 +775,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if ~obj.use_hd_data
                 n_ROIs = size(obj.ref.simple_data,2);
             else
-                n_ROIs = sum(obj.ref.header.res_list(:,1));
+                n_ROIs = sum(obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1));
             end
         end
 
@@ -1494,7 +1494,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         
         function [tp, beh, mode] = get_tp_for_condition(obj, mode)
             %% Get signal time range     
-            tp          = true(1,size(obj.binned_data.median_traces,1));
+            tp          = true(1,numel(obj.t));
             using_peaks = false;
             if contains(mode, 'peaks') %% event time
                 tp              = ~tp;
