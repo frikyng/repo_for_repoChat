@@ -77,8 +77,8 @@ for el = 1:numel(conditions)
     %% Remove Nans
     all_ROIs        = 1:size(current_signal, 2);
     valid_ROIs      = ~all(isnan(current_signal),1);
-    current_signal  = current_signal(valid_ROIs,:);
-    current_signal  = current_signal(:,~all(isnan(current_signal),1));
+    current_signal  = current_signal(:,valid_ROIs);
+    current_signal  = current_signal(~all(isnan(current_signal),2),:);
     
     %% Define if we will extract infor along space or time
     if strcmp(analysis_mode, 'space')
@@ -129,6 +129,9 @@ for el = 1:numel(conditions)
     
     phate_figure(obj, Y_PHATE_3D, epsilon, source_signal(tp,:), Fig_count, signal_indices);
     hold on;sgtitle(['Cluster for condition : ',strrep(conditions{el},'_','\_')])
+    
+    
+    loc = get_phate_on_events(Y_PHATE_3D, 3, current_signal, 0.5) % half max phate
 
     %% Hierarchical clustering for reference    
     %     figure(Fig_count + 1000);clf();
