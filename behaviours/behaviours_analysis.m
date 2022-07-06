@@ -131,7 +131,7 @@ classdef behaviours_analysis < handle
             end            
             if nargin < 4 || isempty(detrend_sig)
                 detrend_sig = false;
-            end  
+            end   
             obj.detrend_behaviour = detrend_sig;
 
             %% Initialize variables
@@ -205,7 +205,9 @@ classdef behaviours_analysis < handle
             end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert)
+            %   invert (BOOL) - Optional - Default is false
+            %       * If true, the detected behaviours is inverted  
             if nargin < 2 || isempty(beh_types)
                 beh_types = {'encoder'};
             elseif ischar(beh_types)
@@ -222,6 +224,9 @@ classdef behaviours_analysis < handle
             if numel(smoothing) == 1
                 smoothing = [smoothing, 0];
             end
+            if nargin < 5 || isempty(invert)
+                invert = false;
+            end 
             
             plts = {};
             for idx = 1:numel(beh_types)
@@ -237,7 +242,11 @@ classdef behaviours_analysis < handle
                 current_thr     = prctile(beh_sm,(100/obj.beh_thr)) + range(beh_sm)/(100/obj.beh_thr); % 5% of max
 
                 %% Define bouts
-                active_tp       = abs(beh_sm) > abs(current_thr);
+                if ~invert
+                    active_tp       = abs(beh_sm) > abs(current_thr);
+                else
+                    active_tp       = abs(beh_sm) < abs(current_thr);
+                end
                 [starts, stops] = get_limits(active_tp, beh_sm);
 
                 %% Add some pts before and after each epoch
