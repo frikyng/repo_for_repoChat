@@ -882,12 +882,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function binned_data = get.binned_data(obj)
             binned_data = obj.binned_data;
-%             if isfield(obj.binned_data, 'median_traces')
-%             	binned_data.median_traces = smoothdata(binned_data.median_traces,'gaussian',obj.filter_win);
-%             end
-%             if isfield(obj.binned_data, 'global_median')
-%             	binned_data.global_median = smoothdata(binned_data.global_median,'gaussian',obj.filter_win);
-%             end
+            if isempty(binned_data)                
+                warning('binned data not available because no groups were set. using unique group instead')
+                binned_data = {};
+                binned_data.condition   = 'single group';
+                binned_data.groups      = {1:obj.n_ROIs};
+                binned_data.metrics     = 1;
+                binned_data.bin_legend  = {'all ROIs'};
+                binned_data.readmap     = sort(unique([binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map
+            end
         end
 
         function external_variables = get.external_variables(obj)
@@ -1073,9 +1076,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin >= 2 && ~isempty(method)
                 obj.rescaling_method = method;
             end
-            if nargin < 3 || isempty(smoothing)
-                pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
-                smoothing               = [pk_width*2,0];
+            if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
+                if isempty(obj.event)
+                    error('LD RESCALING REQUIRES DETECTED EVENTS. RUN obj.detect_events() first');
+                else
+                    pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
+                    smoothing               = [pk_width*2,0];
+                end
+            elseif (nargin < 3 || isempty(smoothing)) && obj.use_hd_data
+                %pass
             elseif numel(smoothing) == 1
                 smoothing = [smoothing, 0];
             end
@@ -1152,8 +1161,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 rescaled_traces                         = obj.extracted_traces_conc;
                 transition                              = cumsum([1,obj.timescale.tp(1:end-1)]);
                 rescaled_traces([transition,transition+1],  obj.bad_ROI_list) = NaN; % remove bad ROis and transition timepoints
-                rescaled_traces = rescaled_traces - diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offst percentile for ach trace. much faster than  a loop
-                rescaled_traces = rescaled_traces ./ obj.rescaling_info.scaling;
+                rescaled_traces = rescaled_traces - diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offset percentile for each trace. much faster than  a loop
+                try 
+                    obj.rescaling_info.scaling; % debug hack. somtimes it needs to be called twice at initialisation --> to be fixed
+                end
+                scaling = obj.rescaling_info.scaling;
+                scaling(isinf(scaling)) = NaN;
+                rescaled_traces = rescaled_traces ./ scaling;
             end
         end
         
@@ -1418,7 +1432,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 msg = [msg, 'Correlation done between all ROIs, '];
             end         
-            cc_mode = erase(cc_mode, 'groups');
+            cc_mode = erase(cc_mode, {'groups', 'ROIs'});
             if contains(obj.cc_mode, 'pop')
                 msg = [msg, 'including population data.'];
             end
@@ -1498,6 +1512,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             using_peaks = false;
             if contains(mode, 'peaks') %% event time
                 tp              = ~tp;
+                %tp(obj.event.peak_time) = true
+                %tp(obj.event.fitting.pre_correction_peaks) = true;
                 tp(obj.event.fitting.peak_pos) = true;% could be using obj.event.fitting.pre_correction_peaks
                 using_peaks     = true;
             elseif contains(mode, 'quiet') %% low corr window
@@ -1524,14 +1540,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
                 beh_name = obj.behaviours.types{find(to_test)};
                 
-                %% Get behaviour boutsd
+                %% Get behaviour bouts
                 [~, ~, beh] = obj.get_behaviours(beh_name); 
-                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true);
-                
-                %% Invert if required
+                bout_extra_win = obj.bout_extra_win;
                 if contains(mode, '~')
-                    active_tp = ~active_tp;
+                    smoothing = [50,0];
+                    obj.bout_extra_win = [0,0];
+                else
+                    smoothing = [];
                 end
+                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true, smoothing, contains(mode, '~'));
+                obj.bout_extra_win = bout_extra_win;
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks
@@ -1573,20 +1592,38 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             else
-                fprintf('Using current obj.cc_mode\n')
+                cc_mode = obj.cc_mode;
+                fprintf(['Using current obj.cc_mode : ',cc_mode,'\n'])
             end
             
             %% Get signal to use
             if contains(obj.cc_mode, 'groups')
                 signal = obj.binned_data.median_traces;
             else% if contains(obj.cc_mode, 'ROIs')
-                signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);                
+                try
+                    if ~obj.use_hd_data
+                        signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois); 
+                    else
+                        if contains(obj.cc_mode, 'ROIs')
+                            error('to use ROIs, set obj.use_hd_data to false');
+                        end
+                        signal = obj.rescaled_traces; 
+                        warning('full hd not filtering excluded ROIS / voxels for now')
+                    end
+                catch
+                    error('unable to get rescaled data. try to run obj.rescale_traces()')
+                end
+                    
             end
             %signal = signal - nanmean(signal,2);
-            mode = erase(mode, {'ROIs','groups'});
+            cc_mode = erase(cc_mode, {'ROIs','groups'});
             
             %% Get ref ROIs and trace
-            somatic_ROIs= obj.ref.indices.somatic_ROIs;
+            if ~obj.use_hd_data
+                somatic_ROIs= obj.ref.indices.somatic_ROIs;
+            else
+                somatic_ROIs= obj.ref.indices.HD_somatic_ROIs;
+            end
             ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
             
             %% Add population signal if needed
@@ -1600,13 +1637,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 pop = [];
             end
-            mode = erase(mode, {'pop', '~'});
+            cc_mode = erase(cc_mode, {'pop'});
 
             %% Get timepoints base on filter
-            [tp, beh, mode] = obj.get_tp_for_condition(mode);
+            [tp, beh, cc_mode] = obj.get_tp_for_condition(cc_mode);
             
             %% Update ref if we want directly the behaviour data instead of the somatic ROIs
-            if ~isempty(beh) && contains(mode, 'behref')
+            if ~isempty(beh) && contains(cc_mode, 'behref')
                 ref         = beh.value';
             end
 
@@ -1642,7 +1679,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   13/05/2022
             
-            if isempty(obj.binned_data)
+            if isempty(obj.binned_data) && contains(obj.cc_mode, 'groups')
+                fprintf('\tcrossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first\n')
+                crosscorr = [];
+                return
+            elseif isempty(obj.event) && contains(obj.cc_mode, 'peaks')
+                fprintf('\tcrossscorr cannot be calculated using the "peaks" flag if you have not run event detection. Use obj.detect_events first\n')
                 crosscorr = [];
                 return
             elseif isempty(obj.crosscorr) || size(obj.crosscorr, 1) ~= numel(obj.binned_data)
@@ -1667,7 +1709,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             cc(1:size(cc,1)+1:end)= NaN;
             
             %% Remove "ref" row/column when you pass a matrix with one row per ROI
-            if (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1))
+            if (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
                 cc = cc(2:end,2:end);
             end
             
