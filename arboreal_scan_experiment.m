@@ -1078,11 +1078,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
                 if isempty(obj.event)
-                    error('LD RESCALING REQUIRES DETECTED EVENTS. RUN obj.detect_events() first');
-                else
-                    pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
-                    smoothing               = [pk_width*2,0];
+                    warning('LD RESCALING REQUIRES DETECTED EVENTS. RUNNING obj.find_events() now');
+                    obj.find_events();                    
                 end
+                pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
+                smoothing               = [pk_width*2,0];
             elseif (nargin < 3 || isempty(smoothing)) && obj.use_hd_data
                 %pass
             elseif numel(smoothing) == 1
@@ -1118,7 +1118,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
                 end                
             else
-                obj.bad_ROI_list            = [];
+                obj.bad_ROI_list         = [];
                 traces                   = obj.extracted_traces_conc;
                 bsl                      = mode(traces);
                 temp                     = sort(traces, 1);
@@ -1167,7 +1167,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
                 scaling = obj.rescaling_info.scaling;
                 scaling(isinf(scaling)) = NaN;
-                rescaled_traces = rescaled_traces ./ scaling;
+                try
+                    rescaled_traces = rescaled_traces ./ scaling;
+                catch
+                    rescaled_traces = rescaled_traces ./ scaling'; %qq to fix --> hapens with hd data only
+                end
             end
         end
         
@@ -1512,9 +1516,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             using_peaks = false;
             if contains(mode, 'peaks') %% event time
                 tp              = ~tp;
-                %tp(obj.event.peak_time) = true
+                %tp(obj.event.peak_time{:}) = true
                 %tp(obj.event.fitting.pre_correction_peaks) = true;
-                tp(obj.event.fitting.peak_pos) = true;% could be using obj.event.fitting.pre_correction_peaks
+                tp(vertcat(obj.event.peak_time{:})) = true;% could be using obj.event.fitting.pre_correction_peaks
                 using_peaks     = true;
             elseif contains(mode, 'quiet') %% low corr window
                 tp_of_events    = sort(unique([obj.event.t_win{:}]));                
@@ -2098,6 +2102,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
 
                 
+                
+
+
                 kD = pdist2(obj.dimensionality.LoadingsPM ,obj.dimensionality.LoadingsPM ,'euc','Smallest',5)
                 figure();
                 plot(sort(kD(end,:)));

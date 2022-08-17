@@ -68,11 +68,12 @@ classdef arboreal_scan_plotting < handle
             if nargin < 2 || isempty(rescaled)
                 rescaled = true;
             end
-            %% Plot the mean trace for each bin  
-            if isempty(obj.binned_data)
-               warning('Cannot plot binned data before having formed some groups. use obj.prepare_binning(condition)')
-               return 
-            end            
+            if rescaled && ~obj.is_rescaled
+                obj.rescale_traces
+            end                
+            if ~isfield(obj.binned_data, 'median_traces')
+                obj.set_median_traces(rescaled);
+            end
             traces = obj.binned_data.median_traces;
             figure(1001);cla();plot(obj.t, traces); hold on;
             legend(obj.binned_data.bin_legend); hold on;
