@@ -1542,7 +1542,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         to_test(end+1) = 0;                   
                     end
                 end
-                beh_name = obj.behaviours.types{find(to_test)};
+                beh_name = {obj.behaviours.types{find(to_test)}};
                 
                 %% Get behaviour bouts
                 [~, ~, beh] = obj.get_behaviours(beh_name); 
@@ -1558,9 +1558,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks
-                    tp = tp & active_tp;
+                    tp = tp & active_tp{1};
                 else
-                    tp = active_tp;
+                    tp = active_tp{1};
                 end
             end
             mode = erase(mode, {'~'}); %% qq could also remove behaviours
@@ -1645,6 +1645,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Get timepoints base on filter
             [tp, beh, cc_mode] = obj.get_tp_for_condition(cc_mode);
+            if iscell(tp)
+                tp = any([vertcat(tp{:})]); % if multipe behaviours, using BITWISE OR
+            end
             
             %% Update ref if we want directly the behaviour data instead of the somatic ROIs
             if ~isempty(beh) && contains(cc_mode, 'behref')
