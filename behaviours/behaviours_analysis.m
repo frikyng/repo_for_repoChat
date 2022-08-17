@@ -53,7 +53,7 @@ classdef behaviours_analysis < handle
             
             
             for beh = 1:Max_var
-                behaviours.valid_behaviours(:,beh) = arrayfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)';
+                behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
             end
             if isa(obj.detrend_behaviour, 'function_handle')
                 for rec = 1:numel(behaviours.external_var)
@@ -205,7 +205,7 @@ classdef behaviours_analysis < handle
             end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr)
             %   invert (BOOL) - Optional - Default is false
             %       * If true, the detected behaviours is inverted  
             if nargin < 2 || isempty(beh_types)
@@ -227,54 +227,61 @@ classdef behaviours_analysis < handle
             if nargin < 5 || isempty(invert)
                 invert = false;
             end 
+            if nargin < 6 || isempty(thr)
+                % pass
+            else
+                obj.beh_thr = thr;
+            end 
             
             plts = {};
             for idx = 1:numel(beh_types)
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
-                if any(obj.detrend_win)
-                    beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
-                end
-                beh_sm          = smoothdata(beh.value, 'gaussian', smoothing);
-                beh_sm          = nanmean(beh_sm,1);
-                %beh_sm         = detrend(fillmissing(beh_sm,'nearest'),'linear',cumsum(obj.timescale.tp));
-                %thr            = prctile(beh_sm(beh_sm > 0), 20);
-                current_thr     = prctile(beh_sm,(100/obj.beh_thr)) + range(beh_sm)/(100/obj.beh_thr); % 5% of max
-
-                %% Define bouts
-                if ~invert
-                    active_tp       = abs(beh_sm) > abs(current_thr);
-                else
-                    active_tp       = abs(beh_sm) < abs(current_thr);
-                end
-                [starts, stops] = get_limits(active_tp, beh_sm);
-
-                %% Add some pts before and after each epoch
-                dt = nanmedian(diff(obj.t));
-                for epoch = starts
-                    active_tp(max(1, epoch-round(obj.bout_extra_win(1)*(1/dt))):epoch) = 1;
-                end
-                for epoch = stops
-                    active_tp(epoch:min(numel(active_tp), epoch+round(obj.bout_extra_win(2)*(1/dt)))) = 1;
-                end
-                [starts, stops] = get_limits(active_tp, beh_sm); % update bouts edges now that we extended the range
-
-                if rendering
-                    figure(1027);hold on;
-                    if idx == 1
-                        clf();
+                if ~isempty(beh.value)
+                    if any(obj.detrend_win)
+                        beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
                     end
-                    plts{idx} = subplot(numel(beh_types),1,idx);hold on;
-                    title(strrep(current_type,'_','\_'))
-                    plot(obj.t, beh_sm);hold on;
-                    for el = 1:numel(starts)
-                        x = [starts(el),starts(el),stops(el),stops(el)];
-                        y = [0,nanmax(beh_sm),nanmax(beh_sm),0];
-                        patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
-                    end
-                end
+                    beh_sm{idx}          = smoothdata(beh.value, 'gaussian', smoothing);
+                    beh_sm{idx}          = nanmean(beh_sm{idx},1);
+                    %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
+                    %thr            = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
+                    current_thr     = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
 
-                bouts = sort([starts, stops]);
+                    %% Define bouts
+                    if ~invert
+                        active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
+                    else
+                        active_tp{idx}       = abs(beh_sm{idx}) < abs(current_thr);
+                    end
+                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx});
+
+                    %% Add some pts before and after each epoch
+                    dt = nanmedian(diff(obj.t));
+                    for epoch = starts
+                        active_tp{idx}(max(1, epoch-round(obj.bout_extra_win(1)*(1/dt))):epoch) = 1;
+                    end
+                    for epoch = stops
+                        active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(obj.bout_extra_win(2)*(1/dt)))) = 1;
+                    end
+                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); % update bouts edges now that we extended the range
+
+                    if rendering
+                        figure(1027);hold on;
+                        if idx == 1
+                            clf();
+                        end
+                        plts{idx} = subplot(numel(beh_types),1,idx);hold on;
+                        title(strrep(current_type,'_','\_'))
+                        plot(obj.t, beh_sm{idx});hold on;
+                        for el = 1:numel(starts)
+                            x = [starts(el),starts(el),stops(el),stops(el)];
+                            y = [0,nanmax(beh_sm{idx}),nanmax(beh_sm{idx}),0];
+                            patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
+                        end
+                    end
+
+                    bouts{idx} = sort([starts, stops]);
+                end
             end
 
             if rendering
