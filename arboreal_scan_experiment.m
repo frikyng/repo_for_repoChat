@@ -1713,7 +1713,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             cc(1:size(cc,1)+1:end)= NaN;
             
             %% Remove "ref" row/column when you pass a matrix with one row per ROI
-            if (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
+            if size(cc,1) > 2 && (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
                 cc = cc(2:end,2:end);
             end
             
