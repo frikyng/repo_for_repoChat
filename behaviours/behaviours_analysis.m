@@ -47,7 +47,7 @@ classdef behaviours_analysis < handle
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            t_starts_no_gap_real        = cellfun(@(x) x.analysis_params.t_starts - x.analysis_params.inter_trials, obj.arboreal_scans, 'UniformOutput', false);
+            t_starts_no_gap_real        = cellfun(@(x) x.analysis_params.t_starts - cumsum(x.analysis_params.inter_trials), obj.arboreal_scans, 'UniformOutput', false);
             behaviours.triggers         = cellfun(@(x, y) y + x.header.TTL_delay, obj.arboreal_scans, t_starts_no_gap_real, 'UniformOutput', false);
             behaviours.triggers(cellfun(@(x) ~any(x), behaviours.triggers)) = {[]};
             
@@ -158,7 +158,8 @@ classdef behaviours_analysis < handle
                 for rec = 1:numel(raw_beh{beh})                    
                     %% If behaviour timescale is longer than recording, clip it
                     if ~isempty(raw_beh{beh}{rec}.time)
-                        clipping_idx = find(raw_beh{beh}{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
+                        
+                        clipping_idx = find((raw_beh{beh}{rec}.time - obj.timescale.durations_w_gaps(rec) ) > 0, 1, 'first');
                         if ~isempty(clipping_idx)
                             raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
                             raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
@@ -336,12 +337,13 @@ classdef behaviours_analysis < handle
             detrend_win = double(obj.detrend_behaviour) * obj.detrend_win;
         end
         
-        function stims = get_stim_epochs(obj, rendering)
+        function [stim_time, stim_pt] = get_stim_epochs(obj, rendering)
             if nargin < 2 || isempty(rendering)
                 rendering = false;
             end
 
-            stims   = cellfun(@(x, y) x + y, obj.behaviours.triggers, num2cell(obj.timescale.t_start_nogap),'UniformOutput',false);
+            stim_time   = cellfun(@(x, st) x + st, obj.behaviours.triggers, num2cell(obj.timescale.t_start_nogap),'UniformOutput',false);
+            stim_pt     = cellfun(@(x, st, sr) floor(x/sr) + st, obj.behaviours.triggers, num2cell(cumsum([0, obj.timescale.tp(1:end-1)])), num2cell(obj.timescale.sr),'UniformOutput',false);
 
             if ~isempty(rendering) && any(rendering)
                 if ismatrix(rendering) && numel(rendering) == numel(obj.t)
@@ -352,7 +354,7 @@ classdef behaviours_analysis < handle
                     m       = nanmin(nanmedian(traces,2));   
                     traces  = nanmedian(traces,2);
                 end
-                figure();plot(obj.t, traces);hold on; scatter([stims{:}], repmat(m, size([stims{:}])), 'k^', 'filled');
+                figure();plot(obj.t, traces);hold on; scatter([stim_time{:}], repmat(m, size([stim_time{:}])), 'k^', 'filled');
             end
         end
         

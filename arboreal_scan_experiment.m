@@ -1,3 +1,5 @@
+%% Note, go to the process() method for an overview of the available features
+
 
 %% TO DO :
 % - improve update system when changing folder.
@@ -41,7 +43,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         detrend         = false;
         is_rescaled     = false; % is set to True once you ran the rescaling step.
         default_handle
-        rescaling_method= 'by_trials';
+        rescaling_method= 'by_trials_on_peaks'; 
         breakpoints     = []; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
         use_hd_data     = false;
 
@@ -659,6 +661,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             timescale.tp                = cellfun(@(x) x.analysis_params.timepoints, obj.arboreal_scans);
             timescale.durations         = timescale.sr.*timescale.tp; % same as cellfun(@(x) x.analysis_params.duration, obj.arboreal_scans)
+            timescale.durations_w_gaps  = cellfun(@(x) x.analysis_params.timescale_w_gaps(end), obj.arboreal_scans);
             timescale.rec_timescale     = arrayfun(@(x, y) linspace(0, y*x, x), timescale.tp, timescale.sr, 'UniformOutput', false);
             timescale.global_timescale  = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
             timescale.global_timescale  = cellfun(@(x) [x(1), x], timescale.global_timescale, 'UniformOutput', false);
@@ -1046,12 +1049,51 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         %% #############################
 
-        function prepare_binning(obj, condition)
+        function prepare_binning(obj, condition, demo)
+            %% Creates bins of ROIs based on morphometric criterions
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.prepare_binning(condition, demo)
+            % -------------------------------------------------------------
+            % Inputs:
+            %   condition (STR or {STR, INT} Cell or {1xN INT MAtrix}) - 
+            %   Optional - Default is 'single group' (no binning)
+            %       Defines the type of binning required, and for some
+            %       binning, the size of the bins. 
+            %       - if '' or 'single_group' or 'none' or 'all', no
+            %       binning is done and there is a single global average
+            %      - If the input is a cell array, then see extra notes
+            %      arboreal_scan.get_ROI_groups documentation. 
+            %       - If input is a matrix, or a cell array with a matrix,
+            %       then we use a customized binning.
+            %   demo (BOOL) - Optional - Default obj.demo
+            %       If > 0, additioan lfiures are genrated
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            %   * The condition chosen is set in Value is set in
+            %       EXPE.binned_data.condition
+            %   * If obj.demo is > 0, additional figures are genrated
+            %   showing the binning
+            %
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   23/08/2022
+            
+            %% todo : move 'custom' into get_roi_groups, and add doc there
 
+            if nargin < 3 || isempty(demo)
+                demo = obj.demo;
+            end
+            
             %% Clear fields depending on a different scaling
-            obj.rescaling_info = {};
+            obj.rescaling_info              = {};
             obj.need_update(:)              = true;
-            if  nargin < 2
+            if  nargin < 2 || (ischar(condition) && any(strcmp(condition, {'','single_group','none','all'})))
                 obj.binned_data.condition   = 'single group';
                 obj.binned_data.groups      = {1:obj.n_ROIs};
                 obj.binned_data.metrics     = 1;
@@ -1060,13 +1102,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.binned_data.condition   = condition;
 
                 %% Define current binning rule. See arboreal_scan.get_ROI_groups for more info % CC and peak extractions are based on this binning
-                [obj.binned_data.groups, obj.binned_data.metrics, obj.binned_data.bin_legend] = obj.ref.get_ROI_groups(obj.binned_data.condition, obj.demo);
+                [obj.binned_data.groups, obj.binned_data.metrics, obj.binned_data.bin_legend] = obj.ref.get_ROI_groups(obj.binned_data.condition, demo);
             elseif iscell(condition) && ismatrix(condition{1})
                 obj.binned_data.condition   = 'custom';
                 obj.binned_data.groups      = condition;
                 obj.binned_data.metrics     = 1:numel(condition);
                 legends = strcat('group ', num2str(1:numel(condition))');
                 obj.binned_data.bin_legend  = cellstr(legends(1:3:end,:))';
+            else
+                error('binning condition not identified')
             end
             obj.binned_data.readmap         = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map
             obj.set_median_traces(false);
@@ -1078,8 +1122,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
                 if isempty(obj.event)
-                    warning('LD RESCALING REQUIRES DETECTED EVENTS. RUNNING obj.find_events() now');
-                    obj.find_events();                    
+                    warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events()')   
+                    return
                 end
                 pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
                 smoothing               = [pk_width*2,0];
@@ -1089,37 +1133,38 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 smoothing = [smoothing, 0];
             end
 
+            %% Prepare the trace to use (whoe trace cocnatenated, or individidual trials)
+            invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
+
+            %% Get traces to rescale and Filter out excluded ROIs so they don't mess up the scaling process
+            if contains(obj.rescaling_method, 'global')
+                traces                   = obj.extracted_traces_conc;
+                traces(:,invalid)        = NaN;
+            elseif contains(obj.rescaling_method, 'trials')
+                traces                    = obj.extracted_traces;
+                for idx = 1:numel(traces)
+                    traces{idx}(:,invalid) = NaN;
+                end
+            else
+                error('rescaling method not valid, It must specify "global" or "trials"')
+            end
+            
             %% Set some flag
             obj.is_rescaled             = false;
-            if ~obj.use_hd_data
-                invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
-
-                %% Get traces to rescale and Filter out excluded ROIs so they don't mess up the scaling process
-                if strcmp(obj.rescaling_method, 'global')
-                    traces                   = obj.extracted_traces_conc;
-                    traces(:,invalid)          = NaN;
-                elseif contains(obj.rescaling_method, 'by_trials')
-                    traces                      = obj.extracted_traces;
-                    for idx = 1:numel(traces)
-                        traces{idx}(:,invalid) = NaN;
-                    end
-                else
-                    error('rescaling method not valid, use "global" or "by_trials"')
-                end
-
+            if ~obj.use_hd_data && contains(obj.rescaling_method, 'peaks')
                 %% Now rescale
-                if strcmp(obj.rescaling_method, 'global')
+                if contains(obj.rescaling_method, 'global')
                     [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
                     obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
                     obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
-                elseif contains(obj.rescaling_method, 'by_trials')
+                elseif contains(obj.rescaling_method, 'trials')
                     t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
                     t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
                 end                
             else
+                warning('to finish')
                 obj.bad_ROI_list         = [];
-                traces                   = obj.extracted_traces_conc;
                 bsl                      = mode(traces);
                 temp                     = sort(traces, 1);
                 for idx = 1:size(traces, 2)
@@ -1129,8 +1174,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         traces(:, idx)                   = traces(:, idx)  - prctile(traces(:, idx) , obj.rescaling_info.offset(idx), 1);
                     end
                 end
-
-                
                 ref                      = nanmedian(traces, 2);
                 ref                      = ref - prctile(ref, 5);
                 for idx = 1:size(traces, 2)
@@ -1214,13 +1257,24 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
-        function precision = compute_similarity(obj)
+        function precision = compute_similarity(obj, use_bins)
+            if nargin < 2 || isempty(use_bins)
+                use_bins = true;
+            end
+            
             win                         = ceil(1./median(diff(obj.t)));
-            if size(obj.binned_data.median_traces,2) > 1
-                comb                        = nchoosek(1:size(obj.binned_data.median_traces,2),2);
+            if use_bins
+                data                    = obj.binned_data.median_traces;
+                obj.variability.source  = 'binned data';
+            else
+                data                    = obj.rescaled_traces;
+                obj.variability.source  = 'ROIs';
+            end
+            if size(data,2) > 1
+                comb                        = nchoosek(1:size(data,2),2);
                 corr_results                = {};
                 for pair = 1:size(comb,1)
-                    corr_results{pair}      = movcorr(obj.binned_data.median_traces(:,comb(pair, 1)),obj.binned_data.median_traces(:,comb(pair, 2)),[win, 0]);
+                    corr_results{pair}      = movcorr(data(:,comb(pair, 1)),data(:,comb(pair, 2)),[win, 0]);
                 end
 
                 corr_results                = cell2mat(corr_results);
@@ -1230,8 +1284,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.variability.corr_results= corr_results;
                 obj.variability.precision   = precision;
             else
-                obj.variability.corr_results= NaN(size(obj.binned_data.median_traces));
-                obj.variability.precision   = NaN(size(obj.binned_data.median_traces));
+                obj.variability.corr_results= NaN(size(data));
+                obj.variability.precision   = NaN(size(data));
             end
             if obj.rendering
                 obj.plot_similarity();arrangefigures([1,2]);
@@ -2456,17 +2510,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Load and concatenate traces for the selected experiment
             % obj.load_extracted_data();   % this also sets the current expe #
-            % quality_control(1, obj.extracted_traces)
-            % quality_control(2, cell2mat(all_sr))
 
             %% Prepare binning of ROIs based on specific grouping condition
-            obj.prepare_binning(condition);
+            obj.prepare_binning(condition); % eet obj.demo = 1 or obj.prepare_binning(condition, true); to display the figure wirh the bins
 
             %% Find peaks based on amplitude AND correlation
             obj.find_events();
 
             %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
-            obj.rescale_traces(); % note that signal rescaling is computed on peaks, not noise
+            obj.rescale_traces(); % note that signal rescaling is computed on peaks, not on the entire trace
 
             %% Create median trace per bins
             obj.set_median_traces()
