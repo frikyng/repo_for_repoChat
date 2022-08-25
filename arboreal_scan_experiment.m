@@ -920,7 +920,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
             
             %failed_encoder = cellfun(@(x) ~numel(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
-            external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
+            external_variables = cellfun(@(x) x.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
 
         function bad_ROI_list = get.bad_ROI_list(obj)
@@ -1151,7 +1151,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             
             %% Set some flag
             obj.is_rescaled             = false;
-            if ~obj.use_hd_data && contains(obj.rescaling_method, 'peaks')
+%             if ~obj.use_hd_data && contains(obj.rescaling_method, 'peaks')
                 %% Now rescale
                 if contains(obj.rescaling_method, 'global')
                     [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
@@ -1162,28 +1162,28 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
                 end                
-            else
-                warning('to finish')
-                obj.bad_ROI_list         = [];
-                bsl                      = mode(traces);
-                temp                     = sort(traces, 1);
-                for idx = 1:size(traces, 2)
-                    obj.rescaling_info.offset(idx) = NaN;
-                    if ~all(isnan(temp(:,idx)))
-                        obj.rescaling_info.offset(idx) = 100* find(temp(:,idx) > bsl(idx), 1, 'first') / size(traces, 1);
-                        traces(:, idx)                   = traces(:, idx)  - prctile(traces(:, idx) , obj.rescaling_info.offset(idx), 1);
-                    end
-                end
-                ref                      = nanmedian(traces, 2);
-                ref                      = ref - prctile(ref, 5);
-                for idx = 1:size(traces, 2)
-                    valid = ~isnan(traces(:,idx));
-                    obj.rescaling_info.scaling(idx) = 1/(traces(valid,idx) \ ref(valid));
-                end
-                obj.rescaling_info.scaling = obj.rescaling_info.scaling';
-                obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
-                obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
-            end
+%             else
+%                 warning('to finish')
+%                 obj.bad_ROI_list         = [];
+%                 bsl                      = mode(traces);
+%                 temp                     = sort(traces, 1);
+%                 for idx = 1:size(traces, 2)
+%                     obj.rescaling_info.offset(idx) = NaN;
+%                     if ~all(isnan(temp(:,idx)))
+%                         obj.rescaling_info.offset(idx) = 100* find(temp(:,idx) > bsl(idx), 1, 'first') / size(traces, 1);
+%                         traces(:, idx)                   = traces(:, idx)  - prctile(traces(:, idx) , obj.rescaling_info.offset(idx), 1);
+%                     end
+%                 end
+%                 ref                      = nanmedian(traces, 2);
+%                 ref                      = ref - prctile(ref, 5);
+%                 for idx = 1:size(traces, 2)
+%                     valid = ~isnan(traces(:,idx));
+%                     obj.rescaling_info.scaling(idx) = 1/(traces(valid,idx) \ ref(valid));
+%                 end
+%                 obj.rescaling_info.scaling = obj.rescaling_info.scaling';
+%                 obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
+%                 obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
+%             end
 
             obj.is_rescaled = true;
             obj.set_median_traces(true);
@@ -1564,33 +1564,34 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
-        function [tp, beh, mode] = get_tp_for_condition(obj, mode)
+        function [tp, beh, analysis_mode] = get_tp_for_condition(obj, analysis_mode)
             %% Get signal time range     
             tp          = true(1,numel(obj.t));
             using_peaks = false;
-            if contains(mode, 'peaks') %% event time
+            if contains(analysis_mode, 'peaks') %% event time
                 tp              = ~tp;
                 %tp(obj.event.peak_time{:}) = true
                 %tp(obj.event.fitting.pre_correction_peaks) = true;
                 tp(vertcat(obj.event.peak_time{:})) = true;% could be using obj.event.fitting.pre_correction_peaks
                 using_peaks     = true;
-            elseif contains(mode, 'quiet') %% low corr window
+            elseif contains(analysis_mode, 'quiet') %% low corr window
                 tp_of_events    = sort(unique([obj.event.t_win{:}]));                
                 tp(tp_of_events)= false;
-            elseif contains(mode, 'active') %% high corr window
+            elseif contains(analysis_mode, 'active') %% high corr window
                 tp_of_events    = sort(unique([obj.event.t_win{:}]));
                 tp              = ~tp;
                 tp(tp_of_events)= true;
             else
                 %% keep all tp
-            end
-            mode = erase(mode, {'peaks','quiet','active'});
+            end  
+            
+            analysis_mode = erase(analysis_mode, {'peaks','quiet','active'});
 
             beh      = {};
-            if contains(mode, obj.behaviours.types)
+            if contains(analysis_mode, obj.behaviours.types)
                 to_test = [];
                 for el = obj.behaviours.types
-                    if contains(mode, el{1})
+                    if contains(analysis_mode, el{1})
                         to_test(end+1) = 1;
                     else
                         to_test(end+1) = 0;                   
@@ -1598,17 +1599,26 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
                 beh_name = {obj.behaviours.types{find(to_test)}};
                 
+                %% Check if there is window suffix
+                beh_end_loc = strfind(analysis_mode, beh_name{1}) + numel(beh_name{1});
+                if beh_end_loc < numel(analysis_mode) && strcmp(analysis_mode(beh_end_loc), '[')
+                    loc = strfind(analysis_mode,']');
+                    loc = loc(find(loc > beh_end_loc, 1, 'first'));
+                    range = analysis_mode(beh_end_loc:loc);
+                    bout_extra_win = str2num(range);
+                else
+                    bout_extra_win = obj.bout_extra_win;
+                end
+
                 %% Get behaviour bouts
                 [~, ~, beh] = obj.get_behaviours(beh_name); 
-                bout_extra_win = obj.bout_extra_win;
-                if contains(mode, '~')
-                    smoothing = [50,0];
-                    obj.bout_extra_win = [0,0];
-                else
-                    smoothing = [];
-                end
-                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true, smoothing, contains(mode, '~'));
-                obj.bout_extra_win = bout_extra_win;
+                %                 if contains(analysis_mode, '~')
+                %                     smoothing = [50,0];
+                %                     obj.bout_extra_win = [0,0];
+                %                 else
+                %                     smoothing = [];
+                %                 end
+                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true, [], contains(analysis_mode, '~'), '', bout_extra_win);
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks
@@ -1617,7 +1627,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     tp = active_tp{1};
                 end
             end
-            mode = erase(mode, {'~'}); %% qq could also remove behaviours
+            analysis_mode = erase(analysis_mode, {'~'}); %% qq could also remove behaviours
         end
         
         function tp = set_crosscorr(obj, cc_mode)
