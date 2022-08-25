@@ -26,19 +26,19 @@ Finally, to perform group data analysis across experiments, `arboreal_scan_exper
 
 4 - Global mask computed on registered data
 
-5 - Extraction of RAW Ca2+, using global registration and mask
+5 - Extraction of RAW Ca2+ (or normalized signals, this is up to you), using global registration and mask
 
-6 - Compression of each ROI into a single pixel time series. This is a 2-step process:
+6 - Compression of each ROI into either a single pixel time series (i.e. LowD projection. This is much faster for analysis) OR an array of values (projection along the dendritic shaft, i.e. HD projection) . This is a 2-step or 1-step process:
 
 6a - Max across the dendrite (mean would work, median would be bad)
 
-6b - Median along the dendrite (Mean would work, max would work. Median removes most artifacts, max emphasize hotspots (and artifacts). Mean is usually close to median
+6b - Median along the dendrite (Mean would work, max would work. Median removes most artifacts, max emphasize hotspots (and artifacts). Mean is usually close to median). Note that you cou
 
-7 - Data goes into an « arboreal_scan » object that also contains information about the tree morphology. Extraction information (e.g. masks, and other info) and behavioural data (e.g. encoder, MC log and Video motion indices) are stored too.
+7 - Data goes into an « arboreal_scan » object that also contains information about the tree morphology. Extraction information (e.g. header, masks, and other info) and behavioural data (e.g. encoder, MC log and Video motion indices) are stored too.
 
 8 - Recordings are concatenated
 
-9 - Some analyses require normalized data. For each ROI, we find a unique offset and scalar that scales all the bAP amplitudes to the cell median trace (ref_trace). Several normalization options are possible:
+9 - Some analyses require amplitude-normalized data. For each ROI, we find a unique offset and scalar that scales all the reponse amplitudes to the cell median trace (ref_trace). Several normalization options are possible:
 
 9a - For the offset -> computed on baseline
 
@@ -110,7 +110,7 @@ You can (and should) fill it with header info, which can be done using `fill_spe
 
 <u>3.1.  Manual curation</u>
 
-Using the pre-filled lab-book, you can identify experiments that can be deleted easily (e.g. short “test” recordings, funny dwell times or patch size). It is recommended to go manually through every folder. However you can detect specific conditions automatically. For example:
+Using the pre-filled lab-book, you can identify experiments that can be deleted easily (e.g. short “test” recordings, funny dwell times or patch size). It is recommended to go manually through every folder. However you can detect specific conditions automatically. For example, to identify all the recordings that are <1 second :
 
 ```matlab
 data_folders = find_specific_condition(TOP_FOLDER, {'duration','<1', 'mode','Ribbon'})'  
@@ -166,7 +166,7 @@ You need to specify these values if you plan to use tree morphology. There’s a
 
 4.2.  Once the spreadsheet is updated, you can generate the batch setting file using `get_setting_file_from_table(SPREADSHEET_NAME, TOP_FOLDER);` 
 
-4.3.  You should verify the settings.txt file is correct and properly formatted.
+4.3.  You should verify the settings.txt file is correct and properly formatted. Then, move the file to the TOP_FOLDER location, as this is where most of the auto-processing scripts look will for it later on.
 
  
 
@@ -174,11 +174,15 @@ You need to specify these values if you plan to use tree morphology. There’s a
 
 5.1.  Use this batch function to generate all the tree thumbnails
 
-batch_generate_lateral_projection(TOP_FOLDER,SETTINGS_FILE).
+`batch_generate_lateral_projection(TOP_FOLDER,SETTINGS_FILE)`.
 
 Once done, check all images and come back to the trees with incorrect morphology, fix the spreadsheet info, regenerate the settings file, and rerun the script for the problematic experiments (or for all experiments).
 
- 
+
+
+> NOTE : Steps 6,7,8,9 and 10 can be done at once using `batch_global_preprocessing(TOP_FOLDER, true, true, true, true, {'Ribbon',1})`, or to go faster and skip local registration, `batch_global_preprocessing(TOP_FOLDER, false, true, true, true,{'Ribbon',1})`
+
+
 
 **6.**    **(Optional) Quickly Generate thumbnails** 
 
@@ -286,9 +290,8 @@ If the settings file is not in your top folder, you need to specify it or your t
 
 You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *process_ribbon_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used.  
 
-<<<<<<< HEAD
-=======
 `expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path')`;
+
 >>>>>>> a9f8446c758c2d0bf41dd0614bcad9572f750b54
 
 
