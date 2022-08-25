@@ -6,7 +6,6 @@ classdef behaviours_analysis < handle
         detrend_win         = 100       % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true        
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
         bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds. 
-        
     end
 
     methods
@@ -39,7 +38,6 @@ classdef behaviours_analysis < handle
             % Revision Date:
             %   14/04/2022
             
-            
             behaviours                  = obj.behaviours;
             behaviours.external_var     = obj.external_variables;
             behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), behaviours.external_var);
@@ -47,11 +45,6 @@ classdef behaviours_analysis < handle
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            t_starts_no_gap_real        = cellfun(@(x) x.analysis_params.t_starts - cumsum(x.analysis_params.inter_trials), obj.arboreal_scans, 'UniformOutput', false);
-            behaviours.triggers         = cellfun(@(x, y) y + x.header.TTL_delay, obj.arboreal_scans, t_starts_no_gap_real, 'UniformOutput', false);
-            behaviours.triggers(cellfun(@(x) ~any(x), behaviours.triggers)) = {[]};
-            
-            
             for beh = 1:Max_var
                 behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
             end
@@ -206,7 +199,7 @@ classdef behaviours_analysis < handle
             end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr, window)
             %   invert (BOOL) - Optional - Default is false
             %       * If true, the detected behaviours is inverted  
             if nargin < 2 || isempty(beh_types)
@@ -233,6 +226,11 @@ classdef behaviours_analysis < handle
             else
                 obj.beh_thr = thr;
             end 
+            if nargin < 7 || isempty(window)
+                window = obj.bout_extra_win;
+            elseif numel(window) == 1
+                window = [window, window];
+            end 
             
             plts = {};
             for idx = 1:numel(beh_types)
@@ -249,22 +247,25 @@ classdef behaviours_analysis < handle
                     current_thr     = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
 
                     %% Define bouts
-                    if ~invert
-                        active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
-                    else
-                        active_tp{idx}       = abs(beh_sm{idx}) < abs(current_thr);
-                    end
+                    active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
                     [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx});
 
                     %% Add some pts before and after each epoch
                     dt = nanmedian(diff(obj.t));
                     for epoch = starts
-                        active_tp{idx}(max(1, epoch-round(obj.bout_extra_win(1)*(1/dt))):epoch) = 1;
+                        active_tp{idx}(max(1, epoch-round(window(1)*(1/dt))):epoch) = 1;
                     end
                     for epoch = stops
-                        active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(obj.bout_extra_win(2)*(1/dt)))) = 1;
+                        active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(window(2)*(1/dt)))) = 1;
                     end
-                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); % update bouts edges now that we extended the range
+                    
+                    %% If required, invert
+                    if invert
+                        active_tp{idx}       = ~active_tp{idx};
+                    end    
+                    
+                    %% Update bouts edges now that we extended the range
+                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
 
                     if rendering
                         figure(1027);hold on;
@@ -336,28 +337,6 @@ classdef behaviours_analysis < handle
         function detrend_win = get.detrend_win(obj)
             detrend_win = double(obj.detrend_behaviour) * obj.detrend_win;
         end
-        
-        function [stim_time, stim_pt] = get_stim_epochs(obj, rendering)
-            if nargin < 2 || isempty(rendering)
-                rendering = false;
-            end
-
-            stim_time   = cellfun(@(x, st) x + st, obj.behaviours.triggers, num2cell(obj.timescale.t_start_nogap),'UniformOutput',false);
-            stim_pt     = cellfun(@(x, st, sr) floor(x/sr) + st, obj.behaviours.triggers, num2cell(cumsum([0, obj.timescale.tp(1:end-1)])), num2cell(obj.timescale.sr),'UniformOutput',false);
-
-            if ~isempty(rendering) && any(rendering)
-                if ismatrix(rendering) && numel(rendering) == numel(obj.t)
-                    traces  = rendering;
-                    m       = mode(traces(:));
-                else
-                    traces  = obj.extracted_traces_conc;
-                    m       = nanmin(nanmedian(traces,2));   
-                    traces  = nanmedian(traces,2);
-                end
-                figure();plot(obj.t, traces);hold on; scatter([stim_time{:}], repmat(m, size([stim_time{:}])), 'k^', 'filled');
-            end
-        end
-        
     end
 end
 
