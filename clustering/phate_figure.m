@@ -44,7 +44,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     s2 = subplot(2,2,2);
     valid = ROIs(valid_points);
     if ~obj.use_hd_data
-        %% Flor Low_D tree
+        %% For Low_D tree
         obj.ref.plot_value_tree(cluster_idx(valid_points), valid,'','cluster tree (one value per ROI)','',s2,'curved',current_cmap(2:end,:));
         %obj.ref.plot_value_tree(cluster_idx, find(~all(isnan(signal),2)),'','','',s2,'classic','jet');
     else
@@ -61,5 +61,4 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
             plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
         %end
     end
-
 end

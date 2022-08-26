@@ -2,20 +2,25 @@
     %% to test a range of epsilon value and identify best number    
     
     rendering   = false
-    range       = logspace(-1,2,30);
+    range       = logspace(-1,2,150);
     
     v1 = [];
     v2 = [];
     
     current_ep = 1
     gp = [];
-    while (numel(gp) > 1 || current_ep <=1) && current_ep < 30        
+    while current_ep < numel(range)        
         ep = range(current_ep);
         fprintf(['testing epsilon = ',num2str(ep), '\n'])
         cluster_idx = dbscan(Y_PHATE_3D , ep, 3);
 
         %colors = 1:sum(cluster_idx > 0);
+        prev_gp = gp;
         [gp ,~, indices] = unique(cluster_idx(cluster_idx > 0));
+        if numel(gp) < numel(prev_gp) && all(gp == 1)
+            break
+        end
+        
         colors = viridis(numel(gp));
         colors = colors(randperm(size(colors,1), size(colors,1)),:);
         colors = colors(indices, :);
@@ -35,7 +40,11 @@
         blank_v = NaN(size(all_ROIs));
         blank_v(valid_ROIs) = cluster_idx;
         blank_v(blank_v <= 0) = NaN;
-        values = split_values_per_voxel(blank_v, obj.ref.header.res_list(:,1),find(~all(isnan(current_signal),2)));
+        if obj.use_hd_data
+            values = split_values_per_voxel(blank_v, obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1),find(~all(isnan(current_signal),2)));
+        else
+            values = blank_v;
+        end
         updated_colors = repmat([0.8, 0.8, 0.8], numel(all_ROIs),1);
         updated_colors(~(isnan(blank_v)), :) = colors;
         if rendering
@@ -49,9 +58,20 @@
         current_ep = current_ep + 1;
     end
     
-     figure();plot(range(1:numel(v2)), v1); hold on;
-     plot(range(1:numel(v2)), v2)
-    suggested = knee_pt(range(1:numel(v2)), v1);
+    
+    [~, max_loc] = max(v1);
+    suggested = knee_pt(range(max_loc:numel(v2)), v1(max_loc:end));
+%     
+%      figure();plot(range(1:numel(v2)), v1); hold on;
+%      plot(range(1:numel(v2)), v2)
+%      
+     figure();plot(range(1:numel(v2)), v1./ nanmax(v1)); hold on;
+     plot(range(1:numel(v2)), v2./nanmax(v2))
+%      
+%      figure();plot(range(1:numel(v2)), v1./ nanmax(v1));hold on
+%      plot(range(1:numel(v2)), v1./ nanmax(v1) .* v2./nanmax(v2));
+%      
+%      suggested = knee_pt(range(1:numel(v2)), v1);
  end
 
  

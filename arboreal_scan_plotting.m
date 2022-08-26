@@ -169,11 +169,16 @@ classdef arboreal_scan_plotting < handle
         end
         
         function plot_similarity(obj)
-            if size(obj.binned_data.median_traces,2) > 1
+            if strcmp(obj.variability.source,'binned data')
+                data                    = obj.binned_data.median_traces;
+            elseif strcmp(obj.variability.source,'ROIs')
+                data                    = obj.rescaled_traces;
+            end
+            if size(data,2) > 1
                 f       = figure(1022);clf();title('Similarity plot');hold on;set(gcf,'Color','w');hold on;
                 f.Tag   = 'Similarity plot'; %for figure saving
-                R       = [nanmin(obj.binned_data.median_traces(:)), nanmax(obj.binned_data.median_traces(:))];
-                ax1     = subplot(3,1,1); hold on;plot(obj.binned_data.median_traces);title('Cell Signal');ylim([R(1)-(range(R/10)), R(2)+(range(R/10))]);
+                R       = [nanmin(data(:)), nanmax(data(:))];
+                ax1     = subplot(3,1,1); hold on;plot(data);title('Cell Signal');ylim([R(1)-(range(R/10)), R(2)+(range(R/10))]);
                 ax2     = subplot(3,1,2); hold on;plot(obj.variability.corr_results,'Color',[0.9,0.9,0.9]);
                 hold on;plot(nanmean(obj.variability.corr_results, 2),'r');title('pairwise temporal correlation');ylim([-1.1,1.1]);plot([0,size(obj.variability.corr_results, 1)],[-1,-1],'k--');plot([0,size(obj.variability.corr_results, 1)],[1,1],'k--')
                 ax3     = subplot(3,1,3); hold on;plot(obj.variability.precision);title('Precision (1/Var)');set(ax3, 'YScale', 'log');plot([0,size(obj.variability.precision, 1)],[1,1],'k--')

@@ -5,8 +5,7 @@ classdef behaviours_analysis < handle
         detrend_behaviour   = false;    % If true, behaviours are detrended before applying threshold
         detrend_win         = 100       % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
-        bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds.
-
+        bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds. 
     end
 
     methods
@@ -38,8 +37,6 @@ classdef behaviours_analysis < handle
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-
-
             behaviours                  = obj.behaviours;
             behaviours.external_var     = obj.external_variables;
             behaviours.valid_encoder    = cellfun(@(x) ~isempty(x.encoder.time), behaviours.external_var);
@@ -47,14 +44,7 @@ classdef behaviours_analysis < handle
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            t_starts_no_gap_real        = cellfun(@(x) x.analysis_params.t_starts - x.analysis_params.inter_trials, obj.arboreal_scans, 'UniformOutput', false);
-            behaviours.triggers         = cellfun(@(x, y) y + x.header.TTL_delay, obj.arboreal_scans, t_starts_no_gap_real, 'UniformOutput', false);
-            behaviours.triggers(cellfun(@(x) ~any(x), behaviours.triggers)) = {[]};
-
-
-            for beh = 1:Max_var
-                behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
-            end
+            behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
             if isa(obj.detrend_behaviour, 'function_handle')
                 for rec = 1:numel(behaviours.external_var)
                     for beh = 1:Max_var
@@ -125,6 +115,12 @@ classdef behaviours_analysis < handle
 
             if nargin < 2 || isempty(type)
                 type = 'encoder';
+            else
+                if ischar(type)
+                    type = cleanup_type(type);
+                elseif iscell(type)
+                    type = cellfun(@(x) cleanup_type(x), type , 'UniformOutput', false)
+                end
             end
             if nargin < 3 || isempty(rendering)
                 rendering = false;
@@ -158,7 +154,8 @@ classdef behaviours_analysis < handle
                 for rec = 1:numel(raw_beh{beh})
                     %% If behaviour timescale is longer than recording, clip it
                     if ~isempty(raw_beh{beh}{rec}.time)
-                        clipping_idx = find(raw_beh{beh}{rec}.time - obj.timescale.durations(rec) > 0, 1, 'first');
+                        
+                        clipping_idx = find((raw_beh{beh}{rec}.time - obj.timescale.durations_w_gaps(rec) ) > 0, 1, 'first');
                         if ~isempty(clipping_idx)
                             raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
                             raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
@@ -203,15 +200,22 @@ classdef behaviours_analysis < handle
                 out.time = [];
                 out.value = [];
             end
+            
+            function type = cleanup_type(type)
+                type                = erase(type, '~');
+                range_idx           = strfind(type, '[');
+                type(range_idx:end) = [];
+            end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr, window)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
             %   [bouts, beh_sm, active_tp] =
-            %       EXPE.get_activity_bout(beh_types, rendering, smoothing)
-            % -------------------------------------------------------------
+            %       EXPE.get_activity_bout(
+            %       beh_types, rendering, smoothing, invert, thr, window)
+            % ------------------------------------------------------------- 
             % Inputs:
             %   type (CHAR OR CELL ARRAY OF CHAR) - Optional - default is
             %   'encoder'
@@ -271,14 +275,64 @@ classdef behaviours_analysis < handle
                 % pass
             else
                 obj.beh_thr = thr;
-            end
-
+            end 
+            if nargin < 7 || isempty(window)
+                window = obj.bout_extra_win;
+            elseif numel(window) == 1
+                window = [window, window];
+            end 
+            
             plts = {};
             for idx = 1:numel(beh_types)
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
-                if any(obj.detrend_win)
-                    beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
+                if ~isempty(beh.value)
+                    if any(obj.detrend_win)
+                        beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
+                    end
+                    beh_sm{idx}          = smoothdata(beh.value, 'gaussian', smoothing);
+                    beh_sm{idx}          = nanmean(beh_sm{idx},1);
+                    %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
+                    %thr                = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
+                    current_thr         = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
+
+                    %% Define bouts
+                    active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
+                    [starts, stops]     = get_limits(active_tp{idx}, beh_sm{idx});
+
+                    %% Add some pts before and after each epoch
+                    dt = nanmedian(diff(obj.t));
+                    for epoch = starts
+                        active_tp{idx}(max(1, epoch-round(window(1)*(1/dt))):epoch) = 1;
+                    end
+                    for epoch = stops
+                        active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(window(2)*(1/dt)))) = 1;
+                    end
+                    
+                    %% If required, invert
+                    if invert
+                        active_tp{idx}       = ~active_tp{idx};
+                    end    
+                    
+                    %% Update bouts edges now that we extended the range
+                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
+
+                    if rendering
+                        figure(1027);hold on;
+                        if idx == 1
+                            clf();
+                        end
+                        plts{idx} = subplot(numel(beh_types),1,idx);hold on;
+                        title(strrep(current_type,'_','\_'))
+                        plot(obj.t, beh_sm{idx});hold on;
+                        for el = 1:numel(starts)
+                            x = [starts(el),starts(el),stops(el),stops(el)];
+                            y = [0,nanmax(beh_sm{idx}),nanmax(beh_sm{idx}),0];
+                            patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
+                        end
+                    end
+
+                    bouts{idx} = sort([starts, stops]);
                 end
                 beh_sm{idx}     = smoothdata(beh.value, 'gaussian', smoothing);
                 beh_sm{idx}     = nanmean(beh_sm{idx},1);
@@ -365,49 +419,5 @@ classdef behaviours_analysis < handle
         function detrend_win = get.detrend_win(obj)
             detrend_win = double(obj.detrend_behaviour) * obj.detrend_win;
         end
-
-        function stims = get_stim_epochs(obj, rendering)
-            %% Return the time of TTL trigger epochs
-            % -------------------------------------------------------------
-            % Syntax:
-            %   [stims] = EXPE.get_stim_epochs(rendering)
-            % -------------------------------------------------------------
-            % Inputs:
-            %   rendering (BOOL) - Optional - Default is false
-            %       If true, display the epochs behaviours superimposed on
-            %       the mean signal
-            % -------------------------------------------------------------
-            % Outputs:
-            %   stims (1xN CELL ARRAY of 1xP FLOAT)
-            %       For each N recording, a cell with the time of each stim
-            %       epochs
-            % -------------------------------------------------------------
-            % Extra Notes:
-            % -------------------------------------------------------------
-            % Author(s):
-            %   Antoine Valera
-            %--------------------------------------------------------------
-            % Revision Date:
-            %   17/08/2022
-
-            if nargin < 2 || isempty(rendering)
-                rendering = false;
-            end
-
-            stims   = cellfun(@(x, y) x + y, obj.behaviours.triggers, num2cell(obj.timescale.t_start_nogap),'UniformOutput',false);
-
-            if ~isempty(rendering) && any(rendering)
-                if ismatrix(rendering) && numel(rendering) == numel(obj.t)
-                    traces  = rendering;
-                    m       = mode(traces(:));
-                else
-                    traces  = obj.extracted_traces_conc;
-                    m       = nanmin(nanmedian(traces,2));
-                    traces  = nanmedian(traces,2);
-                end
-                figure();plot(obj.t, traces);hold on; scatter([stims{:}], repmat(m, size([stims{:}])), 'k^', 'filled');
-            end
-        end
-
     end
 end
