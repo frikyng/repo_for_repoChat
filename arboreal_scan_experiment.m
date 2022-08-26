@@ -803,7 +803,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
-            n_pop_ROIs = size(obj.ref.population_data,2);
+            n_pop_ROIs = size(obj.ref.simple_pop_data,2);
         end
 
         function logs = get.logs(obj)
