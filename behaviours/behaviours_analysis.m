@@ -44,7 +44,7 @@ classdef behaviours_analysis < handle
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
-            behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
+            %behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
             if isa(obj.detrend_behaviour, 'function_handle')
                 for rec = 1:numel(behaviours.external_var)
                     for beh = 1:Max_var
