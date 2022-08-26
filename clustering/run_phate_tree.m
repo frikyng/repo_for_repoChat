@@ -1,13 +1,13 @@
 path            = '';
 use_hd_data     = false;
-time_filter     = 10;
+time_filter     = 0;
 type_of_trace   = 'subtracted_peaks'; %raw, rescaled, subtracted
 
 %% Load object
-if exist('obj', 'var')
-    [obj, source_signal, signal_indices] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
+if ~exist('obj', 'var')
+    [obj, source_signal, signal_indices] = prepare_phate_analysis(path, use_hd_data, time_filter, type_of_trace);    
 else
-    [obj, source_signal, signal_indices] = prepare_phate_analysis(path, use_hd_data, time_filter, type_of_trace);
+    [obj, source_signal, signal_indices] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
 end
 
 %% ##############
@@ -27,7 +27,7 @@ end
 %conditions = {'encoder_active','BodyCam_L_whisker_active'};
 %conditions = {''};%{'BodyCam_L_whisker'}%{'encoder','~encoder'};
 
-conditions = {'peaks'};%{'peaks_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0]'}
+conditions = {'peaks_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0]'}
 
 %% List of typical conditions.
 %% type obj.behaviours.types' to get valid entries
@@ -49,6 +49,10 @@ conditions = {'peaks'};%{'peaks_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trig
 Fig_count = 1000;
 Y_PHATE_3D = {};
 cluster_idx = {};
+
+% tp = obj.get_tp_for_condition('peaks');
+% Y_PHATE_3D = phate(source_signal(), 'ndim', N_Dim, 't', []);
+
 for el = 1:numel(conditions)
     %% Set/Restore whole signal
     current_signal = source_signal;
@@ -152,16 +156,9 @@ for el = 1:numel(conditions)
     %suggested = 1;
     
     suggested = test_epsilon(obj, Y_PHATE_3D{el}, current_signal, all_ROIs, valid_ROIs); %open test_epsilon and change rendering to true to see it
-    %suggested = 3
-    %for testing new PHATE (comment out if not using)
-    %suggested = test_epsilon(obj, Y_PHATE_3D{el}, current_signal, all_ROIs, valid_ROIs);
-    
+
     %% Show clusters, push on tree, show traces
-    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, mean([epsilon, suggested]), source_signal(tp,:), Fig_count, signal_indices);
-    
-    %for testing new PHATE (comment out if not using)
-    %phate_figure(obj, New_PHATE_3D, mean([epsilon, suggested]), source_signal(tp,:), Fig_count, signal_indices);
-    
+    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, mean([suggested, epsilon]), source_signal(tp,:), Fig_count, signal_indices);
     hold on;sgtitle(['Cluster for condition : ',strrep(conditions{el},'_','\_')])
     
     %% Rerun phate along time
@@ -217,6 +214,9 @@ for el = 1:numel(specific)
     sub = subplot(1,numel(specific),el);
     obj.ref.plot_value_tree(Y_PHATE_3D{test_beh}(:,specific(el)), find(valid_ROIs),'',['phate #',num2str(specific(el)),' is specific to this behaviour'],'',sub,'curved','viridis');
 end
+
+different = Y_PHATE_3D{test_beh}(:,specific(el));
+ROIs = find(different > prctile(different, 80));
 
 
     

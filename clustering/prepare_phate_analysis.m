@@ -45,7 +45,7 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     obj.rescale_traces();
     obj.set_median_traces();
     obj.compute_similarity();
-    close all
+    %close all
 
     %% Define wether to use HD data or LD data, if using HD,
     if use_hd_data
@@ -55,7 +55,7 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
         end
         obj.rescale_traces(); %% run once
     end
-    close all
+   % close all
 
 
     %% Time filtering of traces if required. 

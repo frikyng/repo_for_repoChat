@@ -4,8 +4,8 @@
     rendering   = false
     range       = logspace(-1,2,150);
     
-    v1 = [];
-    v2 = [];
+    n_gp = [];
+    n_noise_pt = [];
     
     current_ep = 1
     gp = [];
@@ -25,8 +25,8 @@
         colors = colors(randperm(size(colors,1), size(colors,1)),:);
         colors = colors(indices, :);
         
-        v1(current_ep) = numel(gp);
-        v2(current_ep) = sum(cluster_idx <= 0);      
+        n_gp(current_ep) = numel(gp);
+        n_noise_pt(current_ep) = sum(cluster_idx <= 0);      
         
 
         if rendering
@@ -59,14 +59,16 @@
     end
     
     
-    [~, max_loc] = max(v1);
-    suggested = knee_pt(range(max_loc:numel(v2)), v1(max_loc:end));
+    [~, max_loc] = max(n_gp);
+    suggested = knee_pt(range(max_loc:numel(n_noise_pt)), n_gp(max_loc:end));
+
+%     suggested = range(find(n_noise_pt/size(Y_PHATE_3D, 1) < 0.05, 1, 'first'));
 %     
 %      figure();plot(range(1:numel(v2)), v1); hold on;
 %      plot(range(1:numel(v2)), v2)
 %      
-     figure();plot(range(1:numel(v2)), v1./ nanmax(v1)); hold on;
-     plot(range(1:numel(v2)), v2./nanmax(v2))
+     figure();plot(range(1:numel(n_noise_pt)), n_gp./ nanmax(n_gp)); hold on;
+     plot(range(1:numel(n_noise_pt)), n_noise_pt./nanmax(n_noise_pt))
 %      
 %      figure();plot(range(1:numel(v2)), v1./ nanmax(v1));hold on
 %      plot(range(1:numel(v2)), v1./ nanmax(v1) .* v2./nanmax(v2));
