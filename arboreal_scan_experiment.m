@@ -82,7 +82,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% arboreal_scan_experiment Constructor
             % -------------------------------------------------------------
             % Syntax:
-            %   EXPE = 
+            %   EXPE =
             %   arboreal_scan_experiment(source_folder, keep_2D, varargin)
             % -------------------------------------------------------------
             % Inputs:
@@ -96,8 +96,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       If true, the full_data field is kept for each ROI. Not
             %       that this will considerably increase the object size.
             %   varargin
-            %       When passing an experiment folder, varargin{1} can 
-            %       contain the analysis_params to use for extraction, and 
+            %       When passing an experiment folder, varargin{1} can
+            %       contain the analysis_params to use for extraction, and
             %       varargin{2} the path to a settings.txt file
             % -------------------------------------------------------------
             % Outputs:
@@ -112,9 +112,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   have several experiment to process.
             %   * arboreal_scan_experiment objects also contains the
             %   arboreal_scan objects used for extraction BUT to reduce
-            %   the file size, each ROI data is compressed into a single 
+            %   the file size, each ROI data is compressed into a single
             %   1xT time serie, while it is a XxT Timeseries in the
-            %   arboreal_scan object. The compression is done using 
+            %   arboreal_scan object. The compression is done using
             %   obj.extraction_method. To keep XxT data, set Keep_2D = true
             %   * See Documentation for examples
             % -------------------------------------------------------------
@@ -123,14 +123,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
-            if nargin < 1 || isempty(source_folder)    
+
+            if nargin < 1 || isempty(source_folder)
                 source_folder = pwd;
             end
-            if nargin < 2 || isempty(keep_2D)                
+            if nargin < 2 || isempty(keep_2D)
                 keep_2D = false;
             end
-            
+
             %% Fix paths
             obj.source_folder       = parse_paths(source_folder);
 
@@ -170,7 +170,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             %% List available arboreal scans
             if isempty(obj.update_folder) % normal case
                 all_recordings          = dir([obj.source_folder,'/**/*-*-*_exp_*_*-*-*']);
@@ -208,15 +208,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Extra Notes:
             %   * Note that all analyses will be cleared. Do this only if
             %   you added / removed some recordings, or fundamentally
-            %   changed something in the extracted arboreal_scans. 
+            %   changed something in the extracted arboreal_scans.
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
-            if nargin < 2 || isempty(keep_2D)                
+
+            if nargin < 2 || isempty(keep_2D)
                 keep_2D = false;
             end
             if nargin < 3 || isempty(bypass) || ~bypass
@@ -251,19 +251,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     end
                 end
                 obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
-                
+
                 %% Clear all fields
                 obj.reset();
                 for field = {'arboreal_scans','binned_data','rescaling_info','event','variability','dimensionality'}
                     obj.(field{1}) = {};
                 end
-                
+
                 %% Rebuild from extracted arboreal_scans
                 for el = fliplr(find(obj.need_update))
                     add_tree(el, keep_2D);
                 end
             end
-            
+
             function add_tree(pos, keep_2D)
                 %% INTERNAL FUNCTION THAT LOADS THE ARBOREAL_SCAN OBJECT
                 obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
@@ -280,7 +280,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
         end
-        
+
         function reset(obj)
             %% Reset all analyzed fields
             % -------------------------------------------------------------
@@ -298,7 +298,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             %% Saving options
             obj.demo                = 0;
             obj.auto_save_analysis  = false;
@@ -328,7 +328,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.updatable       = [];   % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
             obj.crosscorr       = [];   % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
         end
-        
+
         %% ########### GET METHODS ###################
 
         function updatable = get.updatable(obj)
@@ -351,7 +351,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             updatable = cellfun(@(x) ~isfolder(x), obj.updated_data_path); % which is either the extracted data path or the updated one
         end
 
@@ -366,7 +366,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Outputs:
             %   updatable (1xN CELL ARRAY OF CHAR)
             %   List of update folders if obj.update_folder was provided,
-            %   or the original extracted_data_paths if not. 
+            %   or the original extracted_data_paths if not.
             % -------------------------------------------------------------
             % Extra Notes:
             %   * This doesn't tell you if the folder is valid. Use
@@ -377,7 +377,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             if isempty(obj.update_folder)
                 updated_data_path = obj.extracted_data_paths;
             else
@@ -419,14 +419,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             if isfield(obj.batch_params, 'breakpoints') && ~isempty(obj.batch_params.breakpoints)
                 breakpoints = obj.batch_params.breakpoints; %find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.updated_data_path));
             else
                 breakpoints = [];
             end
         end
-        
+
         function set.breakpoints(obj, breakpoints)
             %% Update breakpoints if not initially provided
             % -------------------------------------------------------------
@@ -452,12 +452,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             for rec = 1:numel(obj.arboreal_scans)
                 obj.arboreal_scans{rec}.batch_params.breakpoints = sort(breakpoints);
             end
         end
-        
+
         function set.bad_ROI_thr(obj, value)
             %% Defines the exclusion threshold based on correlation
             % This defines the lowest acceptable correlation coefficient
@@ -482,18 +482,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
             %
             % See also : find_bad_ROIs
-            
+
             if value < 0 || value > 1
                 error('Cutoff must be between 0 and 1')
             else
                 obj.bad_ROI_thr = value;
-                a = dbstack(); 
+                a = dbstack();
                 if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting
                     obj.find_bad_ROIs();
                 end
             end
         end
-        
+
         function extracted_traces = get.extracted_traces(obj)
             %% Get extracted traces from individual arboreal_scans
             % -------------------------------------------------------------
@@ -523,7 +523,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 extracted_traces = cellfun(@(x)  squeeze(cat(1, x.full_data{:})), obj.arboreal_scans, 'UniformOutput', false);
                 extracted_traces = cellfun(@(x) x(:,:,1)', extracted_traces, 'UniformOutput', false);
             end
-            
+
             %% If expe was interrupted signal gain changed, we fix it here
             if ~isempty(obj.breakpoints) || obj.detrend
             	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
@@ -556,7 +556,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             extracted_pop = cellfun(@(x) x.simple_pop_data, obj.arboreal_scans, 'UniformOutput', false);
             if obj.detrend
                 extracted_pop = cellfun(@(x) x - prctile(x, 1), extracted_pop, 'UniformOutput', false);
@@ -583,7 +583,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
             extracted_traces_conc(isinf(extracted_traces_conc))    = NaN;
             %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
@@ -609,7 +609,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             extracted_pop_conc = vertcat(obj.extracted_pop{:});
             % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
@@ -628,7 +628,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       * sr : sampling rate per recording
             %       * time_source : source of timescale. Most accurate is
             %           "encoder" any in ({'command','computed','encoder'})
-            %       * tp : timepoints per recording  
+            %       * tp : timepoints per recording
             %       * durations : duration per recording in seconds, based
             %           on time_source estimate
             %       * rec_timescale : 1xT timescale for each recording
@@ -638,8 +638,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       * datetime_start : real start time of each recording
             %       * real_timescale : 1xT timescale, for all recordings
             %           concatenated, including gaps between recordings.
-            %       * t_start_real : t start for each recording, with start 
-            %           of experiment at 0 
+            %       * t_start_real : t start for each recording, with start
+            %           of experiment at 0
             % -------------------------------------------------------------
             % Extra Notes:
             % -------------------------------------------------------------
@@ -648,8 +648,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
-            
+
+
             %% Prepare timescale for each recording and concatenated timescale
             timescale                   = {};
             timescale.sr                = 1./cellfun(@(x) x.analysis_params.points_per_s, obj.arboreal_scans);
@@ -665,11 +665,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             timescale.global_timescale  = cumsum(horzcat(timescale.global_timescale{:}));
             timescale.t_start_nogap     = cellfun(@(x) x(end), timescale.rec_timescale);
             timescale.t_start_nogap     = cumsum([0, timescale.t_start_nogap(1:end-1) + timescale.sr(1:end-1)]);
-            
+
             t_start_real_posix          = cellfun(@(x) posixtime(x.header.recording_t_start), obj.arboreal_scans);
             timescale.t_start_real      = t_start_real_posix - t_start_real_posix(1);
             timescale.datetime_start    = cellfun(@(x) x.header.recording_t_start, obj.arboreal_scans, 'UniformOutput', false);
-            
+
             %timescale.real_timescale   = cellfun(@(x) diff(x), timescale.rec_timescale, 'UniformOutput', false);
             timescale.real_timescale   = cellfun(@(x, y) [x+y], timescale.rec_timescale, num2cell(timescale.t_start_real), 'UniformOutput', false);
             timescale.real_timescale   = horzcat(timescale.real_timescale{:});
@@ -685,7 +685,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % -------------------------------------------------------------
             % Outputs:
             %   t (1xT DOUBLE)
-            %       equivalent to obj.timescale.global_timescale. Use it to 
+            %       equivalent to obj.timescale.global_timescale. Use it to
             %       simplify your code
             % -------------------------------------------------------------
             % Extra Notes:
@@ -695,7 +695,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             t = obj.timescale.global_timescale;
         end
 
@@ -719,11 +719,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             ref = obj.arboreal_scans{1};
         end
 
-        function batch_params = get.batch_params(obj) 
+        function batch_params = get.batch_params(obj)
             %% Quick handle for the batch_paramns of the first arboreal_scan
             % -------------------------------------------------------------
             % Syntax:
@@ -743,7 +743,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             batch_params = obj.ref.batch_params;
             if ~isfield(batch_params, 'breakpoints')
                 batch_params.breakpoints = [];
@@ -771,7 +771,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             if ~obj.use_hd_data
                 n_ROIs = size(obj.ref.simple_data,2);
             else
@@ -799,10 +799,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             n_pop_ROIs = size(obj.ref.population_data,2);
         end
-        
+
         function logs = get.logs(obj)
             %% Individual arboreal scan logs (the comments you wrote
             % during the recording !)
@@ -823,7 +823,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             logs = cellfun(@(x) x.log, obj.arboreal_scans, 'Uniformoutput', false); % vertcat(obj.logs{:})
         end
 
@@ -850,7 +850,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
             %
             % See also : load_several_experiments
-            
+
             use_mask = false;
             f_handle = @(x) load_several_experiments(x, cellfun(@(x) x.data_folder, obj.arboreal_scans, 'UniformOutput', false), use_mask);
         end
@@ -874,7 +874,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             global_median_raw = obj.extracted_traces_conc;
             global_median_raw(:, obj.bad_ROI_list) = [];
             global_median_raw = nanmedian(global_median_raw, 2);
@@ -882,7 +882,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function binned_data = get.binned_data(obj)
             binned_data = obj.binned_data;
-            if isempty(binned_data)                
+            if isempty(binned_data)
                 warning('binned data not available because no groups were set. using unique group instead')
                 binned_data = {};
                 binned_data.condition   = 'single group';
@@ -903,7 +903,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % -------------------------------------------------------------
             % Outputs:
             %   external_variables (1xN STRUCT of external variables)
-            %       Each external variable is a structure with a "value" 
+            %       Each external variable is a structure with a "value"
             %       and a "time" field. Value can have more than one column
             %       (eg : X,Y,Z values for 3dMC, multiple ROIs for Motion
             %       index...)
@@ -915,7 +915,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             %failed_encoder = cellfun(@(x) ~numel(x.analysis_params.external_var.encoder.time), obj.arboreal_scans);
             external_variables = cellfun(@(x) x.analysis_params.external_var, obj.arboreal_scans, 'UniformOutput', false);
         end
@@ -929,14 +929,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 %obj.rendering = rendering;
                 bad_ROI_list = obj.bad_ROI_list;
             end
-            
+
             %% If analyzing every pixel, convert bad ROIs to bad pixels
             if obj.use_hd_data
                 bad_ROI_list = obj.get_voxel_for_ROI(bad_ROI_list');
             end
         end
-        
- 
+
+
         function set.use_hd_data(obj, use_hd_data)
             %% Set use_hd_data variable. This changes the data used for computations
             % -------------------------------------------------------------
@@ -954,30 +954,30 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   * if obj.use_hd_data is true, all voxels are used for
             %   computation instead of one value per ROI. This is possible
             %   only if the arboreal scan_experiment contains the full_data
-            %   (which is not the default extraction behaviour, as it makes 
-            %   the files much larger). if you intend to use it, you need 
+            %   (which is not the default extraction behaviour, as it makes
+            %   the files much larger). if you intend to use it, you need
             %   to build your objects using the keep_2D flag :
-            %   arboreal_scan_experiment('',true) 
+            %   arboreal_scan_experiment('',true)
             %   * Using use_hd_data makes the computations significantly
-            %   slower. 
+            %   slower.
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
             %--------------------------------------------------------------
             % Revision Date:
             %   17/06/2022
-            
+
             obj.use_hd_data = false;
             if ~isempty(obj.ref.full_data) && use_hd_data
                 obj.use_hd_data = true;
             elseif isempty(obj.ref.full_data) && use_hd_data
                 warning('unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object. Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).')
-            end  
+            end
         end
-        
+
 
         %% ########### ... ###################
-        
+
         function extracted_traces = fix_changes_in_gain(obj, extracted_traces)
             %% Rescale gain changes between pairs of breakpoints
             % by correcting changes in F0 if obj.detrend > 0
@@ -1005,7 +1005,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   14/04/2022
-            
+
             extracted_traces = fix_gain_changes(obj, extracted_traces);
         end
 
@@ -1022,7 +1022,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         %             %% Map dimension weights on the tree
         %             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(Pvec_tree(obj.ref.simplified_tree{1}), '', '', 'Segment length');
         %         end
-        
+
 
         function animate_experiment(obj, values, timepoints, ROIs, color_range)
             if nargin < 2 || isempty(values)
@@ -1036,7 +1036,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             if nargin < 5 || isempty(color_range)
             	color_range = [nanmin(values(:)),nanmax(values(:))];
-            end 
+            end
 
             %% Get the ROIs to display
             ROI_idx           = obj.ref.indices.complete_ROIs_list(:,1);
@@ -1079,7 +1079,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
                 if isempty(obj.event)
                     warning('LD RESCALING REQUIRES DETECTED EVENTS. RUNNING obj.find_events() now');
-                    obj.find_events();                    
+                    obj.find_events();
                 end
                 pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
                 smoothing               = [pk_width*2,0];
@@ -1116,7 +1116,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
                     t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
-                end                
+                end
             else
                 obj.bad_ROI_list         = [];
                 traces                   = obj.extracted_traces_conc;
@@ -1130,7 +1130,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     end
                 end
 
-                
+
                 ref                      = nanmedian(traces, 2);
                 ref                      = ref - prctile(ref, 5);
                 for idx = 1:size(traces, 2)
@@ -1162,7 +1162,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 transition                              = cumsum([1,obj.timescale.tp(1:end-1)]);
                 rescaled_traces([transition,transition+1],  obj.bad_ROI_list) = NaN; % remove bad ROis and transition timepoints
                 rescaled_traces = rescaled_traces - diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offset percentile for each trace. much faster than  a loop
-                try 
+                try
                     obj.rescaling_info.scaling; % debug hack. somtimes it needs to be called twice at initialisation --> to be fixed
                 end
                 scaling = obj.rescaling_info.scaling;
@@ -1174,8 +1174,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
         end
-        
-        function pxl_list = get_voxel_for_ROI(obj, ROIs)            
+
+        function pxl_list = get_voxel_for_ROI(obj, ROIs)
             pxl_list = [];
             res_list = obj.ref.header.res_list(:,1);
             pxls = [cumsum(res_list) - res_list(1) + 1;  sum(res_list)];
@@ -1200,7 +1200,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 if obj.use_hd_data
                      columns = obj.get_voxel_for_ROI(find(columns));
                 end
-                
+
                 all_traces_per_bin{gp}      = nanmedian(traces(:,columns), 2);
             end
 
@@ -1323,7 +1323,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         %% #############################################
-        
+
         function set.cc_mode(obj, cc_mode)
             %% Set cross correlation mode
             % -------------------------------------------------------------
@@ -1331,7 +1331,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   EXPE.get_correlations(cc_mode)
             % -------------------------------------------------------------
             % Inputs:
-            %   cc_mode (STR) - See Description for details - Optional - 
+            %   cc_mode (STR) - See Description for details - Optional -
             %           Default is your current obj.cc_mode value
             %       update EXPE.cc_mode with existing value
             % -------------------------------------------------------------
@@ -1340,37 +1340,37 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Extra Notes:
             %   * Correlation is computed using:
             %       - A reference trace (located at index 1)
-            %       - The data you want to correlate (individual ROI, 
+            %       - The data you want to correlate (individual ROI,
             %           OR binned data, see below)
             %       - Optionally, you can append population data
             %   * cc_mode is build by concatenating strings defining the
-            %   timepoints to use (all of them or a subset), the traces to  
-            %   use (all of them or the binned data), whether you want to 
-            %   use population data too and whether you want to use some 
-            %   behavioural metrics. for example : 
+            %   timepoints to use (all of them or a subset), the traces to
+            %   use (all of them or the binned data), whether you want to
+            %   use population data too and whether you want to use some
+            %   behavioural metrics. for example :
             %      - 'groups_pop' : correlation between binned median
-            %        traces and population data using all timepoints 
+            %        traces and population data using all timepoints
             %      - 'active' : correlation between all ROIs, using all
             %        timepoints when cell is active (i.e. during bAPs)
             %      - 'peaks' : correlation between all ROIS, only
             %        at peak time.
-            %      - 'encoder_peaks' : correlation between all 
+            %      - 'encoder_peaks' : correlation between all
             %        ROIS, only at peak time, AND only when running speed
-            %        is high    
-            %      - '~encoder_peaks' : correlation between all 
+            %        is high
+            %      - '~encoder_peaks' : correlation between all
             %        ROIS, only at peak time, AND only when running speed
-            %        is low  
+            %        is low
             %   * The reference (located at index 1 of the matrix) is
-            %    either 
+            %    either
             %       - The averaged somatic data when available (as defined
-            %         by ref.indices.somatic_ROIs), or the nexus signal 
+            %         by ref.indices.somatic_ROIs), or the nexus signal
             %         when somatic ROIS are not available
-            %       - The behaviour data if you specify 'behref', AND IF 
-            %         you pass a valid behaviour in obj.cc_mode (list 
-            %         available when typing obj.behaviours.types). eg : 
+            %       - The behaviour data if you specify 'behref', AND IF
+            %         you pass a valid behaviour in obj.cc_mode (list
+            %         available when typing obj.behaviours.types). eg :
             %         '~encoder_peaks_behref'
-            %   * Correlation matrix can be generated using the entire 
-            %     trace (default) or a subset of timepoints : 
+            %   * Correlation matrix can be generated using the entire
+            %     trace (default) or a subset of timepoints :
             %       - If cc_mode contains 'peaks', only the values at peak
             %       times (as defined by event.fitting.peak_pos) are used
             %       - If cc_mode contains 'active', all the timepoints
@@ -1380,12 +1380,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   * Correlation matrix can be generated using
             %       - every ROIs (except for excluded ROIs, indicated in
             %     ref.indices.valid_swc_rois)
-            %       - If cc_mode contains 'groups', using the median traces 
+            %       - If cc_mode contains 'groups', using the median traces
             %       after categorical binning  (as defined by
-            %        binned_data.median_traces). 
+            %        binned_data.median_traces).
             %   * To include population data, include 'pop' in cc_mode
             % -------------------------------------------------------------
-            % Example - How To 
+            % Example - How To
             %
             % * Get correlations across all ROIs
             %   EXPE.get_correlations(''); % Rejected ROIs appear in gray
@@ -1406,11 +1406,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   timepoints when running)
             %   EXPE.get_correlations('encoder');
             %
-            % * Get correlations only when the mouse is running (only peak 
+            % * Get correlations only when the mouse is running (only peak
             %   times when running)
             %   EXPE.get_correlations('encoder_peaks');
             %
-            % * Get correlations only when the mouse is NOT running (only 
+            % * Get correlations only when the mouse is NOT running (only
             %   peak  times when not running)
             %   EXPE.get_correlations('~encoder_peaks');
             %
@@ -1424,18 +1424,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   13/05/2022
-            
+
         	if ~strcmp(obj.cc_mode, cc_mode)
                 obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
             end
-            
+
             original_cc_mode = cc_mode;
-            msg = '\n\t'; 
+            msg = '\n\t';
             if contains(cc_mode, 'groups')
                 msg = [msg, 'Correlation done by group median, using your current binning, '];
             else
                 msg = [msg, 'Correlation done between all ROIs, '];
-            end         
+            end
             cc_mode = erase(cc_mode, {'groups', 'ROIs'});
             if contains(obj.cc_mode, 'pop')
                 msg = [msg, 'including population data.'];
@@ -1446,16 +1446,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 msg = [msg, '\n\tReference trace is the somatic signal average, at the indicated timpoints. '];
             end
-            cc_mode = erase(cc_mode, 'behref');            
+            cc_mode = erase(cc_mode, 'behref');
             if contains(cc_mode, 'peaks')
                 msg = [msg, '\n\tCorrelation computed using data at peak time only, '];
             elseif contains(cc_mode, 'active')
                 msg = [msg, '\n\tCorrelation computed using timepoints when the cell is active (i.e. during bAPs), '];
             elseif contains(cc_mode, 'quiet')
-                msg = [msg, '\n\tCorrelation computed using timepoints when the cell is quiet (i.e. between bAPs), '];             
+                msg = [msg, '\n\tCorrelation computed using timepoints when the cell is quiet (i.e. between bAPs), '];
             else
                 msg = [msg, '\n\tCorrelation done using all timepoints, '];
-            end       
+            end
             cc_mode = erase(cc_mode, {'peaks', 'active', 'quiet', '_',' '});
             if ~isempty(cc_mode)
                 if contains(cc_mode, '~')
@@ -1464,11 +1464,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     msg = [msg, ' WHEN "',cc_mode,'" behaviour IS ongoing.'];
                 end
             end
-            
+
             fprintf([msg ,  '\n'])
             obj.cc_mode = original_cc_mode;
-        end        
-        
+        end
+
         function cross_corr = get_correlations(obj, cc_mode)
             %% Returns cross correlation (and triggers computation if required)
             % -------------------------------------------------------------
@@ -1476,7 +1476,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   cross_corr = EXPE.get_correlations(cc_mode)
             % -------------------------------------------------------------
             % Inputs:
-            %   cc_mode (STR) - See Description for details - Optional - 
+            %   cc_mode (STR) - See Description for details - Optional -
             %       Default is [];
             %       If provided, update EXPE.cc_mode. see set.cc_mode for
             %       more details
@@ -1493,8 +1493,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   Antoine Valera.
             %--------------------------------------------------------------
             % Revision Date:
-            %   13/05/2022            
-            
+            %   13/05/2022
+
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             else
@@ -1503,15 +1503,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Get CC (and build the correlation matrix if the settings changed)
             cross_corr = obj.crosscorr;
-            
+
             %% Show tree if required
             if obj.rendering
                 obj.plot_correlation_results(cross_corr);
             end
         end
-        
+
         function [tp, beh, mode] = get_tp_for_condition(obj, mode)
-            %% Get signal time range     
+            %% Get signal time range
             tp          = true(1,numel(obj.t));
             using_peaks = false;
             if contains(mode, 'peaks') %% event time
@@ -1521,7 +1521,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 tp(vertcat(obj.event.peak_time{:})) = true;% could be using obj.event.fitting.pre_correction_peaks
                 using_peaks     = true;
             elseif contains(mode, 'quiet') %% low corr window
-                tp_of_events    = sort(unique([obj.event.t_win{:}]));                
+                tp_of_events    = sort(unique([obj.event.t_win{:}]));
                 tp(tp_of_events)= false;
             elseif contains(mode, 'active') %% high corr window
                 tp_of_events    = sort(unique([obj.event.t_win{:}]));
@@ -1539,13 +1539,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     if contains(mode, el{1})
                         to_test(end+1) = 1;
                     else
-                        to_test(end+1) = 0;                   
+                        to_test(end+1) = 0;
                     end
                 end
                 beh_name = {obj.behaviours.types{find(to_test)}};
-                
+
                 %% Get behaviour bouts
-                [~, ~, beh] = obj.get_behaviours(beh_name); 
+                [~, ~, beh] = obj.get_behaviours(beh_name);
                 bout_extra_win = obj.bout_extra_win;
                 if contains(mode, '~')
                     smoothing = [50,0];
@@ -1555,7 +1555,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
                 [~, ~, active_tp] = obj.get_activity_bout(beh_name, true, smoothing, contains(mode, '~'));
                 obj.bout_extra_win = bout_extra_win;
-                
+
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks
                     tp = tp & active_tp{1};
@@ -1565,15 +1565,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             mode = erase(mode, {'~'}); %% qq could also remove behaviours
         end
-        
+
         function tp = set_crosscorr(obj, cc_mode)
-            %% Compute cross correlation 
+            %% Compute cross correlation
             % -------------------------------------------------------------
             % Syntax:
             %   EXPE.set_crosscorr(cc_mode)
             % -------------------------------------------------------------
             % Inputs:
-            %   cc_mode (STR) - See Description for details - Optional - 
+            %   cc_mode (STR) - See Description for details - Optional -
             %       Default is [];
             %       If provided, update EXPE.cc_mode. see set.cc_mode for
             %       more details
@@ -1583,8 +1583,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %       The timepoints used based on your fitlering criteria
             % -------------------------------------------------------------
             % Extra Notes:
-            %       Cross correlation is computed between ROIs OR groups 
-            %       based on traces OR Peaks, depending on the settings. 
+            %       Cross correlation is computed between ROIs OR groups
+            %       based on traces OR Peaks, depending on the settings.
             %       see set.cc_mode doc for the details
             % -------------------------------------------------------------
             % Author(s):
@@ -1592,36 +1592,36 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   13/05/2022
-            
+
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             else
                 cc_mode = obj.cc_mode;
                 fprintf(['Using current obj.cc_mode : ',cc_mode,'\n'])
             end
-            
+
             %% Get signal to use
             if contains(obj.cc_mode, 'groups')
                 signal = obj.binned_data.median_traces;
             else% if contains(obj.cc_mode, 'ROIs')
                 try
                     if ~obj.use_hd_data
-                        signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois); 
+                        signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);
                     else
                         if contains(obj.cc_mode, 'ROIs')
                             error('to use ROIs, set obj.use_hd_data to false');
                         end
-                        signal = obj.rescaled_traces; 
+                        signal = obj.rescaled_traces;
                         warning('full hd not filtering excluded ROIS / voxels for now')
                     end
                 catch
                     error('unable to get rescaled data. try to run obj.rescale_traces()')
                 end
-                    
+
             end
             %signal = signal - nanmean(signal,2);
             cc_mode = erase(cc_mode, {'ROIs','groups'});
-            
+
             %% Get ref ROIs and trace
             if ~obj.use_hd_data
                 somatic_ROIs= obj.ref.indices.somatic_ROIs;
@@ -1629,7 +1629,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 somatic_ROIs= obj.ref.indices.HD_somatic_ROIs;
             end
             ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
-            
+
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
                 if isempty(obj.extracted_pop_conc)
@@ -1648,18 +1648,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if iscell(tp)
                 tp = any([vertcat(tp{:})]); % if multipe behaviours, using BITWISE OR
             end
-            
+
             %% Update ref if we want directly the behaviour data instead of the somatic ROIs
             if ~isempty(beh) && contains(cc_mode, 'behref')
                 ref         = beh.value';
             end
 
-            %% Build the arrays used for the correlation matrix            
+            %% Build the arrays used for the correlation matrix
             variable        = [ref(tp, :), signal(tp, :)];
             if ~isempty(pop)
                 variable = [variable, pop(tp,:)];
             end
-                        
+
             cc   = corrcoef(variable,'Rows','Pairwise')';
             obj.crosscorr = cc;
         end
@@ -1685,7 +1685,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   13/05/2022
-            
+
             if isempty(obj.binned_data) && contains(obj.cc_mode, 'groups')
                 fprintf('\tcrossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first\n')
                 crosscorr = [];
@@ -1695,7 +1695,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 crosscorr = [];
                 return
             elseif isempty(obj.crosscorr) || size(obj.crosscorr, 1) ~= numel(obj.binned_data)
-                obj.set_crosscorr(); 
+                obj.set_crosscorr();
             end
             crosscorr = obj.crosscorr;
         end
@@ -1707,19 +1707,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     pop_sz = size(obj.extracted_pop_conc,2);
                     cc = cc(1:(end-pop_sz),1:(end-pop_sz));
                 end
-            end  
+            end
             if nargin < 3
                 ref_column = [];
             end
-            
+
             %% Erase diagonal
             cc(1:size(cc,1)+1:end)= NaN;
-            
+
             %% Remove "ref" row/column when you pass a matrix with one row per ROI
             if size(cc,1) > 2 && (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
                 cc = cc(2:end,2:end);
             end
-            
+
             %% If no ref were provided, we will use the average correlation
             if isempty(ref_column)
                 ref_column = 1:size(cc,1);
@@ -1746,12 +1746,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 ROIs_list   = obj.ref.indices.valid_swc_rois;
                 mean_bin_cc = cc(:,1);
             end
-            
+
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
             caxis([0,1]);
             col = colorbar; col.Label.String = 'Spatial correlation between ROIs/groups with soma';
-            
-%             
+
+%
 %             [S,Q] = genlouvain(double(cc),[],[],1);
 %             [a,b] = sort(S);
 %             figure(1008);clf();imagesc(cc(b,b))
@@ -1760,10 +1760,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 %             colorbar('Ticks',R);
 %             caxis([nanmin(R)-0.5, nanmax(R)+0.5])
 %             colormap(lines(numel(unique(S))));
-%             
+%
 %             figure(125);clf();
 %             for community = R'
-%                 plot(nanmean(obj.extracted_traces_conc(:,S == community),2)); hold on;                
+%                 plot(nanmean(obj.extracted_traces_conc(:,S == community),2)); hold on;
 %             end
         end
 
@@ -1843,11 +1843,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         %% ###################
-        
+
         function gui(obj)
             explore_factors(obj);
         end
-        
+
         function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, clust_meth, N_clust)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
@@ -1859,11 +1859,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.dimensionality           = {};
                 obj.dimensionality.n_factors = n_factors;
             elseif nargin < 3 || isempty(n_factors) && ~isfield(obj.dimensionality, 'n_factors') || (isfield(obj.dimensionality, 'n_factors') && isempty(obj.dimensionality.n_factors))
-                obj.dimensionality.n_factors = 5;                
+                obj.dimensionality.n_factors = 5;
             end
             if nargin < 4 || isempty(timepoints) || (ischar(timepoints) && contains(timepoints, 'full'))
                 timepoints                  = true(size(obj.timescale.global_timescale));
-                variable                      = 'full_traces'; 
+                variable                      = 'full_traces';
             elseif ischar(timepoints) && strcmpi(timepoints, 'peaks')
             	timepoints     = vertcat(obj.event.peak_time{:});
                 variable       = 'peaks';
@@ -1873,8 +1873,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 timepoints = timepoints(2:2:end)
                 variable       = timepoints;
             else
-                variable                      = 'manual selection'; 
-            end   
+                variable                      = 'manual selection';
+            end
             if nargin < 5 || isempty(dim_red_type)
                 dim_red_type                  = 'pca';
             end
@@ -1884,39 +1884,39 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 7 || isempty(N_clust)
                 N_clust                    = 0;
             end
-            
+
 %             t = 1:numel(obj.global_median_raw);
 %             t_bap = [obj.event.t_win_no_overlap{:}];
 %             t_no_bap = ~ismember(t, t_bap);
-% 
+%
 %             timepoints = find(t_no_bap);
-            
+
             obj.dimensionality.dim_red_type     = dim_red_type;
             obj.dimensionality.variable         = variable;
-            
+
             data                = obj.rescaled_traces(timepoints,:);
-            
+
             %rescaled_traces     = rescaled_traces - obj.binned_data.global_median;
-            
+
             all_ROIs            = 1:size(data, 2);
             normal_n_NaN        = median(sum(isnan(data(:,~all(isnan(data)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
             valid_trace_idx     = sum(isnan(data)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
             data                = fillmissing(data(:, valid_trace_idx),'spline'); % removed funny traces
-            
+
             %% Need to set it now
             obj.dimensionality.valid_trace_idx = valid_trace_idx;
 
-            
+
             %data = data - nanmedian(data,2)
             data = data - nanmean(data,2);
-            
-            
+
+
             %% Get single or multiple factor estimate
             if ~cross_validate
                 T = [];
                 stats = {};
                 specVarPM = [];
-                
+
                 switch dim_red_type
                     case 'pca'
                         %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',obj.dimensionality.n_factors);
@@ -1935,7 +1935,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     case 'factoran'
                         [LoadingsPM, specVarPM, T, stats, F] = factoran(double(data), obj.dimensionality.n_factors,'rotate','varimax'); % varimax, quartimax
                 end
-                
+
                 %% Store results
                 obj.dimensionality.LoadingsPM         = LoadingsPM;
                 obj.dimensionality.specVarPM          = specVarPM;
@@ -1944,7 +1944,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.dimensionality.F                  = F;                % components
                 obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
                 obj.dimensionality.mask               = timepoints;
-                
+
                 obj.dimensionality.cluster_idx        = [];
                 obj.dimensionality.clust_meth         = clust_meth;
                 obj.dimensionality.N_clust            = N_clust;
@@ -1953,14 +1953,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 for comp = 1:obj.dimensionality.n_factors
                     obj.plot_dim_tree(comp);
                 end
-                
+
                 if obj.rendering
-                    obj.plot_factor_tree();      
+                    obj.plot_factor_tree();
                 end
 
                 %% Plot a map of tree weights by ROI number for each component
                 weighted_averages = obj.get_weight_map();
-                
+
                 %% If no weighted average, Find clusters from latent variables
                 if ~strcmp(clust_meth, 'none')
                     obj.cluster_factors();
@@ -1970,18 +1970,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 %                     for row = 1:size(LoadingsPM,1)
 %                         [~, maxloc] = max(LoadingsPM(row, :));
 %                         LoadingsPM(row, :) = 0;
-%                         LoadingsPM(row, maxloc) = 1;                        
+%                         LoadingsPM(row, maxloc) = 1;
 %                     end
 
                     %% To assign to strongest component
 %                     for row = 1:size(LoadingsPM,1)
 %                         LoadingsPM(row, :) = 0;
-%                         LoadingsPM(row, idx(row)) = 1;    
+%                         LoadingsPM(row, idx(row)) = 1;
 %                         if ~ismember(idx(row), [1,4,5])
 %                             LoadingsPM(row, :) = 0;
-%                         end                            
+%                         end
 %                     end
-                
+
             else
                 %% Cross validation (thanks Harsha)
                 %[~,N]                       = size(rescaled_traces);
@@ -2019,7 +2019,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                             catch
                             test(factor_nb, jj)                  = NaN;
                             train(factor_nb, jj)                 = NaN;
-                            
+
                             end
                         end
                     end
@@ -2035,14 +2035,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
             end
         end
-        
+
         function cluster_factors(obj)
             if ~obj.dimensionality.N_clust
                 obj.dimensionality.cluster_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 obj.dimensionality.sorted_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 return
             end
-            
+
             if isinf(obj.dimensionality.N_clust)
                 R = 1:20;
                 if strcmp(obj.dimensionality.clust_meth, 'kmeans')
@@ -2078,17 +2078,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 %                 T = cluster(Z,'maxclust',10);
                 %                 cluster_idx = T;
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
-                MIN_GP = 3   
+                MIN_GP = 3
 %                 
 %                 [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
 %                 dist = nanmean(mD(:,2))
 %                 cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,dist*2,MIN_GP, 'Distance', 'euclidean');
-                %if isinf(obj.dimensionality.N_clust)                    
+                %if isinf(obj.dimensionality.N_clust)
 %                     mean_v = [];
 %                     L = 0.01:0.01:1
 %                     [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
 %                     nanmean(mD(:,2))
-%                     
+%
 %                     for v = L
 %                         %cluster_idx = clusterdata(obj.dimensionality.LoadingsPM, 'Linkage', 'ward', 'MAXCLUST', v);%, 'Criterion','distance' 'MAXCLUST', 40)
 %                         cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,v,MIN_GP, 'Distance', 'euclidean');
@@ -2101,11 +2101,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 %                     obj.dimensionality.N_clust = L(best);
 %                     cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,obj.dimensionality.N_clust,MIN_GP, 'Distance', 'euclidean');
 %                 %end
-%                 
+%
 
 
-                
-                
+
+
 
 
                 kD = pdist2(obj.dimensionality.LoadingsPM ,obj.dimensionality.LoadingsPM ,'euc','Smallest',5)
@@ -2116,11 +2116,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 ylabel('50th nearest distances')
                 grid
                 thr = 1;
-                
+
                 M = [];
                 L = 0.01:0.01:1
                 for thr = L
-                    thr = thr - thr/20;                           
+                    thr = thr - thr/20;
                     labels = dbscan(obj.dimensionality.LoadingsPM ,thr, MIN_GP, 'Distance', 'euclidean');
                     M(end + 1) = numel(unique(labels))
                 end
@@ -2132,7 +2132,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 labels_col = [labels, labels, labels];
                 count = 1;
                 for v = unique(labels)'
-                    subset = labels_col(:,1) == v;                            
+                    subset = labels_col(:,1) == v;
                     labels_col(subset, :) = repmat(col(count,:),sum(subset),1);
                     count = count + 1;
                 end
@@ -2145,10 +2145,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 obj.dimensionality.cluster_idx = [];
             end
-            
+
             obj.dimensionality.cluster_idx = ones(size(obj.dimensionality.cluster_idx));
             obj.dimensionality.sorted_idx   = 1:(numel(obj.dimensionality.cluster_idx));
-            
+
             if ~strcmp(obj.dimensionality.clust_meth, 'none')
                 %% Sort clusters by number of elements
                 [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
@@ -2156,7 +2156,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 gp = a(gp);
                 idx_sorted = NaN(size(cluster_idx));
                 count = 1;
-                for gp_idx = gp  
+                for gp_idx = gp
                     idx_sorted(cluster_idx == gp_idx) = count;
                     count = count + 1;
                 end
@@ -2169,7 +2169,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
         end
-        
+
 
         function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle)
             if nargin < 2 || isempty(comp) || ~comp
@@ -2240,7 +2240,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 3 || isempty(fig_handle)
                 fig_handle = 10200;
             end
-            
+
 
             [~, loc]    = nanmax(obj.dimensionality.LoadingsPM(:,1:n_dim),[],2);
             Valid_ROIs  = find(obj.dimensionality.valid_trace_idx);
@@ -2296,8 +2296,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 4 || isempty(method)
                 method = 'corr';
             end
-            
-            fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])     
+
+            fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])
 
             %% Get original traces (unscaled)
             raw_traces              = obj.extracted_traces_conc(:, idx_filter);
@@ -2313,7 +2313,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, correlation_res, ROIs)
             if nargin < 3 || isempty(ROIs)
                 ROIs = 1:obj.n_ROIs;
-            end            
+            end
             if nargin < 2 || isempty(correlation_res)
                 warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY. RUNNING DEFAULT EVENT DETECTION')
                 raw_data = obj.extracted_traces_conc;
@@ -2322,13 +2322,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 events = obj.event;
             end
 
-            
+
             THR_FOR_CONNECTION      = 0.2 % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
             fprintf(['* Now detecting ROIs that are either,\n'...
                      '      - so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).\n',...
                      '      - are member of batch_params.excluded_branches \n',...
-                     '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])  
-            
+                     '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])
+
             %% Show mean correlation with each ROI
             mean_corr_with_others   = [];
             max_corr_for_cell       = max(events.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
@@ -2341,59 +2341,59 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Normalize to 100%
             mean_corr_with_others = mean_corr_with_others / numel(mean_corr_with_others); % renormalize to max possible corr for this cell
-            
+
             if obj.rendering
-                figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
+                figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on;
                 xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             end
-            
+
             %% Renormalize to max possible corr for this cell
-            mean_corr_with_others_norm = mean_corr_with_others / max(mean_corr_with_others); 
+            mean_corr_with_others_norm = mean_corr_with_others / max(mean_corr_with_others);
             if obj.rendering
-                figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on; 
+                figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on;
                 xlabel('%% of correlation with all other ROIs (from the tree)'); ylabel('counts')
             end
-            
+
             %% Update class variables
             if obj.bad_ROI_thr ~= THR_FOR_CONNECTION
                 obj.bad_ROI_thr = THR_FOR_CONNECTION;
-            end            
-            bad_ROIs = mean_corr_with_others_norm < obj.bad_ROI_thr;            
+            end
+            bad_ROIs = mean_corr_with_others_norm < obj.bad_ROI_thr;
             obj.bad_ROI_list = bad_ROIs; % below threshold% of max correlation
             bad_ROIs = find(bad_ROIs);
-            
+
             %% ROIs that were manually excluded
             excl = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);
-            
+
             RECOVERY_THR = 1-THR_FOR_CONNECTION
             excl_but_not_bad    = excl & ~obj.bad_ROI_list';
             excl_but_good       = excl & (mean_corr_with_others_norm > RECOVERY_THR)';
             if any(excl_but_good)
                  fprintf(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'])
             end
-                            
-            if obj.rendering     
+
+            if obj.rendering
                 bad = obj.extracted_traces_conc(:, find(obj.bad_ROI_list));
-               
-                              
+
+
                 ref = nanmedian(obj.extracted_traces_conc,2);
                 ref = ref - prctile(ref, 1);
-                
+
                 figure(1031);clf();title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);hold on;
 
                 %% Plot normalized excluded traces
                %plot_many_traces(smoothdata(normalize(bad),'gaussian',[20,0]),'','k')
-                
+
                 %% Plot normalized excluded traces
               %  plot_many_traces(bad, 1031, 'Color', [0.8,0.8,0.8]);
-                
+
                 hold on; plot(ref/nanmax(ref),'r')
-                
+
                 %% Plot (if possible) the excluded traces
                 try
-                    regroup_traces(bad', 80, 'pca') 
+                    regroup_traces(bad', 80, 'pca')
                 end
-                
+
                 bad = bad - prctile(bad, 1);
                 %plot(smoothdata(bad./nanmax(bad),'gaussian',obj.filter_win),'r');hold on;
 %                 plot(bad./nanmax(bad),'r');hold on;
@@ -2415,9 +2415,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 caxis([0,1]); % otherwise if all values are the same you get a white tree on a white bkg
             end
             %obj.bad_ROI_list = find((excl | obj.bad_ROI_list') & ~excl_but_good);
-            obj.bad_ROI_list = find((excl | obj.bad_ROI_list'));  
-            %obj.bad_ROI_list = find(excl); 
-            %obj.bad_ROI_list = find(obj.bad_ROI_list); 
+            obj.bad_ROI_list = find((excl | obj.bad_ROI_list'));
+            %obj.bad_ROI_list = find(excl);
+            %obj.bad_ROI_list = find(obj.bad_ROI_list);
         end
 
         function [corr_results, comb] = get_pairwise_correlations(obj, idx_filter, corr_window)
@@ -2492,16 +2492,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             catch
                 warning('Not enough events availabl for factoran on peaks. Using full traces instead')
                 try
-                    obj.get_dimensionality(false,6,'','pca',false,'peaks'); % set to true for cross validation 
+                    obj.get_dimensionality(false,6,'','pca',false,'peaks'); % set to true for cross validation
                 catch
                     warning('Not enough events available for pca on peaks. Using full traces instead')
-                    obj.get_dimensionality(false,6,'','factoran',false,'full_traces'); % set to true for cross validation 
+                    obj.get_dimensionality(false,6,'','factoran',false,'full_traces'); % set to true for cross validation
                 end
             end
 
             %% Optionally, if external variables need an update, do it here
             %obj.update_external_metrics(60)
-            
+
             %% Extract behaviours
             obj.get_behaviours();
 
