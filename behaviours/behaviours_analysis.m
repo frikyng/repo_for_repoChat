@@ -118,6 +118,12 @@ classdef behaviours_analysis < handle
 
             if nargin < 2 || isempty(type)
                 type = 'encoder';
+            else
+                if ischar(type)
+                    type = cleanup_type(type);
+                elseif iscell(type)
+                    type = cellfun(@(x) cleanup_type(x), type , 'UniformOutput', false)
+                end
             end
             if nargin < 3 || isempty(rendering)
                 rendering = false;
@@ -197,6 +203,12 @@ classdef behaviours_analysis < handle
                 out.time = [];
                 out.value = [];
             end
+            
+            function type = cleanup_type(type)
+                type                = erase(type, '~');
+                range_idx           = strfind(type, '[');
+                type(range_idx:end) = [];
+            end
         end
 
         function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr, window)
@@ -243,12 +255,12 @@ classdef behaviours_analysis < handle
                     beh_sm{idx}          = smoothdata(beh.value, 'gaussian', smoothing);
                     beh_sm{idx}          = nanmean(beh_sm{idx},1);
                     %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
-                    %thr            = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
-                    current_thr     = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
+                    %thr                = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
+                    current_thr         = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
 
                     %% Define bouts
                     active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
-                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx});
+                    [starts, stops]     = get_limits(active_tp{idx}, beh_sm{idx});
 
                     %% Add some pts before and after each epoch
                     dt = nanmedian(diff(obj.t));
