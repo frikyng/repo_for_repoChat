@@ -269,7 +269,9 @@ classdef behaviours_analysis < handle
                 smoothing = [smoothing, 0];
             end
             if nargin < 5 || isempty(invert)
-                invert = false;
+                invert = contains(beh_types, '~');   
+            elseif numel(invert) == 1
+                invert = repmat(invert, 1, numel(beh_types));
             end
             if nargin < 6 || isempty(thr)
                 % pass
@@ -310,7 +312,7 @@ classdef behaviours_analysis < handle
                     end
                     
                     %% If required, invert
-                    if invert
+                    if invert(idx)
                         active_tp{idx}       = ~active_tp{idx};
                     end    
                     
@@ -333,38 +335,7 @@ classdef behaviours_analysis < handle
                     end
 
                     bouts{idx} = sort([starts, stops]);
-                end
-                beh_sm{idx}     = smoothdata(beh.value, 'gaussian', smoothing);
-                beh_sm{idx}     = nanmean(beh_sm{idx},1);
-                %beh_sm{idx}    = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
-                %thr            = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
-                current_thr     = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
-
-                %% Define bouts
-                active_tp{idx}  = abs(beh_sm{idx}) > abs(current_thr);
-                [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx});
-
-                %% Add some pts before and after each epoch
-                dt = nanmedian(diff(obj.t));
-                for epoch = starts
-                    active_tp{idx}(max(1, epoch-round(obj.bout_extra_win(1)*(1/dt))):epoch) = 1;
-                end
-                for epoch = stops
-                    active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(obj.bout_extra_win(2)*(1/dt)))) = 1;
-                end
-                [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); % update bouts edges now that we extended the range
-
-
-                plts{idx} = subplot(numel(beh_types),1,idx);hold on;
-                title(strrep(current_type,'_','\_'))
-                plot(obj.t, beh_sm{idx});hold on;
-                for el = 1:numel(starts)
-                    x = [starts(el),starts(el),stops(el),stops(el)];
-                    y = [0,nanmax(beh_sm{idx}),nanmax(beh_sm{idx}),0];
-                    patch('XData',obj.t(x),'YData',y,'FaceColor','red','EdgeColor','none','FaceAlpha',.1);hold on
-                end
-
-                bouts{idx} = sort([starts, stops]);
+                end              
             end
 
             if rendering

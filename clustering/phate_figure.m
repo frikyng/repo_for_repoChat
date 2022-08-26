@@ -3,7 +3,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
         method = 'dbscan';
     end
 
-    MIN_CLUSTER_SIZE = 5
+    MIN_CLUSTER_SIZE = 4 % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
 
     %% Get cluster
     if strcmp(method, 'dbscan')
@@ -12,7 +12,6 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
         clusterer = HDBSCAN(Low_D_Data);
         %% clusterer.run_hdbscan(minpts, minclustsize, minClustNum, dEps, outlierThresh, plotResults)
         clusterer.run_hdbscan(MIN_CLUSTER_SIZE,MIN_CLUSTER_SIZE,1,[],epsilon,false);%whitebg('w'); hold on;set(gcf,'Color','w')
-        %[newLabels,probability] = hdbscan.predict( Y );
         cluster_idx = clusterer.labels;
     else
         error('method not implemented')

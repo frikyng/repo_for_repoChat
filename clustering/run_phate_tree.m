@@ -6,7 +6,7 @@ type_of_trace   = 'subtracted_peaks'; %raw, rescaled, subtracted
 %% Load object
 if ~exist('obj', 'var')
     [obj, source_signal, signal_indices] = prepare_phate_analysis(path, use_hd_data, time_filter, type_of_trace);    
-else
+elseif isempty(obj.event) || ~exist('signal_indices', 'var')
     [obj, source_signal, signal_indices] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
 end
 
@@ -28,6 +28,7 @@ end
 %conditions = {''};%{'BodyCam_L_whisker'}%{'encoder','~encoder'};
 
 conditions = {'peaks_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0]'}
+conditions = {'all','encoder','~encoder'}
 
 %% List of typical conditions.
 %% type obj.behaviours.types' to get valid entries
@@ -158,7 +159,9 @@ for el = 1:numel(conditions)
     suggested = test_epsilon(obj, Y_PHATE_3D{el}, current_signal, all_ROIs, valid_ROIs); %open test_epsilon and change rendering to true to see it
 
     %% Show clusters, push on tree, show traces
-    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, mean([suggested, epsilon]), source_signal(tp,:), Fig_count, signal_indices);
+    %v = mean([suggested, epsilon]);
+    v = suggested;
+    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, v, source_signal(tp,:), Fig_count, signal_indices);
     hold on;sgtitle(['Cluster for condition : ',strrep(conditions{el},'_','\_')])
     
     %% Rerun phate along time
