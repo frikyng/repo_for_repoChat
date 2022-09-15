@@ -3,7 +3,7 @@ function [Y, P, K] = phate(data, varargin)
 %   Y = phate(data) runs PHATE on data (rows: samples, columns: features)
 %   with default parameter settings and returns a 2 dimensional embedding.
 %
-%   If data is sparse PCA without mean centering will be done to maintain
+%   If data is sparse, PCA without mean centering will be done to maintain
 %   low memory footprint. If data is dense then normal PCA (with mean
 %   centering) is done.
 %
@@ -86,7 +86,7 @@ distfun_mds = 'euclidean';
 pot_method = 'log';
 K = [];
 a = 40;
-Pnm = [];
+Pnm = [];  % is this defined?
 t_max = 100;
 pot_eps = 1e-7;
 gamma = 0.5;
@@ -285,7 +285,7 @@ if strcmpi(mds_method, 'mmds')
     tic;
     disp 'Doing metric MDS:'
     opt = statset('display','iter');
-    Y = mdscale(PDX,ndim,'options',opt,'start',Y,'Criterion','metricstress');
+    [Y, stress, disparities] = mdscale(PDX,ndim,'options',opt,'start',Y,'Criterion','metricstress');
     tt_mmds = toc;
     disp(['MMDS took ' num2str(tt_mmds) ' seconds']);
 end
