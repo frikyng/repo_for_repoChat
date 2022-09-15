@@ -20,14 +20,18 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     %% Get valid pts and cmap      
     outliers        = cluster_idx <= 0;
     valid_points    = cluster_idx > 0;
-    current_cmap    = jet(numel(unique(cluster_idx(valid_points))));
+    [clust,~, individual_idx] = unique(cluster_idx);
+    current_cmap    = jet(numel(clust));
+    current_cmap    = current_cmap(individual_idx, :);
     
     RANDOMIZE_COLORS = true;
     if RANDOMIZE_COLORS
         current_cmap = current_cmap(randperm(size(current_cmap, 1)),:);
     end
+    
+    
     %% Add gray
-    current_cmap = [0.8,0.8,0.8;current_cmap];
+    current_cmap(outliers, :) = [];%repmat([0.8,0.8,0.8],sum(outliers),1);
     
     %% Prepare Figure
     figure(Fig_number);clf();set(gcf,'Units','normalized','Position',[0.05 0.05 0.9 0.9]);title(num2str(epsilon));
@@ -44,7 +48,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     valid = ROIs(valid_points);
     if ~obj.use_hd_data
         %% For Low_D tree
-        obj.ref.plot_value_tree(cluster_idx(valid_points), valid,'','cluster tree (one value per ROI)','',s2,'curved',current_cmap(2:end,:));
+        obj.ref.plot_value_tree(cluster_idx(valid_points), valid,'','cluster tree (one value per ROI)','',s2,'curved',current_cmap);
         %obj.ref.plot_value_tree(cluster_idx, find(~all(isnan(signal),2)),'','','',s2,'classic','jet');
     else
         %% FOR HD tree

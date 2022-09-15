@@ -161,7 +161,7 @@ classdef arboreal_scan_plotting < handle
             subplot(2,1,2); plot(obj.t, obj.event.mean_pairwise_corr); hold on;scatter(obj.t(obj.event.t_corr), obj.event.mean_pairwise_corr(obj.event.t_corr), [], obj.event.globality_index, 'filled');xlabel('time (s)');ylabel('Mean pairwise correlation');set(gcf,'Color','w');
         end
         
-        function plot_rescaled_traces(obj)
+        function plot_rescaled_traces(obj)            
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
             rescaled_traces = obj.rescaled_traces(:,valid_ROIS);            
             figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
@@ -195,7 +195,6 @@ classdef arboreal_scan_plotting < handle
 %             end
 %             
 %         end
-        
 
         function plot_cluster_tree(obj, tree_handle, map_handle, trace_handle)
             if nargin < 2 || isempty(tree_handle)
@@ -208,9 +207,16 @@ classdef arboreal_scan_plotting < handle
                 trace_handle = figure(7777);trace_handle = gca();
             end            
             
-            tree_handle
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
-            colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
+            colors = obj.dimensionality.labels;
+            if isempty(obj.dimensionality.labels)
+                colors = 'jet';
+            end
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', colors);
+            cmap = jet(range(obj.dimensionality.cluster_idx)+1);
+            if any(obj.dimensionality.cluster_idx <= 0)
+                cmap(1,:) = [0.3,0.3,0.3];
+            end
+            colormap(cmap);
 
             %% Display rearranged Loadings and Cluster limits    
             cla(map_handle);
@@ -233,10 +239,12 @@ classdef arboreal_scan_plotting < handle
             title(trace_handle, 'Average traces per cluster');xlabel('Time (s)');colororder(trace_handle, jet(gp))
         end
         
-        function cluster_traces = get_cluster_traces(obj)
+        function [cluster_traces, unassigned] = get_cluster_traces(obj)
             rescaled_traces     = obj.rescaled_traces(:, obj.dimensionality.valid_trace_idx);
             cluster_traces      = [];
-            for gp = sort(unique(obj.dimensionality.cluster_idx))'
+            idx                 = obj.dimensionality.cluster_idx;
+            unassigned          = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx <= 0),2);
+            for gp = sort(unique(idx(idx > 0)))'
                 cluster_traces(gp,:) = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2);
             end
         end
@@ -270,11 +278,14 @@ classdef arboreal_scan_plotting < handle
 %             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
 %             colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
 
-
-            figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
+            if ~isempty(obj.dimensionality.F)
+                figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
+            end
             
-            
-            %% Display rearranged Loadings and Cluster limits    
+            %% Display rearranged Loadings and Cluster limits 
+            if ~isvalid(map_handle)
+                map_handle = figure(1017);map_handle = gca();
+            end
             cla(map_handle);
             imagesc(map_handle, obj.dimensionality.LoadingsPM(:,weights_to_show));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
             %colorbar;set(gcf,'Color','w');

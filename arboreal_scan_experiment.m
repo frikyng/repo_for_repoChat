@@ -1215,6 +1215,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 catch
                     rescaled_traces = rescaled_traces ./ scaling'; %qq to fix --> hapens with hd data only
                 end
+                
+                %rescaled_traces = rescaled_traces - nanmedian(rescaled_traces, 2);                
             end
         end
 
@@ -1911,57 +1913,113 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         function gui(obj)
             explore_factors(obj);
         end
-
-        function weighted_averages = get_dimensionality(obj, cross_validate, n_factors, timepoints, dim_red_type, clust_meth, N_clust)
+        
+        function cross_validate(obj)
             if nargin < 2 || isempty(cross_validate)
                 cross_validate                  = false;
             end
-%             if ~isfield(obj.dimensionality, 'n_factors')
-%                 obj.dimensionality.n_factors = 5; % temp fix until we regenerate all recordings
-%             end
-            if (nargin >= 3 && ~isempty(n_factors)) && (isempty(obj.dimensionality) || n_factors ~= obj.dimensionality.n_factors) % if you change the value
-                obj.dimensionality           = {};
-                obj.dimensionality.n_factors = n_factors;
-            elseif nargin < 3 || isempty(n_factors) && ~isfield(obj.dimensionality, 'n_factors') || (isfield(obj.dimensionality, 'n_factors') && isempty(obj.dimensionality.n_factors))
-                obj.dimensionality.n_factors = 5;
-            end
-            if nargin < 4 || isempty(timepoints) || (ischar(timepoints) && contains(timepoints, 'full'))
-                timepoints                  = true(size(obj.timescale.global_timescale));
-                variable                      = 'full_traces';
-            elseif ischar(timepoints) && strcmpi(timepoints, 'peaks')
-            	timepoints     = vertcat(obj.event.peak_time{:});
-                variable       = 'peaks';
-            elseif ischar(timepoints)
-                [timepoints, beh_sm, active_tp] = obj.get_activity_bout(timepoints, true, 5);
-                1
-                timepoints = timepoints(2:2:end)
-                variable       = timepoints;
-            else
-                variable                      = 'manual selection';
-            end
-            if nargin < 5 || isempty(dim_red_type)
-                dim_red_type                  = 'pca';
-            end
-            if nargin < 6 || isempty(clust_meth)
-                clust_meth                    = 'none';
-            end
-            if nargin < 7 || isempty(N_clust)
-                N_clust                    = 0;
+            
+             %[~,N]                       = size(rescaled_traces);
+            nFactors                    = 20;%round(0.66*N);
+            n_iter                      = 5;
+            train                       = NaN(nFactors, n_iter);
+            test                        = NaN(nFactors, n_iter);
+            fac_steps                   = 1;
+            weighted_averages = [];
+            tic
+            for jj = 1:n_iter
+                %% Partition data into Xtrain and Xtest
+                %% random indexing
+                blocks = false
+                if ~blocks
+                    test_idx = randperm(size(data, 1));
+                    Xtrain = double(data(test_idx(1:2:end), :));
+                    Xtest  = double(data(test_idx(2:2:end), :));
+                else
+                    test_idx = randperm(size(data, 1)/10)*10;
+                    test_idx(test_idx == max(test_idx)) = [];
+                    idx_train = cell2mat(arrayfun(@(x) x:x+9, test_idx(1:2:end-1), 'UniformOutput', false));
+                    idx_test = cell2mat(arrayfun(@(x) x:x+9, test_idx(2:2:end-1), 'UniformOutput', false));
+                    Xtrain = double(data(idx_train, :));
+                    Xtest  = double(data(idx_test, :));
+                end
+
+                jj
+                parfor factor_nb = 1:nFactors
+                    if ~rem(factor_nb-1, fac_steps) % every fac_steps steps, starting at 1
+                        try
+                        [LoadingsPM, specVarPM, ~, stats, F] = factoran(Xtrain, factor_nb,'maxit',1500);
+                        train(factor_nb, jj)                 = stats.loglike;
+                        test(factor_nb, jj)                  = testloglike_factorAnalysis(Xtest, nanmean(Xtrain,1), LoadingsPM, specVarPM);
+                        catch
+                        test(factor_nb, jj)                  = NaN;
+                        train(factor_nb, jj)                 = NaN;
+
+                        end
+                    end
+                end
             end
 
-%             t = 1:numel(obj.global_median_raw);
-%             t_bap = [obj.event.t_win_no_overlap{:}];
-%             t_no_bap = ~ismember(t, t_bap);
-%
-%             timepoints = find(t_no_bap);
+            tested_modes = 1:fac_steps:nFactors;
+            figure(1028);cla();plot(tested_modes,train(tested_modes,1:n_iter),'o');hold on;plot(tested_modes,nanmean(train(tested_modes,1:n_iter), 2),'ko-')
+            xlabel('number of modes');ylabel('?');set(gcf,'Color','w');title('train');
+            figure(1029);cla();plot(tested_modes,test(tested_modes,1:n_iter),'o');hold on;plot(tested_modes,nanmean(test(tested_modes,1:n_iter), 2),'ko-')
+            xlabel('number of modes');ylabel('?');set(gcf,'Color','w');title('test');
+
+            [~, n_factor] = max(nanmean(test, 2));
+            %obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
+        end
+        
+        function weighted_averages = get_dimensionality(obj, data, dim_red_type, timepoints, n_factors, varargin)
+            if nargin < 3 || isempty(data)
+                data                = obj.rescaled_traces;
+            end            
+            if nargin < 3 || isempty(dim_red_type)
+                dim_red_type        = 'pca';
+            end
+            if nargin < 4 || isempty(timepoints)
+                timepoints          = 'full';
+            end
+            
+            %% Adjust timepoints
+            median_subtracted = false;            
+            if ischar(timepoints)
+                variable = timepoints;
+                if contains(variable, 'subtracted')
+                    median_subtracted = true;
+                end
+                timepoints = obj.get_tp_for_condition(variable);
+            else
+                timepoints = true(size(obj.timescale.global_timescale));
+                variable = 'manual_input';
+            end                
+           
+            %% Filter timepoints
+            data                    = data(timepoints,:);
+            
+            %% Subtract signal median if required
+            if median_subtracted
+                data = data - nanmedian(data,2);
+            end
+            
+            %% Reset dimensionality field
+            if nargin < 5 || isempty(n_factors)
+                [~,~,~,~,explained] = pca(obj.rescaled_traces(:, ~all(isnan(obj.rescaled_traces), 1)));
+                n_factors           = find(cumsum(explained)  > 50, 1, 'first');
+            end
+            obj.dimensionality           = {};
+            obj.dimensionality.n_factors = n_factors;
+
+            %             t = 1:numel(obj.global_median_raw);
+            %             t_bap = [obj.event.t_win_no_overlap{:}];
+            %             t_no_bap = ~ismember(t, t_bap);%
+            %             timepoints = find(t_no_bap);
 
             obj.dimensionality.dim_red_type     = dim_red_type;
             obj.dimensionality.variable         = variable;
 
-            data                = obj.rescaled_traces(timepoints,:);
-
-            %rescaled_traces     = rescaled_traces - obj.binned_data.global_median;
-
+            %% Remove NaN
+            data(isinf(data))   = NaN;
             all_ROIs            = 1:size(data, 2);
             normal_n_NaN        = median(sum(isnan(data(:,~all(isnan(data)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
             valid_trace_idx     = sum(isnan(data)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
@@ -1970,267 +2028,171 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Need to set it now
             obj.dimensionality.valid_trace_idx = valid_trace_idx;
 
-
-            %data = data - nanmedian(data,2)
-            data = data - nanmean(data,2);
-
-
             %% Get single or multiple factor estimate
-            if ~cross_validate
-                T = [];
-                stats = {};
-                specVarPM = [];
+            T = [];
+            stats = {};
+            specVarPM = [];
 
-                switch dim_red_type
-                    case 'pca'
-                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces),'NumComponents',obj.dimensionality.n_factors);
-                        [LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data),'NumComponents',obj.dimensionality.n_factors);
+            switch dim_red_type
+                case 'pca'
+                    [LoadingsPM, F, specVarPM,stats,explained,mu] = pca(double(data),'NumComponents',obj.dimensionality.n_factors);
+                    T                                           = [];
+                case 'nnmf'
+                    N_REPLICATES  = 20
+                    [F, LoadingsPM, D]  = nnmf(double(data),obj.dimensionality.n_factors,'replicates',N_REPLICATES,'algorithm','als');
+                    LoadingsPM          = LoadingsPM';
+                    T                   = [];
+                    stats               = {};
+                    specVarPM           = [];
+                case 'factoran'
+                    [LoadingsPM, specVarPM, T, stats, F] = factoran(double(data), obj.dimensionality.n_factors,'rotate','varimax'); % varimax, quartimax
+                case 'phate'
+                    varargin = {'ndim', obj.dimensionality.n_factors, varargin{:}};
+                    [LoadingsPM, P, K]  = phate(double(data'),varargin{:});
+                    T                   = [];
+                    stats               = {};
+                    specVarPM           = [];
+                    F                   = [];
+            end
 
-                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(data) - obj.binned_data.global_median(vertcat(obj.event.peak_time{:})),'NumComponents',obj.dimensionality.n_factors);
+            %% Store results
+            obj.dimensionality.LoadingsPM         = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
+            obj.dimensionality.specVarPM          = specVarPM;
+            obj.dimensionality.T                  = T;                % Rotation matrix
+            obj.dimensionality.stats              = stats;            % Factoran stats
+            obj.dimensionality.F                  = F;                % components
+            obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
+            obj.dimensionality.mask               = timepoints;
 
-                        %[LoadingsPM,F,specVarPM,stats,explained,mu] = pca(double(rescaled_traces) - F(:,1)*LoadingsPM(:,1)','NumComponents',obj.dimensionality.n_factors)
-                        T = []
-                    case 'nnmf'
-                        [F,LoadingsPM, D] = nnmf(double(data),obj.dimensionality.n_factors,'replicates',20,'algorithm','als');
-                        LoadingsPM = LoadingsPM';
-                        T = [];
-                        stats = {};
-                        specVarPM = [];
-                    case 'factoran'
-                        [LoadingsPM, specVarPM, T, stats, F] = factoran(double(data), obj.dimensionality.n_factors,'rotate','varimax'); % varimax, quartimax
-                end
+            obj.dimensionality.cluster_idx        = [];
+            obj.dimensionality.clust_meth         = [];
+            obj.dimensionality.N_clust            = [];
 
-                %% Store results
-                obj.dimensionality.LoadingsPM         = LoadingsPM;
-                obj.dimensionality.specVarPM          = specVarPM;
-                obj.dimensionality.T                  = T;                % Rotation matrix
-                obj.dimensionality.stats              = stats;            % Factoran stats
-                obj.dimensionality.F                  = F;                % components
-                obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
-                obj.dimensionality.mask               = timepoints;
-
-                obj.dimensionality.cluster_idx        = [];
-                obj.dimensionality.clust_meth         = clust_meth;
-                obj.dimensionality.N_clust            = N_clust;
-
-                %% Plot weight-tree for each component
-                for comp = 1:obj.dimensionality.n_factors
-                    obj.plot_dim_tree(comp);
-                end
-
-                if obj.rendering
-                    obj.plot_factor_tree();
-                end
-
-                %% Plot a map of tree weights by ROI number for each component
-                weighted_averages = obj.get_weight_map();
-
-                %% If no weighted average, Find clusters from latent variables
-                if ~strcmp(clust_meth, 'none')
-                    obj.cluster_factors();
-                end
-
-%                     %% To assign to strongest component
-%                     for row = 1:size(LoadingsPM,1)
-%                         [~, maxloc] = max(LoadingsPM(row, :));
-%                         LoadingsPM(row, :) = 0;
-%                         LoadingsPM(row, maxloc) = 1;
-%                     end
-
-                    %% To assign to strongest component
-%                     for row = 1:size(LoadingsPM,1)
-%                         LoadingsPM(row, :) = 0;
-%                         LoadingsPM(row, idx(row)) = 1;
-%                         if ~ismember(idx(row), [1,4,5])
-%                             LoadingsPM(row, :) = 0;
-%                         end
-%                     end
-
-            else
-                %% Cross validation (thanks Harsha)
-                %[~,N]                       = size(rescaled_traces);
-                nFactors                    = 20;%round(0.66*N);
-                n_iter                      = 5;
-                train                       = NaN(nFactors, n_iter);
-                test                        = NaN(nFactors, n_iter);
-                fac_steps                   = 1;
-                weighted_averages = [];
-                tic
-                for jj = 1:n_iter
-                    %% Partition data into Xtrain and Xtest
-                    %% random indexing
-                    blocks = false
-                    if ~blocks
-                        test_idx = randperm(size(data, 1));
-                        Xtrain = double(data(test_idx(1:2:end), :));
-                        Xtest  = double(data(test_idx(2:2:end), :));
-                    else
-                        test_idx = randperm(size(data, 1)/10)*10;
-                        test_idx(test_idx == max(test_idx)) = [];
-                        idx_train = cell2mat(arrayfun(@(x) x:x+9, test_idx(1:2:end-1), 'UniformOutput', false));
-                        idx_test = cell2mat(arrayfun(@(x) x:x+9, test_idx(2:2:end-1), 'UniformOutput', false));
-                        Xtrain = double(data(idx_train, :));
-                        Xtest  = double(data(idx_test, :));
-                    end
-
-                    jj
-                    parfor factor_nb = 1:nFactors
-                        if ~rem(factor_nb-1, fac_steps) % every fac_steps steps, starting at 1
-                            try
-                            [LoadingsPM, specVarPM, ~, stats, F] = factoran(Xtrain, factor_nb,'maxit',1500);
-                            train(factor_nb, jj)                 = stats.loglike;
-                            test(factor_nb, jj)                  = testloglike_factorAnalysis(Xtest, nanmean(Xtrain,1), LoadingsPM, specVarPM);
-                            catch
-                            test(factor_nb, jj)                  = NaN;
-                            train(factor_nb, jj)                 = NaN;
-
-                            end
-                        end
-                    end
-                end
-
-                tested_modes = 1:fac_steps:nFactors;
-                figure(1028);cla();plot(tested_modes,train(tested_modes,1:n_iter),'o');hold on;plot(tested_modes,nanmean(train(tested_modes,1:n_iter), 2),'ko-')
-                xlabel('number of modes');ylabel('?');set(gcf,'Color','w');title('train');
-                figure(1029);cla();plot(tested_modes,test(tested_modes,1:n_iter),'o');hold on;plot(tested_modes,nanmean(test(tested_modes,1:n_iter), 2),'ko-')
-                xlabel('number of modes');ylabel('?');set(gcf,'Color','w');title('test');
-
-                [~, n_factor] = max(nanmean(test, 2));
-                obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
+            
+            if obj.rendering
+                obj.plot_factor_tree();
+            end
+            
+            %% Plot a map of tree weights by ROI number for each component
+            weighted_averages = obj.get_weight_map();
+            
+            %% Plot weight-tree for each component
+            for comp = 1:obj.dimensionality.n_factors
+                obj.plot_dim_tree(comp);
             end
         end
 
-        function cluster_factors(obj)
-            if ~obj.dimensionality.N_clust
+        function cluster_factors(obj, clust_meth, N_clust)
+            if nargin < 2 || isempty(clust_meth)
+                clust_meth                    = 'hierarchical';
+            end
+            if nargin < 3 || isempty(N_clust)
+                N_clust                    = [];
+            end
+            
+            %% Clear previous results
+            obj.dimensionality.cluster_idx      = [];
+            obj.dimensionality.clust_meth       = clust_meth;
+            obj.dimensionality.N_clust          = N_clust;
+            obj.dimensionality.epsilon       	= [];
+            obj.dimensionality.labels           = [];
+
+            %% If N cluster is 0, skip clustering
+            if obj.dimensionality.N_clust == 0
                 obj.dimensionality.cluster_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 obj.dimensionality.sorted_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
                 return
             end
 
-            if isinf(obj.dimensionality.N_clust)
+            %% If N cluster is unknow, try to guess
+            if isempty(obj.dimensionality.N_clust) || isnan(obj.dimensionality.N_clust)
                 R = 1:20;
                 if strcmp(obj.dimensionality.clust_meth, 'kmeans')
                     eva = evalclusters(obj.dimensionality.LoadingsPM,'kmeans','silhouette','KList',R);
+                    obj.dimensionality.N_clust = eva.OptimalK;
+                    fprintf(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
                 elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical')
                     eva = evalclusters(obj.dimensionality.LoadingsPM,'linkage','silhouette','KList',R);
+                    obj.dimensionality.N_clust = eva.OptimalK;
+                    fprintf(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
+                elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
+                    obj.dimensionality.epsilon = test_epsilon(obj, obj.dimensionality.LoadingsPM);
+                    fprintf(['Optimal espilon s ',num2str(obj.dimensionality.epsilon), '\n'])
+                elseif strcmp(obj.dimensionality.clust_meth, 'strongest')
+                    obj.dimensionality.N_clust = NaN;
                 else
-                    eva = {};
-                    eva.OptimalK = inf;
-                    fprintf(['No auto auto-determinatiopn of the number of cluster\n'])
+                    error(['No auto auto-determination of the number of cluster for this method\n'])
                 end
-                obj.dimensionality.N_clust = eva.OptimalK
-                fprintf(['Ideal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
+            elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
+                if obj.dimensionality.N_clust > 0
+                    obj.dimensionality.epsilon = obj.dimensionality.N_clust;
+                    obj.dimensionality.N_clust = [];
+                else
+                    [obj.dimensionality.epsilon, obj.dimensionality.N_clust] = test_epsilon(obj, obj.dimensionality.LoadingsPM,[],[],[],obj.dimensionality.N_clust);
+                end
             end
-
+            
             if strcmp(obj.dimensionality.clust_meth, 'kmeans')
-                %cluster_idx = kmeans_opt(obj.dimensionality.LoadingsPM, max_n, 0.95, 500);
                 cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.N_clust);
+                figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
             elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical') % see https://fr.mathworks.com/help/stats/hierarchical-clustering.html
                 cluster_idx = clusterdata(obj.dimensionality.LoadingsPM,'Linkage', 'ward', 'MAXCLUST', obj.dimensionality.N_clust);%, 'Criterion','distance' 'MAXCLUST', 40)
                 figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
-                %                 Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');
-                %                 Z = linkage(Y,'ward');
-                %                 figure();dendrogram(Z);
-                %                 W = inconsistent(Z,3)
-
-                %                 pause(0.1); drawnow
-                %                 Y = pdist(obj.dimensionality.LoadingsPM ,'cityblock');
-                %                 Z = linkage(Y,'average');
-                %                 %c = cophenet(Z,Y); % cophenetic correlation coefficient
-                %                 %I = inconsistent(Z)
-                %                 %T = cluster(Z,'cutoff',obj.dimensionality.N_clust)
-                %                 T = cluster(Z,'maxclust',10);
-                %                 cluster_idx = T;
+                %Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');Z = linkage(Y,'ward');figure();dendrogram(Z);                                
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
-                MIN_GP = 3
-%                 
-%                 [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
-%                 dist = nanmean(mD(:,2))
-%                 cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,dist*2,MIN_GP, 'Distance', 'euclidean');
-                %if isinf(obj.dimensionality.N_clust)
-%                     mean_v = [];
-%                     L = 0.01:0.01:1
-%                     [mIdx,mD] = knnsearch(obj.dimensionality.LoadingsPM,obj.dimensionality.LoadingsPM,'K',2);
-%                     nanmean(mD(:,2))
-%
-%                     for v = L
-%                         %cluster_idx = clusterdata(obj.dimensionality.LoadingsPM, 'Linkage', 'ward', 'MAXCLUST', v);%, 'Criterion','distance' 'MAXCLUST', 40)
-%                         cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,v,MIN_GP, 'Distance', 'euclidean');
-%                         %labels = labels - min(labels)+ 1
-%                         %figure();silhouette(obj.dimensionality.LoadingsPM,cluster_idx);
-%                         a = silhouette(obj.dimensionality.LoadingsPM, cluster_idx);
-%                         mean_v(end+1) = nanmean(a);
-%                     end
-%                     [~, best] = nanmax(mean_v);
-%                     obj.dimensionality.N_clust = L(best);
-%                     cluster_idx = dbscan(obj.dimensionality.LoadingsPM ,obj.dimensionality.N_clust,MIN_GP, 'Distance', 'euclidean');
-%                 %end
-%
-
-
-
-
-
-
-                kD = pdist2(obj.dimensionality.LoadingsPM ,obj.dimensionality.LoadingsPM ,'euc','Smallest',5)
-                figure();
-                plot(sort(kD(end,:)));
-                title('k-distance graph')
-                xlabel('Points sorted with 50th nearest distances')
-                ylabel('50th nearest distances')
-                grid
-                thr = 1;
-
-                M = [];
-                L = 0.01:0.01:1
-                for thr = L
-                    thr = thr - thr/20;
-                    labels = dbscan(obj.dimensionality.LoadingsPM ,thr, MIN_GP, 'Distance', 'euclidean');
-                    M(end + 1) = numel(unique(labels))
+                MIN_GP = 4
+                cluster_idx                 = dbscan(obj.dimensionality.LoadingsPM, obj.dimensionality.epsilon, MIN_GP, 'Distance', 'euclidean');
+                obj.dimensionality.N_clust  = numel(unique(cluster_idx(cluster_idx > 0)));
+                if any(cluster_idx <= 0)
+                    col = [0.8, 0.8, 0.8];
+                else
+                    col = [];
                 end
-                [~, maxloc] = max(M);
-                L(maxloc)
-                labels = dbscan(obj.dimensionality.LoadingsPM ,L(maxloc),MIN_GP, 'Distance', 'euclidean');
-                labels = labels - min(labels)+ 1
-                col = lines(numel(unique(labels)));
-                labels_col = [labels, labels, labels];
-                count = 1;
-                for v = unique(labels)'
-                    subset = labels_col(:,1) == v;
-                    labels_col(subset, :) = repmat(col(count,:),sum(subset),1);
-                    count = count + 1;
+                col                         = [col ; jet(obj.dimensionality.N_clust)];
+                obj.dimensionality.labels   = [cluster_idx, cluster_idx, cluster_idx];
+                count                       = 1;
+                for v = unique(cluster_idx)'
+                    subset                                  = obj.dimensionality.labels(:,1) == v;
+                    obj.dimensionality.labels(subset, :)    = repmat(col(count,:),sum(subset),1);
+                    count                                   = count + 1;
                 end
-                figure();
-                scatter3(obj.dimensionality.LoadingsPM (:,1),obj.dimensionality.LoadingsPM (:,2),obj.dimensionality.LoadingsPM (:,3),20,labels_col)
-                %gscatter(obj.dimensionality.LoadingsPM (:,2),obj.dimensionality.LoadingsPM (:,3),labels);
-                title('epsilon = 2 and minpts = 50')
-                grid
-                cluster_idx = labels;
+                figure(1111);clf();
+                for offset = 0:(min(size(obj.dimensionality.LoadingsPM, 1)-1, 3))
+                    subplot(2,2,offset+1); hold on; grid; hold on
+                    scatter3(obj.dimensionality.LoadingsPM (:,1+offset),obj.dimensionality.LoadingsPM (:,2+offset),obj.dimensionality.LoadingsPM (:,3+offset),20,obj.dimensionality.labels, 'filled');
+                end               
+            elseif strcmp(obj.dimensionality.clust_meth, 'strongest')
+                %% To assign to strongest component
+                for row = 1:size(LoadingsPM,1)
+                    [~, maxloc] = max(LoadingsPM(row, :));
+                    LoadingsPM(row, :) = 0;
+                    LoadingsPM(row, maxloc) = 1;
+                end
             else
                 obj.dimensionality.cluster_idx = [];
             end
-
-            obj.dimensionality.cluster_idx = ones(size(obj.dimensionality.cluster_idx));
-            obj.dimensionality.sorted_idx   = 1:(numel(obj.dimensionality.cluster_idx));
-
-            if ~strcmp(obj.dimensionality.clust_meth, 'none')
-                %% Sort clusters by number of elements
+            
+            %% Sort clusters by number of elements
+            if obj.dimensionality.N_clust > 0
                 [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
-                a = unique(cluster_idx)';
-                gp = a(gp);
-                idx_sorted = NaN(size(cluster_idx));
-                count = 1;
-                for gp_idx = gp
-                    idx_sorted(cluster_idx == gp_idx) = count;
-                    count = count + 1;
-                end
-                obj.dimensionality.cluster_idx = idx_sorted; % stored group ids (reordered by number of element)
-                [~, obj.dimensionality.sorted_idx] = sort(idx_sorted); % get ROI index to reorder the data by group
+            else
+                gp = 1;
+            end
+            a = unique(cluster_idx)';
+            gp = a(gp);
+            idx_sorted = NaN(size(cluster_idx));
+            count = 1;
+            for gp_idx = gp(gp > 0)
+                idx_sorted(cluster_idx == gp_idx) = count;
+                count = count + 1;
+            end
+            idx_sorted(isnan(idx_sorted)) = 0;
+            obj.dimensionality.cluster_idx = idx_sorted; % stored group ids (reordered by number of element)
+            [~, obj.dimensionality.sorted_idx] = sort(idx_sorted); % get ROI index to reorder the data by group
 
-                if obj.rendering
-                    %% Plot clusters
-                    obj.plot_cluster_tree();
-                end
+            %% Plot clusters
+            if obj.rendering                
+                obj.plot_cluster_tree();
             end
         end
 

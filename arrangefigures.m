@@ -34,6 +34,12 @@ function arrangefigures(varargin)
 %
 % (c) M. van Dijk
 
+if any(arrayfun(@(x) contains(x.name, 'LiveEditorEvaluationHelper'), dbstack))
+    %% skip feature for live editors. Live edito create a temporary matfile called LiveEditorEvaluationHelperxxxxxxx.m
+    return
+end
+
+
 if nargin > 3
     warning('Incorrect number of input arguments. Leaving figures unchanged.')
     return

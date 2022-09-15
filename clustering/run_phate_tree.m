@@ -27,8 +27,8 @@ end
 %conditions = {'encoder_active','BodyCam_L_whisker_active'};
 %conditions = {''};%{'BodyCam_L_whisker'}%{'encoder','~encoder'};
 
-conditions = {'peaks_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0]'}
-conditions = {'all','encoder','~encoder'}
+conditions = {'peaks'};%_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0]'}
+%conditions = {'all'}%,'encoder','~encoder'}
 
 %% List of typical conditions.
 %% type obj.behaviours.types' to get valid entries
@@ -99,7 +99,7 @@ for el = 1:numel(conditions)
     %     Y_tSNE = tsne(signal,'Theta',0.5,'Verbose',2, 'perplexity', 20);
 
     %% PHATE 3D
-    Y_PHATE_3D{el} = phate(current_signal, 'ndim', N_Dim, 't', []);
+    Y_PHATE_3D{el} = phate(current_signal, 'ndim', N_Dim);
     close(gcf); 
     figure(Fig_count + 3000);clf(); title('Phate first 3 dimensions scatter plot')
     scatter3(Y_PHATE_3D{el}(:,1), Y_PHATE_3D{el}(:,2), Y_PHATE_3D{el}(:,3), 30); hold on;
