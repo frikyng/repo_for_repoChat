@@ -273,10 +273,7 @@ classdef arboreal_scan_plotting < handle
             end  
             
             %% Plot strongest component per ROI
-            obj.plot_strongest_comp_tree('', tree_handle);
-            
-%             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', 'jet');
-%             colorbar('Ticks',1:nanmax(obj.dimensionality.cluster_idx));colormap(jet(nanmax(obj.dimensionality.cluster_idx)));  
+            obj.plot_dim_tree(0, tree_handle);
 
             if ~isempty(obj.dimensionality.F)
                 figure(1024);cla();plot(obj.t(obj.dimensionality.mask), obj.dimensionality.F(:,weights_to_show));set(gcf,'Color','w');title(['Components ',strjoin(strsplit(num2str(weights_to_show),' '),'-'),' per ROI']);xlabel('t');
