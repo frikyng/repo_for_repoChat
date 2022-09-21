@@ -73,7 +73,7 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     elseif contains(type_of_trace, 'rescaled')
         source_signal = obj.rescaled_traces;
     elseif contains(type_of_trace, 'subtracted')
-        source_signal = obj.rescaled_traces - obj.global_median_raw;
+        source_signal = obj.rescaled_traces - nanmedian(obj.rescaled_traces,2);
     end
 
     if contains(type_of_trace, 'shuffle')
