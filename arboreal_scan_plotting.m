@@ -205,13 +205,14 @@ classdef arboreal_scan_plotting < handle
             end
             if nargin < 4 || isempty(trace_handle)
                 trace_handle = figure(7777);trace_handle = gca();
-            end            
+            end   
+
             
             colors = obj.dimensionality.labels;
             if isempty(obj.dimensionality.labels)
                 colors = 'jet';
             end
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'regular', colors);
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'curved', colors, 'discrete');
             cmap = jet(range(obj.dimensionality.cluster_idx)+1);
             if any(obj.dimensionality.cluster_idx <= 0)
                 cmap(1,:) = [0.3,0.3,0.3];
@@ -246,23 +247,6 @@ classdef arboreal_scan_plotting < handle
             unassigned          = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx <= 0),2);
             for gp = sort(unique(idx(idx > 0)))'
                 cluster_traces(gp,:) = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2);
-            end
-        end
-        
-        function plot_multiple_tree_dim(obj, N_Dim)
-            if nargin < 2 || isempty(N_Dim)
-                N_Dim = obj.dimensionality.n_factors;
-            end
-            n_row = floor(sqrt(N_Dim));
-            n_col = ceil(sqrt(N_Dim)) ;
-            figure(2000);clf()
-            for dim = 1:N_Dim
-                sub = subplot(n_row,n_col,dim);
-                if obj.use_hd_data
-                    obj.ref.plot_value_tree(split_values_per_voxel(obj.dimensionality.LoadingsPM(:,dim), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',sub,'curved','viridis');
-                else
-                    obj.ref.plot_value_tree(obj.dimensionality.LoadingsPM(:,dim), find(obj.dimensionality.valid_trace_idx),'',['phate #',num2str(dim),' Loadings (per ribbon)'],'',sub,'curved','viridis');
-                end
             end
         end
 

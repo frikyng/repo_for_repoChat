@@ -50,120 +50,118 @@ conditions = {'peaks'};%_~trigger[5,5]','peaks_trigger[0,5]', 'peaks_trigger[5,0
 Fig_count = 1000;
 Y_PHATE_3D = {};
 cluster_idx = {};
-
-% tp = obj.get_tp_for_condition('peaks');
-% Y_PHATE_3D = phate(source_signal(), 'ndim', N_Dim, 't', []);
+method = 'legacy'
 
 for el = 1:numel(conditions)
-    %% Set/Restore whole signal
-    current_signal = source_signal;
-    
-    %% Get timpoints for current behavioural condition
-    if contains(type_of_trace, 'subtracted')&&  ~contains(conditions{el}, 'peaks')
-        error_box('You should not use subtracted on full signals as kinetics may vary between ROIs. You should use peaks')
-    end
-    tp = obj.get_tp_for_condition(conditions{el});
-    %     tp = diff(tp);
-    %     tp(tp < 0) = 0;
-    %     tp = [0, tp];
+%     if strcmp(method, 'legacy')
+%         %% Set/Restore whole signal
+%         current_signal = source_signal;
+% 
+%         %% Get timpoints for current behavioural condition
+%         if contains(type_of_trace, 'subtracted')&&  ~contains(conditions{el}, 'peaks')
+%             error_box('You should not use subtracted on full signals as kinetics may vary between ROIs. You should use peaks')
+%         end
+%         tp = obj.get_tp_for_condition(conditions{el});
+%         %     tp = diff(tp);
+%         %     tp(tp < 0) = 0;
+%         %     tp = [0, tp];
+% 
+%         %% Filter out unrequired timepoints
+%         current_signal(~tp, :) = NaN;
+% 
+%         %% Remove Nans
+%         all_ROIs        = 1:size(current_signal, 2);
+%         valid_ROIs      = ~all(isnan(current_signal),1);
+%         all_ROIs(all_ROIs > obj.n_ROIs) = [];
+%         all_ROIs(all_ROIs > obj.n_ROIs) = [];
+%         current_signal  = current_signal(:,valid_ROIs);
+%         current_signal  = current_signal(~all(isnan(current_signal),2),:);
+% 
+%         %% Define if we will extract info along space or time
+%         if strcmp(analysis_mode, 'space')
+%             current_signal = current_signal';
+%         end
+% 
+%         %% Assign timepoint color code
+%         colors = 1:size(current_signal, 1);
+% 
+%         %% PCA
+%         %     Y_PCA = svdpca(signal, 2, 'random');
+%         %     figure()
+%         %     scatter(Y_PCA(:,1), Y_PCA(:,2), 10, colors, 'filled');
+%         %     colormap(viridis); set(gca,'xticklabel',[]); set(gca,'yticklabel',[]);
+%         %     axis tight; xlabel 'PCA1'; ylabel 'PCA2'
+%         %     drawnow
+% 
+% 
+%         %% tSNE
+%         %     Y_tSNE = tsne(signal,'Theta',0.5,'Verbose',2, 'perplexity', 20);
+% 
+%         % PHATE 3D
+%         [Y_PHATE_3D{el}, ~, ~, stress] = phate(current_signal, 'ndim', N_Dim, 't', []);
+%         %[Y_PHATE_3D{el}, ~, ~, stress] = phate(current_signal, 'ndim', N_Dim, 't', []);
+%     else
+       [~, current_signal] =  obj.get_dimensionality([], 'phate', [conditions{el},'_subtracted'], N_Dim, 't', []);
+        Y_PHATE_3D{el} = obj.dimensionality.LoadingsPM;
+        valid_ROIs = obj.dimensionality.valid_trace_idx;
+%     end
 
-    %% Filter out unrequired timepoints
-    current_signal(~tp, :) = NaN;
 
-    %% Remove Nans
-    all_ROIs        = 1:size(current_signal, 2);
-    valid_ROIs      = ~all(isnan(current_signal),1);
-    all_ROIs(all_ROIs > obj.n_ROIs) = [];
-    all_ROIs(all_ROIs > obj.n_ROIs) = [];
-    current_signal  = current_signal(:,valid_ROIs);
-    current_signal  = current_signal(~all(isnan(current_signal),2),:);
-    
-    %% Define if we will extract info along space or time
-    if strcmp(analysis_mode, 'space')
-        current_signal = current_signal';
-    end
+    obj.cluster_factors('dbscan', []);
 
-    %% Assign timepoint color code
-    colors = 1:size(current_signal, 1);
-
-    %% PCA
-    %     Y_PCA = svdpca(signal, 2, 'random');
-    %     figure()
-    %     scatter(Y_PCA(:,1), Y_PCA(:,2), 10, colors, 'filled');
-    %     colormap(viridis); set(gca,'xticklabel',[]); set(gca,'yticklabel',[]);
-    %     axis tight; xlabel 'PCA1'; ylabel 'PCA2'
-    %     drawnow
-
-
-    %% tSNE
-    %     Y_tSNE = tsne(signal,'Theta',0.5,'Verbose',2, 'perplexity', 20);
-
-    %% PHATE 3D
-    Y_PHATE_3D{el} = phate(current_signal, 'ndim', N_Dim);
-    close(gcf); 
+    %close(gcf);
     figure(Fig_count + 3000);clf(); title('Phate first 3 dimensions scatter plot')
     scatter3(Y_PHATE_3D{el}(:,1), Y_PHATE_3D{el}(:,2), Y_PHATE_3D{el}(:,3), 30); hold on;
 
 
     %% Display Phates on tree
-    n_row = floor(sqrt(N_Dim));
-    n_col = ceil(sqrt(N_Dim)) ;
-    figure(Fig_count + 2000);clf()
-    for dim = 1:N_Dim
-        sub = subplot(n_row,n_col,dim);
-        if obj.use_hd_data
-            obj.ref.plot_value_tree(split_values_per_voxel(Y_PHATE_3D{el}(:,dim), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',sub,'curved','viridis');
-        else
-            obj.ref.plot_value_tree(Y_PHATE_3D{el}(:,dim), find(valid_ROIs),'',['phate #',num2str(dim),' Loadings (per ribbon)'],'',sub,'curved','viridis');
-        end
-    end
-    
+    obj.plot_dim_tree(0); % New syntax : you can control colormap and tree type ans individual subplots
+    obj.plot_dim_tree(1:N_Dim); % New syntax : you can control colormap and tree type ans individual subplots
+
     figure();plot(Y_PHATE_3D{el})
     figure();imagesc(Y_PHATE_3D{el});colorbar;%caxis([-1 1]);
-    
+
     % ESTIMATES for the maximum # of PHATE loadings to use
 %     var_PHATE = var(Y_PHATE_3D{el});
 %     figure();subplot(2,2,1); plot(var_PHATE); title('Var of each Loading')
-%     
+%
 %     cumsum_PHATE = cumsum(mean(abs(Y_PHATE_3D{el}),1));
 %     subplot(2,2,2); plot(cumsum_PHATE);title('Cum Sum of each mean(abs(Loading))')
-%         
+%
 %     range_PHATE = range(Y_PHATE_3D{el});
 %     subplot(2,2,3);plot(range_PHATE);title('Range for each Loading')
-%     
+%
 %     cumsum_range_PHATE = cumsum(range(Y_PHATE_3D{el}));
 %     subplot(2,2,4); plot(cumsum_range_PHATE); title('Cum Sum of each range(Loading)')
-    
+
         %%testing if we can use specified PHATE dimensions only, and then do
         %%clustering to identify ROIs that are difficult to see between conditions
-        % determine which PHATE dimensions 
-        
+        % determine which PHATE dimensions
+
         %New_PHATE_3D = Y_PHATE_3D{el}(:,[9,11,13,14,16,25]);
 
-    %% estimate epsilon for subsequent (h)DBScan clustering      
+    %% estimate epsilon for subsequent (h)DBScan clustering
     %original line
     kD = pdist2(Y_PHATE_3D{el},Y_PHATE_3D{el},'euc','Smallest',5);
-    
+
     %for testing new PHATE (comment out if not using)
     %kD = pdist2(New_PHATE_3D,New_PHATE_3D,'euc','Smallest',5);
-    
+
     kd_sorted = sort(kD(:))';
     slope = (kd_sorted(end) - kd_sorted(1)) / numel(kd_sorted);
     [~, minloc] = min(kd_sorted - ((1:numel(kd_sorted)) * slope));
     epsilon = kd_sorted(minloc);
-    
+
     %% estimate epsilon from 'knee' ## Uncomment second line to see how clustering evolves with epsilon
-    %epsilon = 1;
-    %suggested = 1;
-    
-    suggested = test_epsilon(obj, Y_PHATE_3D{el}, current_signal, all_ROIs, valid_ROIs); %open test_epsilon and change rendering to true to see it
+    epsilon_prct = 5;
+    %suggested = test_epsilon(obj, Y_PHATE_3D{el}, current_signal, 1:obj.n_ROIs, valid_ROIs, epsilon_prct); %open test_epsilon and change rendering to true to see it
 
     %% Show clusters, push on tree, show traces
     %v = mean([suggested, epsilon]);
-    v = suggested;
-    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, v, source_signal(tp,:), Fig_count, signal_indices);
+    %v = suggested;
+    cluster_idx{el} = phate_figure(obj, Y_PHATE_3D{el}, obj.dimensionality.epsilon, source_signal(obj.dimensionality.mask,:), Fig_count, signal_indices);
     hold on;sgtitle(['Cluster for condition : ',strrep(conditions{el},'_','\_')])
-    
+
     %% Rerun phate along time
 %   which_phate = 3
 %   loc = get_phate_on_events(Y_PHATE_3D{el}, which_phate, current_signal, 0.8, valid_ROIs, obj, tp) % half max phate
@@ -171,16 +169,16 @@ for el = 1:numel(conditions)
 %         loc = get_phate_on_events(Y_PHATE_3D{el}, which_phate, current_signal, 0.8, valid_ROIs, obj, tp) % half max phate
 %     end
 
-    %% Hierarchical clustering for reference    
+    %% Hierarchical clustering for reference
 %         figure(Fig_count + 1000);clf();
-%         s1 = subplot(3,2,1); 
+%         s1 = subplot(3,2,1);
 %         eva = evalclusters(Y_PHATE_3D{el},'linkage','silhouette','KList',1:100);
 %         cluster_idx = clusterdata(Y_PHATE_3D{el},'Linkage', 'ward', 'MAXCLUST', eva.OptimalK);%, 'Criterion','distance' 'MAXCLUST', 40)
 %         cluster_idx = clusterdata(Y_PHATE_3D{el},'Linkage', 'ward', 'MAXCLUST', 40);%, 'Criterion','distance' 'MAXCLUST', 40)
 %         scatter3(Y_PHATE_3D{el}(:,1), Y_PHATE_3D{el}(:,2), Y_PHATE_3D{el}(:,3), 30, cluster_idx, 'filled'); hold on;
 %         Z = linkage(Y_PHATE_3D{el},'ward');
 %         s2 = subplot(3,2,2); dendrogram(Z,0,'ColorThreshold','default','Orientation','left');
-%         s3 = subplot(3,2,3); 
+%         s3 = subplot(3,2,3);
 %         values = split_values_per_voxel(cluster_idx, obj.ref.header.res_list(:,1), signal_indices);
 %         obj.ref.plot_value_tree(values, '','','cluster tree (one value per voxel)','',s3,'curved',current_cmap);
 %         s4 = subplot(3,2,4);cla();silhouette(Y_PHATE_3D{el},cluster_idx);hold on;axis fill
@@ -189,7 +187,7 @@ for el = 1:numel(conditions)
 %             plot(nanmedian(source_signal(:,signal_indices(cluster_idx == gp)),2));hold on;
 %         end
 
-    Fig_count = Fig_count + 1    
+    Fig_count = Fig_count + 1
 end
 
 
@@ -213,7 +211,7 @@ end
 
 specific = find(~is_matching);
 figure();
-for el = 1:numel(specific)    
+for el = 1:numel(specific)
     sub = subplot(1,numel(specific),el);
     obj.ref.plot_value_tree(Y_PHATE_3D{test_beh}(:,specific(el)), find(valid_ROIs),'',['phate #',num2str(specific(el)),' is specific to this behaviour'],'',sub,'curved','viridis');
 end
@@ -222,7 +220,7 @@ different = Y_PHATE_3D{test_beh}(:,specific(el));
 ROIs = find(different > prctile(different, 80));
 
 
-    
+
 %     cluster_idx = dbscan(Y_PHATE_3D{el} , nanmedian(epsilon), 5);
 %     f = figure();
 %     subplot(1,2,1);
@@ -232,7 +230,7 @@ ROIs = find(different > prctile(different, 80));
 %     s = subplot(1,2,2);
 %     obj.ref.plot_value_tree(cluster_idx, find(~all(isnan(signal),2)),'','','',s,'classic','jet');
 %     title(num2str(e));
-    
+
 
 %     eva = evalclusters(Y_PHATE_3D{el},'kmeans','silhouette','KList',1:20);
 % 	R = 0.01:0.01:5
@@ -243,6 +241,3 @@ ROIs = find(different > prctile(different, 80));
 %     end
 
 %     close all
-
-
-

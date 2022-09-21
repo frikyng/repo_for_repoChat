@@ -2,9 +2,9 @@
     if nargin < 6 || isempty(n_clust)
         n_clust = [];
     end
- 
- 
-    %% to test a range of epsilon value and identify best number    
+
+
+    %% to test a range of epsilon value and identify best number
     method      = 'dbscan'
     rendering   = false
     if strcmp(method, 'dbscan')
@@ -12,15 +12,15 @@
     else
         test_range       = 1:20;
     end
-    
+
     n_gp        = [];
     n_noise_pt  = [];
-    
+
     current_ep  = 1;
     MIN_CLUSTER_SIZE = 4 %2*size(Y_PHATE_3D,2); % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
     gp = [];
     tolerance = 3;
-    while current_ep < numel(test_range)    
+    while current_ep < numel(test_range)
         try
             test_value  = test_range(current_ep);
 
@@ -36,7 +36,7 @@
                 cluster_idx = clusterer.labels;
             else
                 error('method not implemented')
-            end     
+            end
 
 
             %colors = 1:sum(cluster_idx > 0);
@@ -54,7 +54,7 @@
             colors = colors(indices, :);
 
             n_gp(current_ep) = numel(gp);
-            n_noise_pt(current_ep) = sum(cluster_idx <= 0);      
+            n_noise_pt(current_ep) = sum(cluster_idx <= 0);
 
 
             if rendering
@@ -85,21 +85,21 @@
         end
         current_ep = current_ep + 1;
     end
-    
+
     if isempty(n_clust)
-        [n_clust, max_loc] = max(n_gp);
+        max_loc = find((n_noise_pt/size(Low_Dim_Data, 1)) < 0.05, 1, 'first');
+        n_clust = test_range(max_loc);
+        %[n_clust, max_loc] = max(n_gp);
     else
-        max_loc = find(n_gp > abs(n_clust), 1, 'last');
+        max_loc = find(n_gp == abs(n_clust), 1, 'last');
         if isempty(max_loc)
             [n_clust, max_loc] = max(n_gp);
         end
     end
 %     suggested = knee_pt(test_range(max_loc:numel(n_noise_pt)), n_gp(max_loc:end));
 
-    suggested = test_range(find((n_noise_pt/size(Low_Dim_Data, 1)) < 0.05, 1, 'first'));
+    suggested = test_range(max_loc);
     if isempty(suggested)
         suggested = test_range(1);
     end
-%     figure();plot(test_range(1:numel(n_noise_pt)), n_gp./ nanmax(n_gp)); hold on;
-%     plot(test_range(1:numel(n_noise_pt)), n_noise_pt./nanmax(n_noise_pt))
  end
