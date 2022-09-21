@@ -248,6 +248,23 @@ classdef arboreal_scan_plotting < handle
                 cluster_traces(gp,:) = nanmean(rescaled_traces(:,obj.dimensionality.cluster_idx == gp),2);
             end
         end
+        
+        function plot_multiple_tree_dim(obj, N_Dim)
+            if nargin < 2 || isempty(N_Dim)
+                N_Dim = obj.dimensionality.n_factors;
+            end
+            n_row = floor(sqrt(N_Dim));
+            n_col = ceil(sqrt(N_Dim)) ;
+            figure(2000);clf()
+            for dim = 1:N_Dim
+                sub = subplot(n_row,n_col,dim);
+                if obj.use_hd_data
+                    obj.ref.plot_value_tree(split_values_per_voxel(obj.dimensionality.LoadingsPM(:,dim), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',sub,'curved','viridis');
+                else
+                    obj.ref.plot_value_tree(obj.dimensionality.LoadingsPM(:,dim), find(obj.dimensionality.valid_trace_idx),'',['phate #',num2str(dim),' Loadings (per ribbon)'],'',sub,'curved','viridis');
+                end
+            end
+        end
 
         function plot_factor_tree(obj, weights_to_show, weighted_averages, tree_handle, map_handle, trace_handle)
             % rplace : plot_dimensionality_summary
