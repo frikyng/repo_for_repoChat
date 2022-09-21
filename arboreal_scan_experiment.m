@@ -1810,7 +1810,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             else
                 ROIs_list   = obj.ref.indices.valid_swc_rois;
-                mean_bin_cc = cc(:,1);
+                mean_bin_cc = cc(:,find(obj.dimensionality.valid_trace_idx, 1, 'first'));
             end
 
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
@@ -1970,8 +1970,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
         end
         
-        function weighted_averages = get_dimensionality(obj, data, dim_red_type, timepoints, n_factors, varargin)
-            if nargin < 3 || isempty(data)
+        function [weighted_averages, data] = get_dimensionality(obj, data, dim_red_type, timepoints, n_factors, varargin)
+            if nargin < 2 || isempty(data)
                 data                = obj.rescaled_traces;
             end            
             if nargin < 3 || isempty(dim_red_type)
@@ -2068,7 +2068,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.dimensionality.clust_meth         = [];
             obj.dimensionality.N_clust            = [];
 
-            
             if obj.rendering
                 obj.plot_factor_tree();
             end
@@ -2077,9 +2076,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             weighted_averages = obj.get_weight_map();
             
             %% Plot weight-tree for each component
-            for comp = 1:obj.dimensionality.n_factors
-                obj.plot_dim_tree(comp);
-            end
+            obj.plot_multiple_dim_tree(1:obj.dimensionality.n_factors)
         end
 
         function cluster_factors(obj, clust_meth, N_clust)
@@ -2157,7 +2154,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     count                                   = count + 1;
                 end
                 figure(1111);clf();
-                for offset = 0:(min(size(obj.dimensionality.LoadingsPM, 1)-1, 3))
+                for offset = 0:(min(size(obj.dimensionality.LoadingsPM, 2)-2, 2))
                     subplot(2,2,offset+1); hold on; grid; hold on
                     scatter3(obj.dimensionality.LoadingsPM (:,1+offset),obj.dimensionality.LoadingsPM (:,2+offset),obj.dimensionality.LoadingsPM (:,3+offset),20,obj.dimensionality.labels, 'filled');
                 end               
@@ -2186,9 +2183,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 idx_sorted(cluster_idx == gp_idx) = count;
                 count = count + 1;
             end
-            idx_sorted(isnan(idx_sorted)) = 0;
-            obj.dimensionality.cluster_idx = idx_sorted; % stored group ids (reordered by number of element)
-            [~, obj.dimensionality.sorted_idx] = sort(idx_sorted); % get ROI index to reorder the data by group
+            idx_sorted(isnan(idx_sorted))       = 0;
+            obj.dimensionality.cluster_idx      = idx_sorted;       % stored group ids (reordered by number of element)
+            [~, obj.dimensionality.sorted_idx]  = sort(idx_sorted); % get ROI index to reorder the data by group
 
             %% Plot clusters
             if obj.rendering                
@@ -2197,41 +2194,63 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
 
-        function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle)
-            if nargin < 2 || isempty(comp) || ~comp
-                [tree, soma_location, tree_values, values] = obj.plot_strongest_comp_tree();
-                return
+        function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle, cmap, tree_type)
+            % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
+            if nargin < 2 || isempty(comp)
+                comp        = 0;
             end
             if nargin < 3 || isempty(fig_handle)
-                fig_handle = 10200 + comp; % fig number or fig hande
+                fig_handle = 2000;% fig number or fig hande
             end
+            if nargin < 4 || isempty(cmap)
+                cmap       = 'redbluesymmetrical';
+            end
+            if nargin < 5 || isempty(tree_type)
+                tree_type  = 'simple';
+            end
+            figure(fig_handle);clf();
 
+            %% Recover Factors / Loadings
+            LoadingsPM  = obj.dimensionality.LoadingsPM;
+            Valid_ROIs  = obj.dimensionality.all_ROIs(obj.dimensionality.valid_trace_idx);
+            values      = NaN(numel(comp), numel(Valid_ROIs));
+            [~, loc]    = nanmax(obj.dimensionality.LoadingsPM,[],2);
+            
+            %% Prepare rendering
+            N_Dim = numel(comp);
+            n_row = floor(sqrt(N_Dim));
+            n_col = ceil(numel(comp) / n_row);
 
-            % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
-
-            %% Reload loadings
-            LoadingsPM = obj.dimensionality.LoadingsPM;
-            Valid_ROIs = obj.dimensionality.all_ROIs(obj.dimensionality.valid_trace_idx);
-
-            values = NaN(1, numel(Valid_ROIs));
-            if comp
+            %% Plot components (or strongest factor location if comp == 0)
+            tiledlayout(n_row, n_col, 'Padding', 'none', 'TileSpacing', 'compact'); 
+            for comp_idx = 1:numel(comp)
+                ax = nexttile; % a bit beter than subplot, but if you have matlab < 2019b, you can use the line below
+                %ax = subplot(n_row, n_col, comp_idx);
+                dim = comp(comp_idx);
                 for roi = 1:numel(Valid_ROIs)
-                    %ROI = valid_ROIs(roi);
-                    values(roi) = LoadingsPM(roi, comp);
+                    if dim
+                        values(comp_idx, roi) = LoadingsPM(roi, dim);
+                    else                        
+                        values(comp_idx, roi) = loc(roi);
+                    end
                 end
-                titl = ['Weighted average for component ',num2str(comp),' per ROI'];
-            else
-                [~, loc]    = max(LoadingsPM(:,1:5)');
-                for ROI = 1:numel(Valid_ROIs)
-                    roi = Valid_ROIs(ROI);
-                    values(roi) = loc(ROI);
-                end
-                titl = 'Location of strongest component';
-            end
 
-            %% Map dimension weights on the tree
-            if obj.rendering || ishandle(fig_handle)
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, titl, '',  fig_handle, 'regular');
+                %% Map dimension weights on the tree
+                if obj.rendering || ishandle(fig_handle)
+                    if dim
+                        titl = ['Component ',num2str(dim), ' weights'];
+                    else
+                        titl = 'Location of strongest component';
+                        cmap = jet(nanmax(values));
+                        cmap = cmap(values, :);
+                    end  
+
+                    if obj.use_hd_data
+                        [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(split_values_per_voxel(values(comp_idx, :), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',ax,tree_type,cmap);
+                    else
+                    	[f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values(comp_idx, :), Valid_ROIs,'',titl,'',ax,tree_type,cmap);
+                    end
+                end
             end
         end
 
@@ -2259,29 +2278,29 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
-        function [tree, soma_location, tree_values, values] = plot_strongest_comp_tree(obj, n_dim, fig_handle)
-            if nargin < 2 || isempty(n_dim)
-                n_dim = size(obj.dimensionality.LoadingsPM, 2);
-            end
-            if nargin < 3 || isempty(fig_handle)
-                fig_handle = 10200;
-            end
-
-
-            [~, loc]    = nanmax(obj.dimensionality.LoadingsPM(:,1:n_dim),[],2);
-            Valid_ROIs  = find(obj.dimensionality.valid_trace_idx);
-            values      = NaN(size(Valid_ROIs));
-            for ROI = 1:numel(Valid_ROIs)
-                values(ROI)     = loc(ROI);
-            end
-            values = values(~isnan(values));
-
-            %% Map dimension weights on the tree
-            if obj.rendering
-                [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',fig_handle, 'regular', 'jet');
-                colorbar('Ticks',1:nanmax(values));colormap(jet(nanmax(values)))
-            end
-        end
+%         function [tree, soma_location, tree_values, values] = plot_strongest_comp_tree(obj, n_dim, fig_handle)
+%             if nargin < 2 || isempty(n_dim)
+%                 n_dim = size(obj.dimensionality.LoadingsPM, 2);
+%             end
+%             if nargin < 3 || isempty(fig_handle)
+%                 fig_handle = 10200;
+%             end
+% 
+% 
+%             [~, loc]    = nanmax(obj.dimensionality.LoadingsPM(:,1:n_dim),[],2);
+%             Valid_ROIs  = find(obj.dimensionality.valid_trace_idx);
+%             values      = NaN(size(Valid_ROIs));
+%             for ROI = 1:numel(Valid_ROIs)
+%                 values(ROI)     = loc(ROI);
+%             end
+%             values = values(~isnan(values));
+% 
+%             %% Map dimension weights on the tree
+%             if obj.rendering
+%                 [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values, Valid_ROIs, obj.default_handle, 'Location of strongest component','',fig_handle, 'regular', 'jet');
+%                 colorbar('Ticks',1:nanmax(values));colormap(jet(nanmax(values)))
+%             end
+%         end
 
         %% #############################################
 
@@ -2330,6 +2349,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Get original traces
             [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering);
+            
+%             sz = vertcat(obj.event.peak_value{:});
+%             thr1 = max(sz) * 0.8;
+%             thr2 = max(sz) * 0.2;
+%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
+%             for fn = fieldnames(obj.event)'                
+%                  if numel(obj.event.(fn{1})) == numel(mask)
+%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
+%                  end
+%             end
 
             %% Identify and log poorly correlated ROIs
             obj.find_bad_ROIs(correlation_res, idx_filter);
@@ -2422,9 +2451,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 colororder(ax, color_code);
                 
                 %% Plot location of excluded traces
-                f = obj.ref.plot_value_tree(obj.bad_ROI_list, 1:numel(obj.bad_ROI_list), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','RedBlue'); hold on;
+                f = obj.ref.plot_value_tree(obj.bad_ROI_list, 1:numel(obj.bad_ROI_list), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','redblue'); hold on;
                 if any(excl_but_not_bad)
-                    obj.ref.plot_value_tree(repmat(0.7,1,sum(excl_but_not_bad)), find(excl_but_not_bad), obj.default_handle, 'Uncorrelated ROIs', '',  f.Parent,'','RedBlue'); hold on;
+                    obj.ref.plot_value_tree(repmat(0.7,1,sum(excl_but_not_bad)), find(excl_but_not_bad), obj.default_handle, 'Uncorrelated ROIs', '',  f(1).Parent); hold on;
                 end
                 %                 recovered = ((excl | obj.bad_ROI_list') & ~excl_but_good);
                 %                 if any(recovered)
@@ -2503,17 +2532,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.get_correlations();
 
             %% Dimensionality reduction
-            try
-                obj.get_dimensionality(false,6,'','factoran',false,'peaks'); % set to true for cross validation
-            catch
-                warning('Not enough events availabl for factoran on peaks. Using full traces instead')
-                try
-                    obj.get_dimensionality(false,6,'','pca',false,'peaks'); % set to true for cross validation
-                catch
-                    warning('Not enough events available for pca on peaks. Using full traces instead')
-                    obj.get_dimensionality(false,6,'','factoran',false,'full_traces'); % set to true for cross validation
-                end
-            end
+            obj.get_dimensionality([],'phate','peaks_subtracted',[]); 
+            
+            %% Clustering
+            obj.cluster_factors('dbscan', [])
+           
 
             %% Optionally, if external variables need an update, do it here
             %obj.update_external_metrics(60)
