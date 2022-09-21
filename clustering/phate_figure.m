@@ -22,13 +22,14 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     valid_points    = cluster_idx > 0;
     [clust,~, individual_idx] = unique(cluster_idx);
     current_cmap    = jet(numel(clust));
-    current_cmap    = current_cmap(individual_idx, :);
+    
     
     RANDOMIZE_COLORS = true;
     if RANDOMIZE_COLORS
         current_cmap = current_cmap(randperm(size(current_cmap, 1)),:);
     end
     
+    current_cmap    = current_cmap(individual_idx, :);
     
     %% Add gray
     current_cmap(outliers, :) = [];%repmat([0.8,0.8,0.8],sum(outliers),1);
@@ -37,14 +38,14 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     figure(Fig_number);clf();set(gcf,'Units','normalized','Position',[0.05 0.05 0.9 0.9]);title(num2str(epsilon));
     
     %% Scatter subplot
-    s1 = subplot(2,2,1);        
+    s1 = subplot(3,2,1);        
     scatter3(Low_D_Data(valid_points,1), Low_D_Data(valid_points,2), Low_D_Data(valid_points,3), 30, cluster_idx(cluster_idx > 0), 'filled'); hold on;
     colormap(current_cmap(2:end,:)); hold on;
     scatter3(Low_D_Data(outliers,1), Low_D_Data(outliers,2), Low_D_Data(outliers,3), 30, 'MarkerFaceColor' , [0.8,0.8,0.8], 'MarkerEdgeColor', 'none');
     
     %% Tree subplot
     % Tree can be low D or Hd depending on the type of analysis
-    s2 = subplot(2,2,2);
+    s2 = subplot(3,2,2);
     valid = ROIs(valid_points);
     if ~obj.use_hd_data
         %% For Low_D tree
@@ -57,11 +58,30 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     end
    
     %% Plot traces
-    s3 = subplot(2,2,[3,4]);
-    title('median traces per group')
+    s3 = subplot(3,2,[3,4]);
+    title('median traces per group');
     for gp = unique(cluster_idx(valid_points)')
-       % if sum(cluster_idx == gp) > 50
-            plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
-        %end
+        plot(nanmedian(original_Data(:,ROIs(cluster_idx == gp)),2));hold on;
     end
+    
+    
+    %% Plot traces
+    s4 = subplot(3,2,[5,6]);cla(); 
+    
+    glob = nanmedian(obj.rescaled_traces,2);  
+    glob = glob - nanmedian(glob);
+    t = vertcat(obj.event.peak_time{:})';hold on;
+    v = glob(t)';      
+    for clust_idx = unique(cluster_idx(valid_points)')
+        title(['median traces for group', num2str(clust_idx)]);hold on;
+        plot(glob, 'k');hold on;
+        plot(nanmedian(obj.rescaled_traces(:, ROIs(cluster_idx == clust_idx)),2));hold on;
+        m = nanmedian(original_Data(:,ROIs(cluster_idx == clust_idx)),2);
+        high = find(m - median(m) > 3)';
+        down = find(m - median(m) < -3)';
+        scatter(t(down),v(down), 50, 'g^','filled');hold on
+        scatter(t(high),v(high), 50, 'rv','filled');hold on
+        pause(1);
+        %cla() 
+    end  
 end
