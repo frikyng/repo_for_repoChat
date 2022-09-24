@@ -70,10 +70,14 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     %% Select signal source (RAW or rescaled traces or shuffled)
     if contains(type_of_trace, 'raw')
         source_signal = obj.extracted_traces_conc;
+        source_signal(:, obj.bad_ROI_list) = NaN;
     elseif contains(type_of_trace, 'rescaled')
         source_signal = obj.rescaled_traces;
+        source_signal(:, obj.bad_ROI_list) = NaN;
     elseif contains(type_of_trace, 'subtracted')
-        source_signal = obj.rescaled_traces - nanmedian(obj.rescaled_traces,2);
+        source_signal = obj.rescaled_traces;
+        source_signal(:, obj.bad_ROI_list) = NaN;
+        source_signal = source_signal - nanmedian(obj.rescaled_traces,2);
     end
 
     if contains(type_of_trace, 'shuffle')
@@ -85,15 +89,20 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     source_signal(isinf(source_signal)) = NaN;
 
     %% Flag ROIs that have NaN vaues at one point as they may mess up later computations
-    bad_ROI_list                    = find(any(isnan(source_signal),1));
-    bad_ROI_list(bad_ROI_list > obj.n_ROIs) = [];
-    signal_indices                  = true(1, obj.n_ROIs); %% ROIs or voxels, depending on the data source
-    signal_indices(bad_ROI_list)    = false;
-    signal_indices                  = find(signal_indices);    
+    if obj.use_hd_data   
+        bad_ROI_list                    = find(any(isnan(source_signal),1));
+        bad_ROI_list(bad_ROI_list > obj.n_ROIs) = [];
+        signal_indices                  = true(1, obj.n_ROIs); %% ROIs or voxels, depending on the data source
+        signal_indices(bad_ROI_list)    = false;
+        signal_indices                  = find(signal_indices);   
+    else
+        bad_ROI_list                    = obj.bad_ROI_list;
+        signal_indices                  = find(~ismember(1:obj.n_ROIs, bad_ROI_list));
+    end
     
+    %% make sure data is double as some algo doesn't like single
     source_signal = double(source_signal(:, 1:obj.n_ROIs)); 
     
     %% Filter out bad ROIs/voxels
-    source_signal(:, bad_ROI_list) = NaN; 
-    
+    source_signal(:, bad_ROI_list) = NaN;     
 end
