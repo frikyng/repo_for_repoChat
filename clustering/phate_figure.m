@@ -21,19 +21,18 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     outliers        = cluster_idx <= 0;
     valid_points    = cluster_idx > 0;
     [clust,~, individual_idx] = unique(cluster_idx);
-    current_cmap    = jet(numel(clust));
-    
-    
+    current_cmap    = jet(numel(clust(clust > 0)));
+
     RANDOMIZE_COLORS = true;
     if RANDOMIZE_COLORS
         current_cmap = current_cmap(randperm(size(current_cmap, 1)),:);
     end
+    if any(clust <= 0)
+        current_cmap = [[0.8,0.8,0.8]; current_cmap];
+    end
     
     current_cmap    = current_cmap(individual_idx, :);
-    
-    %% Add gray
-    current_cmap(outliers, :) = [];%repmat([0.8,0.8,0.8],sum(outliers),1);
-    
+       
     %% Prepare Figure
     figure(Fig_number);clf();set(gcf,'Units','normalized','Position',[0.05 0.05 0.9 0.9]);title(num2str(epsilon));
     
@@ -46,10 +45,9 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     %% Tree subplot
     % Tree can be low D or Hd depending on the type of analysis
     s2 = subplot(3,2,2);
-    valid = ROIs(valid_points);
     if ~obj.use_hd_data
         %% For Low_D tree
-        obj.ref.plot_value_tree(cluster_idx(valid_points), valid,'','cluster tree (one value per ROI)','',s2,'curved',current_cmap);
+        obj.ref.plot_value_tree(cluster_idx, ROIs,'','cluster tree (one value per ROI)','',s2,'curved',current_cmap, 'discrete');
         %obj.ref.plot_value_tree(cluster_idx, find(~all(isnan(signal),2)),'','','',s2,'classic','jet');
     else
         %% FOR HD tree
