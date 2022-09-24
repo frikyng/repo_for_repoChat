@@ -1996,25 +1996,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
            
             %% Filter timepoints
             data                    = data(timepoints,:);
-            
-            %% Subtract signal median if required
-            if median_subtracted
-                data = data - nanmedian(data,2);
-            end
-            
+
             %% Reset dimensionality field
             if nargin < 5 || isempty(n_factors)
                 [~,~,~,~,explained] = pca(obj.rescaled_traces(:, ~all(isnan(obj.rescaled_traces), 1)));
                 n_factors           = find(cumsum(explained)  > 50, 1, 'first');
             end
-            obj.dimensionality           = {};
-            obj.dimensionality.n_factors = n_factors;
-
-            %             t = 1:numel(obj.global_median_raw);
-            %             t_bap = [obj.event.t_win_no_overlap{:}];
-            %             t_no_bap = ~ismember(t, t_bap);%
-            %             timepoints = find(t_no_bap);
-
+            obj.dimensionality                  = {};
+            obj.dimensionality.n_factors        = n_factors;
             obj.dimensionality.dim_red_type     = dim_red_type;
             obj.dimensionality.variable         = variable;
 
@@ -2022,9 +2011,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             data(isinf(data))   = NaN;
             all_ROIs            = 1:size(data, 2);
             normal_n_NaN        = median(sum(isnan(data(:,~all(isnan(data)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
-            valid_trace_idx     = sum(isnan(data)) <= normal_n_NaN; % eclude traces with too many NaNs (eg. traces that got masked completely)
+            valid_trace_idx     = sum(isnan(data)) <= normal_n_NaN; % exclude traces with too many NaNs (eg. traces that got masked completely)
             data                = fillmissing(data(:, valid_trace_idx),'spline'); % removed funny traces
 
+            %% Subtract signal median if required
+            if median_subtracted
+                data = data - nanmedian(data,2);
+            end
+            
             %% Need to set it now
             obj.dimensionality.valid_trace_idx = valid_trace_idx;
 
@@ -2076,7 +2070,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             weighted_averages = obj.get_weight_map();
             
             %% Plot weight-tree for each component
-            obj.plot_multiple_dim_tree(1:obj.dimensionality.n_factors)
+            obj.plot_dim_tree(1:obj.dimensionality.n_factors)
         end
 
         function cluster_factors(obj, clust_meth, N_clust)
