@@ -1,4 +1,4 @@
-function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
+function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
     if nargin < 1 || isempty(path_or_obj)
         path_or_obj = ''; % i.e. current matlab folder. It must then be an extracted arboreal scan folder
     end
@@ -12,8 +12,8 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
         type_of_trace = 'raw'; % 
     end
     
-    if ~any(contains(type_of_trace, {'raw','rescaled', 'subtracted'}))
-        error('type_of_trace must contain "raw" or "rescaled" or "subtracted" ')
+    if ~any(contains(type_of_trace, {'rescaled', 'subtracted'}))
+        type_of_trace = [type_of_trace,'_raw'];
     end
     
     %% Get object if it needs loading/building
@@ -40,11 +40,27 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
 
     %% Quick processing to have proper event detection. This is required for filtering based on activity
     obj.rescaling_method = 'peaks_trials';
-    obj.prepare_binning({'distance',50});
-    obj.find_events();
-    obj.rescale_traces();
+    
+    %% Time filtering of traces if required. 
+    %% ## ! ## This introduces temporal correlation
+    obj.filter_win = [time_filter, 0];
+
+    if ~iscell(obj.binned_data.condition) || ~(strcmp(obj.binned_data.condition{1}, 'distance') && obj.binned_data.condition{2} == 50)
+        obj.reset();
+        obj.prepare_binning({'distance',50});
+    end
+    if isempty(obj.event.peak_time)
+        obj.find_events();
+        obj.rescaling_info = {};
+    end
+    if isempty(obj.rescaling_info)
+        obj.rescale_traces();
+        obj.variability = {};
+    end    
     obj.set_median_traces();
-    obj.compute_similarity();
+    if isempty(obj.variability)
+        obj.compute_similarity();
+    end
     %close all
 
     %% Define wether to use HD data or LD data, if using HD,
@@ -57,10 +73,6 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     end
    % close all
 
-
-    %% Time filtering of traces if required. 
-    %% ## ! ## This introduces temporal correlation
-    obj.filter_win = [time_filter, 0];
 
     %% If using all voxels, remove bad_ROIs_list field because it is designed for full segments
     if obj.use_hd_data    
@@ -89,6 +101,9 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     source_signal(isinf(source_signal)) = NaN;
 
     %% Flag ROIs that have NaN vaues at one point as they may mess up later computations
+    normal_n_NaN        = median(sum(isnan(source_signal(:,~all(isnan(source_signal)))))) * 4; % get an indicative number of NaN in a normal traces, and set acceptable thr at 4 times that
+    obj.bad_ROI_list    = find(sum(isnan(source_signal)) > normal_n_NaN); % exclude traces with too many NaNs (eg. traces that got masked completely) 
+    
     if obj.use_hd_data   
         bad_ROI_list                    = find(any(isnan(source_signal),1));
         bad_ROI_list(bad_ROI_list > obj.n_ROIs) = [];
@@ -104,5 +119,8 @@ function [obj, source_signal, signal_indices] = prepare_phate_analysis(path_or_o
     source_signal = double(source_signal(:, 1:obj.n_ROIs)); 
     
     %% Filter out bad ROIs/voxels
-    source_signal(:, bad_ROI_list) = NaN;     
+    source_signal(:, bad_ROI_list) = NaN; 
+    
+    %% Get the timepoints
+    timepoints = find(obj.get_tp_for_condition(type_of_trace));
 end
