@@ -207,7 +207,6 @@ classdef arboreal_scan_plotting < handle
                 trace_handle = figure(7777);trace_handle = gca();
             end   
 
-            
             colors = obj.dimensionality.labels;
             if isempty(obj.dimensionality.labels)
                 colors = 'jet';
@@ -215,7 +214,7 @@ classdef arboreal_scan_plotting < handle
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'curved', colors, 'discrete');
             cmap = jet(range(obj.dimensionality.cluster_idx)+1);
             if any(obj.dimensionality.cluster_idx <= 0)
-                cmap(1,:) = [0.3,0.3,0.3];
+                cmap(1,:) = UNASSIGNED_ROI_COLOR;
             end
             colormap(cmap);
 

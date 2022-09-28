@@ -28,7 +28,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
         current_cmap = current_cmap(randperm(size(current_cmap, 1)),:);
     end
     if any(clust <= 0)
-        current_cmap = [[0.8,0.8,0.8]; current_cmap];
+        current_cmap = [UNASSIGNED_ROI_COLOR; current_cmap];
     end
     
     current_cmap    = current_cmap(individual_idx, :);
@@ -40,7 +40,7 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
     s1 = subplot(3,2,1);        
     scatter3(Low_D_Data(valid_points,1), Low_D_Data(valid_points,2), Low_D_Data(valid_points,3), 30, cluster_idx(cluster_idx > 0), 'filled'); hold on;
     colormap(current_cmap(2:end,:)); hold on;
-    scatter3(Low_D_Data(outliers,1), Low_D_Data(outliers,2), Low_D_Data(outliers,3), 30, 'MarkerFaceColor' , [0.8,0.8,0.8], 'MarkerEdgeColor', 'none');
+    scatter3(Low_D_Data(outliers,1), Low_D_Data(outliers,2), Low_D_Data(outliers,3), 30, 'MarkerFaceColor' , UNASSIGNED_ROI_COLOR, 'MarkerEdgeColor', 'none');
     
     %% Tree subplot
     % Tree can be low D or Hd depending on the type of analysis

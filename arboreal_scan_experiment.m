@@ -2135,7 +2135,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 cluster_idx                 = dbscan(obj.dimensionality.LoadingsPM, obj.dimensionality.epsilon, MIN_GP, 'Distance', 'euclidean');
                 obj.dimensionality.N_clust  = numel(unique(cluster_idx(cluster_idx > 0)));
                 if any(cluster_idx <= 0)
-                    col = [0.8, 0.8, 0.8];
+                    col = UNASSIGNED_ROI_COLOR;
                 else
                     col = [];
                 end

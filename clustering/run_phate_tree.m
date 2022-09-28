@@ -223,7 +223,7 @@ method = 'legacy'
 
 
 %%
-test_beh = 2;
+test_beh = 1;
 is_matching     = false(1, N_Dim);
 matching_thr    = 0.3;
 for phate_dim = 1:N_Dim
