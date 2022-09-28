@@ -48,8 +48,14 @@ classdef behaviours_analysis < handle
             if isa(obj.detrend_behaviour, 'function_handle')
                 for rec = 1:numel(behaviours.external_var)
                     for beh = 1:Max_var
-                        temp = behaviours.external_var{rec}.(behaviours.types{beh}).value;
-                        behaviours.external_var{rec}.(behaviours.types{beh}).value = temp - obj.detrend_behaviour(temp);
+                        if isfield(behaviours.external_var{rec}, behaviours.types{beh})
+                            temp = behaviours.external_var{rec}.(behaviours.types{beh}).value;
+                            if ~isempty(temp)
+                                behaviours.external_var{rec}.(behaviours.types{beh}).value = temp - obj.detrend_behaviour(temp);
+                            end
+                        else
+                            warning(['Missing behaviour "',behaviours.types{beh},'" for recording ',num2str(rec)], 'backtrace' )
+                        end
                     end
                 end
             end
@@ -96,7 +102,7 @@ classdef behaviours_analysis < handle
             % -------------------------------------------------------------
             % Extra Notes:
             %  * If you make a typo in the behaviour selection and at least
-            %   one variable is returned, you won't be informed
+            %    one variable is returned, you won't be informed
             %  * Behaviours are extracted from individual
             %    arboreal_scan.analysis_params.external_var. see
             %    get.behaviours doc
@@ -119,7 +125,7 @@ classdef behaviours_analysis < handle
                 if ischar(type)
                     type = cleanup_type(type);
                 elseif iscell(type)
-                    type = cellfun(@(x) cleanup_type(x), type , 'UniformOutput', false)
+                    type = cellfun(@(x) cleanup_type(x), type , 'UniformOutput', false);
                 end
             end
             if nargin < 3 || isempty(rendering)
@@ -153,8 +159,7 @@ classdef behaviours_analysis < handle
                 temp.value = [];
                 for rec = 1:numel(raw_beh{beh})
                     %% If behaviour timescale is longer than recording, clip it
-                    if ~isempty(raw_beh{beh}{rec}.time)
-                        
+                    if ~isempty(raw_beh{beh}{rec}.time)                        
                         clipping_idx = find((raw_beh{beh}{rec}.time - obj.timescale.durations_w_gaps(rec) ) > 0, 1, 'first');
                         if ~isempty(clipping_idx)
                             raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
@@ -363,21 +368,18 @@ classdef behaviours_analysis < handle
         end
 
         function set.detrend_behaviour(obj, detrend_behaviour)
-            if islogical(detrend_behaviour)
-                if ~detrend_behaviour
-                    obj.detrend_behaviour = false;
-                else
-                    sr = obj.timescale.sr;
-                    obj.detrend_behaviour = @(x) movmin(x, [ceil(1/nanmedian(sr)), 0]);
-                end
+            if islogical(detrend_behaviour) && detrend_behaviour
+            	detrend_behaviour = @(x) movmin(x, [ceil(1/nanmedian(obj.timescale.sr)), 0]);
+            elseif islogical(detrend_behaviour) && ~detrend_behaviour 
+                % keep as such
             elseif isnumeric(detrend_behaviour)
-                sr = obj.timescale.sr;
-                obj.detrend_behaviour = @(x) movmin(x, [ceil(detrend_behaviour/nanmedian(sr)), 0]);
+                detrend_behaviour = @(x) movmin(x, [ceil(detrend_behaviour/nanmedian(obj.timescale.sr)), 0]);
             elseif isa(detrend_behaviour, 'function_handle')
-                obj.detrend_behaviour = detrend_behaviour;
+                % keep as such
             else
                 error('detrend_behaviour must be a boolean, a value in seconds or a function handle')
             end
+            obj.detrend_behaviour = detrend_behaviour;
         end
 
         function set.bout_extra_win(obj, bout_extra_win)
