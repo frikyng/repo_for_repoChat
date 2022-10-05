@@ -54,19 +54,20 @@ classdef behaviours_analysis < handle
                                 behaviours.external_var{rec}.(behaviours.types{beh}).value = temp - obj.detrend_behaviour(temp);
                             end
                         else
-                            warning(['Missing behaviour "',behaviours.types{beh},'" for recording ',num2str(rec)], 'backtrace' )
+                           % warning(['Missing behaviour "',behaviours.types{beh},'" for recording ',num2str(rec)], 'backtrace' )
                         end
                     end
                 end
             end
         end
 
-        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig)
+        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
             %   [raw_beh, downsamp_beh, concat_downsamp_beh] =
-            %           EXPE.get_behaviours(type, rendering, detrend_sig)
+            %           EXPE.get_behaviours(type, rendering, detrend_sig,
+            %           ignorecase, average)
             % -------------------------------------------------------------
             % Inputs:
             %   type (CHAR OR CELL ARRAY OF CHAR)
@@ -75,7 +76,7 @@ classdef behaviours_analysis < handle
             %       obj.behaviours.types will be selected. The filtering
             %       uses the contains() function (not strcmp) and is case
             %       insensitive.
-            %   rendering (BOOL)
+            %   rendering (BOOL) - Optional - Default is false
             %       If true, display the selected behaviours
             %   detrend_sig (BOOL, INT or function_handle) - Optional -
             %       Default is false
@@ -85,6 +86,10 @@ classdef behaviours_analysis < handle
             %       is removed from the entire signal
             %       * If function_handle, the function is applied to every
             %       recording and every behaviour. see get.beaviours
+            %   ignorecase (BOOL) - Optional - Default is false
+            %       If true, the case in the behaviour names is ignored
+            %   average (BOOL) - Optional - Default is false
+            %       If true, all requested beahviours are averaged
             % -------------------------------------------------------------
             % Outputs:
             %   extracted_traces (1xN CELL ARRAY of 1xP CELLS ARRAY of STRUCT)
@@ -134,6 +139,13 @@ classdef behaviours_analysis < handle
             if nargin < 4 || isempty(detrend_sig)
                 detrend_sig = false;
             end
+            if nargin < 5 || isempty(ignorecase)
+                ignorecase = false;
+            end
+            if nargin < 6 || isempty(average)
+                average = false;
+            end
+            
             obj.detrend_behaviour = detrend_sig;
 
             %% Initialize variables
@@ -144,7 +156,7 @@ classdef behaviours_analysis < handle
 
             %% Check if at least one variable name is valid
             all_beh                     = obj.behaviours;
-            type                        = all_beh.types(contains(all_beh.types, type));
+            type                        = all_beh.types(contains(all_beh.types, type, 'IgnoreCase', ignorecase));
             if isempty(type)
                 raw_beh = {};
                 warning(['Type not detected. Valid behaviours are :\n', strjoin(all_beh.types,'\n')]);
@@ -186,11 +198,23 @@ classdef behaviours_analysis < handle
                 concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
                 concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
             end
+            
+            if average
+                new = {};
+                for rec = 1:numel(downsamp_beh{1})
+                    new{rec}.value = nanmean(cell2mat(cellfun(@(x) x{rec}.value', downsamp_beh, 'UniformOutput', false)), 2)';
+                    new{rec}.time = downsamp_beh{1}{rec}.time;
+                end
+                downsamp_beh = {new};
+                concat_downsamp_beh = structfun(@(x) nanmean(x,1), concat_downsamp_beh, 'UniformOutput', false);
+                type = {strjoin(type)};
+            end
+            
 
             %% Render extracted traces
             if rendering
                 figure(1026);clf();
-                for beh = 1:numel(type)
+                for beh = 1:numel(type)                 
                     subplot(numel(type),1,beh)
                     for rec = 1:numel(raw_beh{beh})
                         if ~isempty(downsamp_beh{beh}{rec}.time)
