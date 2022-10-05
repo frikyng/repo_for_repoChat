@@ -1978,7 +1978,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 dim_red_type        = 'pca';
             end
             if nargin < 4 || isempty(timepoints)
-                timepoints          = 'full';
+                timepoints          = 1:size(data,1);
             end
             
             %% Adjust timepoints
@@ -1990,7 +1990,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
                 timepoints = obj.get_tp_for_condition(variable);
             else
-                timepoints = true(size(obj.timescale.global_timescale));
                 variable = 'manual_input';
             end                
            
@@ -2148,7 +2147,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     count                                   = count + 1;
                 end
                 figure(1111);clf();
-                for offset = 0:(min(size(obj.dimensionality.LoadingsPM, 2)-2, 2))
+                for offset = 0:(min(size(obj.dimensionality.LoadingsPM, 2)-3, 2))
                     subplot(2,2,offset+1); hold on; grid; hold on
                     scatter3(obj.dimensionality.LoadingsPM (:,1+offset),obj.dimensionality.LoadingsPM (:,2+offset),obj.dimensionality.LoadingsPM (:,3+offset),20,obj.dimensionality.labels, 'filled');
                 end               
