@@ -1,7 +1,9 @@
 %% Classify behaviour for a given experiment, for all behaviours
 %% use expe 07-26 to fix gaps in behaviour
 
-function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
+%% Cell 2019-09-17_exp_1 anticorelated to running
+
+function out = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = '' 
     end
@@ -9,12 +11,27 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
         use_classifier = true; % if false, use regression learner
     end
     if nargin < 3 || isempty(method)
-        method = 'svm'; 
+        method = 'svm'; % i.e. fitcsvm vs fitclinear etc
     end
     if nargin < 4 || isempty(type_of_trace)
         type_of_trace   = 'subtracted_peaks'; % ['subtracted' OR 'rescaled' OR 'raw'] AND ['peaks' or '']. eg 'subtracted_peaks' , or 'raw'
     end
-
+    if nargin < 5 || isempty(behaviour_list)
+        behaviour_list   = obj.behaviours.types;
+    elseif ~iscell(behaviour_list)
+        behaviour_list = {behaviour_list};
+    end
+    if nargin < 6 || isempty(ROI_groups)
+        ROI_groups   = num2cell(obj.ref.indices.valid_swc_rois);
+    elseif ~iscell(ROI_groups)
+        ROI_groups   = num2cell(ROI_groups);
+    end    
+    if nargin < 7 || isempty(varargin)
+        parameters = DEFAULT_CLASSIFIER_OPTION;
+    else
+        parameters = DEFAULT_CLASSIFIER_OPTION(varargin);
+    end
+    
     use_hd_data     = false;
     time_filter     = 0;
 
@@ -24,10 +41,17 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
     [obj, source_signal, ~, timepoints] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
     obj.rendering   = rendering;
 
-
     %% Get the signal for the selected timepoints and ROIs
-    Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
-    Ca              = source_signal(timepoints, Valid_ROIs)';
+    %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
+    invalid_ROIs     = ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list); % remove excluded branches AND bad_ROIs based on correlation)
+    source_signal(:, invalid_ROIs) = NaN;
+    data             = NaN(numel(timepoints), numel(ROI_groups));
+    for gp_idx = 1:numel(ROI_groups)
+        data(:, gp_idx) =  nanmean(source_signal(timepoints, ROI_groups{gp_idx}),2)';        
+    end
+    
+    data(:, all(isnan(data),1)) = [];
+    data = data';
 
     %     %% Correlation of the different ROIs with each other
     %     figure();imagesc(corr(Ca'))
@@ -39,10 +63,16 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
     behaviours              = [];
     raw_behaviours          = [];
     processed_behaviours    = [];
-    beh_types               = obj.behaviours.types;
-    for type = beh_types
+    
+    for type_idx = 1:numel(behaviour_list)
+        type = behaviour_list(type_idx);
+        
         %% Get original bhaviour
-        [~,~,original_beh]   = obj.get_behaviours(type{1},'',true);
+        [~,~,original_beh]   = obj.get_behaviours(type{1},'',true,true,true);
+        if iscell(type) && iscell(type{1})
+            type = type{1}{1};
+            behaviour_list{type_idx} = type;
+        end
         
         %% Median smoothing on all behaviour but trigger to remove small blips
         if ~contains(type, 'trigger')
@@ -84,10 +114,10 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
         if use_classifier
             processed_behaviours= logical([processed_behaviours; current_beh(timepoints) > thr]);
         else
-            processed_behaviours= logical([processed_behaviours; current_beh(timepoints)]);
+            processed_behaviours= [processed_behaviours; current_beh(timepoints)];
         end
     end
-    beh_types   = strrep(beh_types, '_', '\_'); % reformat strings to be usable in titles and legends
+    behaviour_list   = strrep(behaviour_list, '_', '\_'); % reformat strings to be usable in titles and legends
 
 %     %% Correlation of the different behaviours with each other
 %     figure();imagesc(corr(all_beh'))
@@ -95,132 +125,10 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace)
 %     %% Correlation of the behaviours values per event
 %     figure();imagesc(corr(all_beh))
 
-    %Soma_ROIs   = find(ismember(ROI_to_study, obj.ref.indices.somatic_ROIs)); % somatic ROIs, but ignoring the NaNs
-    All_ROIs    = 1:numel(Valid_ROIs);
-    out = train_and_test(Ca, processed_behaviours, timepoints, All_ROIs, method, beh_types, raw_behaviours, nanmedian(obj.rescaled_traces(:,All_ROIs),2));
+    %Soma_ROIs   = find(ismember(1:size(data, 1), obj.ref.indices.somatic_ROIs)); % somatic ROIs, but ignoring the NaNs
+    All_ROIs    = 1:size(data, 1);
+    out = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs),2), parameters);
 end
 
 
 
-
-% 
-% 
-% 
-% 
-% 
-% %% Define analysis otpions
-% variable    = 'binary';% 'binary'
-% ref_roi     = 'all'; % 'soma' or 'all'
-% method      = 'svm' ; % 'svm' or 'forest'
-% 
-% %% Set ROIs to use
-% if strcmp(ref_roi, 'soma')
-%     roi_subset  = Soma_ROIs; % this is the one to study
-% else
-%     roi_subset  = All_ROIs; % this is the one to study
-% end
-% cc          = [];
-% for beh_idx = 1:numel(beh_types)  
-%     %% Set training and testing dataset
-%     train_R     = rand_tp(1:floor(numel(peak_tp)/2));
-%     test_R      = rand_tp(ceil(numel(peak_tp)/2):end);
-%     x_train     = double(Ca(roi_subset,train_R))';
-%     x_test      = double(Ca(roi_subset,test_R))';
-%     
-%     %% Set variable to predict
-%     current_beh = all_beh(beh_idx,:);
-%     
-%     %% Run training
-%     if strcmp(variable, 'binary')
-%         thr = nanmin(current_beh) + range(current_beh) / 5; % 20 %% of min        
-%         y_train = all_beh(beh_idx,train_R)' > thr;    
-%         y_test = all_beh(beh_idx,test_R)' > thr;
-%         
-%         if strcmp(method, 'svm')
-%             %% SVM classifier
-%             MODEL = fitcsvm(x_train,y_train);
-%         elseif strcmp(method, 'forest')
-%             MODEL = fitcensemble(x_train,y_train);
-%         end
-%     else
-%         y_train = all_beh(beh_idx,train_R)';    
-%         y_test = all_beh(beh_idx,test_R)';
-%         %% multiclass SVM classifier        
-%         MODEL=fitcecoc(x_train,y_train); % fitcecoc
-%     end
-% 
-%     y_pred = predict(MODEL, x_test);
-%     figure(beh_idx);clf();plot(y_pred); hold on; plot(y_test); legend({'prediction','measurement'});title(beh_types{beh_idx})
-%     if all(y_pred)
-%         y_pred(1) = 0;
-%     elseif ~any(y_pred)
-%         y_pred(1) = 1;
-%     end
-%     cc(beh_idx) = corr(y_pred, y_test)
-% end
-% figure();bar(categorical(beh_types), cc)
-
-% if strcmp(method, 'forest')
-%     impOOB = oobPermutedPredictorImportance(MODEL);
-%     obj.ref.plot_value_tree(impOOB, ROI_to_study)
-% end
-
-% 
-% 
-% 
-% 
-%     x_train = double(Ca)';
-%     y_train = all_beh(1,:)';
-% 
-% 
-%     t = templateTree('NumVariablesToSample','all',...
-%         'PredictorSelection','interaction-curvature','Surrogate','on');
-%     rng(1); % For reproducibility
-%     Mdl = fitrensemble(x_train,y_train,'Method','Bag','NumLearningCycles',200, ...
-%         'Learners',t);
-% 
-%     yHat = oobPredict(Mdl);
-%     R2 = corr(Mdl.Y,yHat)^2
-% 
-%     impOOB = oobPermutedPredictorImportance(Mdl);
-% 
-%     figure
-%     bar(impOOB)
-%     title('Unbiased Predictor Importance Estimates')
-%     xlabel('Predictor variable')
-%     ylabel('Importance')
-%     h = gca;
-%     h.XTickLabel = Mdl.PredictorNames;
-%     h.XTickLabelRotation = 45;
-%     h.TickLabelInterpreter = 'none';
-% 
-%     
-%     [impGain,predAssociation] = predictorImportance(Mdl);
-% 
-%     figure
-%     plot(1:numel(Mdl.PredictorNames),[impOOB' impGain'])
-%     title('Predictor Importance Estimation Comparison')
-%     xlabel('Predictor variable')
-%     ylabel('Importance')
-%     h = gca;
-%     h.XTickLabel = Mdl.PredictorNames;
-%     h.XTickLabelRotation = 45;
-%     h.TickLabelInterpreter = 'none';
-%     legend('OOB permuted','MSE improvement')
-%     grid on
-%     
-%     obj.ref.plot_value_tree(impOOB, find(obj.dimensionality.valid_trace_idx))
-% 
-% 
-% 
-% forest = fitrensemble(zscore(x_train), ... % all features as input but max firing rate
-%     zscore(y_train), 'crossval', 'on', 'kfold', 10); %%% implement crossvalidation during at training of the forest
-% 
-% predicted_firingrate = kfoldPredict(forest); % perform crossvalidated regression
-% 
-% figure; 
-% plot(zscore(y_train), predicted_firingrate, 'o'); % scatter plot of actual vs predicted maximal firing rates
-% axis square
-% xlabel 'Actual zscore of max firing rate'
-% ylabel 'Regressed zscore of max firing rate'
-% title 'Random forest regression'
