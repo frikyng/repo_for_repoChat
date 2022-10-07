@@ -2,7 +2,7 @@
 %% 'Solver' — Optimization routine --> 'ISDA' | 'L1QP' | 'SMO'
 %% 'Weights' — Observation weights --> numeric vector | name of variable in Tbl % should we use SNR?
 
-function [y_predict, y_test, score, x_test, x_train, y_train] = prediction(XData, YData, partition, method, cost, parameters)
+function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, method, cost, parameters)
     if nargin < 6 || isempty(parameters)
         parameters = DEFAULT_CLASSIFIER_OPTION;
     else
@@ -32,7 +32,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train] = prediction(XData
                             'CrossVal'      , 'on',...
                             'KFold'         , parameters.kFold};
         
-        %% Set trianing model                
+        %% Set training model                
         if islogical(y_train)
             func = @fitcsvm;
             base_varargin = [   base_varargin,...
@@ -43,7 +43,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train] = prediction(XData
         end
 
         %% Define kernel and box size, and update model settings
-        [bmax, kmax] = hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, parameters);   
+        [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
         base_varargin = [base_varargin, 'KernelScale', kmax, 'BoxConstraint', bmax];
 
         %% Train model
@@ -58,13 +58,12 @@ function [y_predict, y_test, score, x_test, x_train, y_train] = prediction(XData
     elseif strcmp(method, 'linear')        
         base_varargin = {   x_train         , ...
                             y_train         , ...  
-                            'Learner'       , 'svm',...
-                            'Regularization','lasso',...
+                            'Learner'       , 'leastsquares',...
+                            'Regularization','ridge',...
                             'PostFitBias'   , true,...
-                            'PassLimit'     , 5,...
-                            'Lambda'        , 1e-4};
+                            'PassLimit'     , 10};
 
-       
+        %% Set training model
         if islogical(y_train)
             func = @fitclinear;
             base_varargin = [base_varargin, {'Cost', cost, 'ClassNames', [false; true]}];
@@ -72,24 +71,13 @@ function [y_predict, y_test, score, x_test, x_train, y_train] = prediction(XData
             updated_varargin = base_varargin;
             func = @fitrlinear;
         end
+
+        Lambda        = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
+        base_varargin = [base_varargin, {'Lambda', Lambda}];
+        base_varargin = [base_varargin, {'KFold', 5}]; 
         
-        if parameters.optimize_hyper
-            optimize_varargin = [base_varargin, {'OptimizeHyperparameters',"Lambda", 'HyperparameterOptimizationOptions', HyperparameterOptimizationOptions}];    
-            model = func(optimize_varargin{:});
-            base_varargin{find(strcmp(base_varargin, 'Lambda'))+1} = model.Lambda;
-        end
-        base_varargin = [base_varargin, {'KFold', 5}];    
-
-
-        %         if parameters.optimize_hyper
-        %             [bmax, kmax] = manual_optimization(x_train, y_train, x_test, y_test, cost);
-        %         else
-        %             bmax = 1000;
-        %             kmax = 20;
-        %         end        
-        %         base_varargin{find(strcmp(base_varargin, 'KernelScale'))+1} = kmax;
-        %         base_varargin{find(strcmp(base_varargin, 'BoxConstraint'))+1} = bmax;
-        model = func(base_varargin{:});
+        %% Train models
+        model         = func(base_varargin{:});
 
         y_predict = get_consensus_prediction(model, x_test); 
         if islogical(y_train)
@@ -141,26 +129,69 @@ function y_predict = get_consensus_prediction(Model, x_test)
     end
 end
 
-function [bmax, kmax] = hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, parameters)
+function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
+    if ~parameters.optimize_hyper
+    	Lmax = 1e-4;    
+    elseif strcmpi(parameters.optimization_method, 'native')
+        optimize_varargin   = [base_varargin, {'OptimizeHyperparameters',"Lambda", 'HyperparameterOptimizationOptions', HyperparameterOptimizationOptions}];    
+        model               = func(optimize_varargin{:}); 
+        Lmax                = model.Lambda;
+    elseif strcmpi(parameters.optimization_method, 'manual')
+        lrange              = logspace(-4,4,40);
+        [score, TPR, TNR, MCC] = deal(NaN(numel(lrange),1));
+        base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
+        for k = 1:numel(lrange)            
+            temp_varargin           = [base_varargin, 'Lambda', lrange(k)];
+            fut(k)                  = parfeval(func, 1, temp_varargin{:});
+        end  
+        for k = 1:numel(lrange)
+            [idx,mdl]            = fetchNext(fut, 0.5);
+            if ~isempty(mdl)
+                y_predict            = mdl.predict(x_test);                
+                [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict);
+            end
+        end
+        
+        MCC     = smoothdata(MCC, 'gaussian', 5);
+        score   = smoothdata(score, 'gaussian', 5);
+        TPR     = smoothdata(TPR, 'gaussian', 5);
+        TNR     = smoothdata(TNR, 'gaussian', 5);
+
+        if parameters.rendering >= 3
+            figure(1002);clf();subplot(2,2,1);im = plot(MCC, 'XData', lrange);im.Parent.XScale = 'log';title('MCC');xlabel('Lambda');
+            subplot(2,2,2);im = plot(score, 'XData', lrange);im.Parent.XScale = 'log';title('Accuracy');xlabel('Lambda');
+            subplot(2,2,3);im = plot(TPR, 'XData', lrange);im.Parent.XScale = 'log';title('TPR');xlabel('Lambda');
+            subplot(2,2,4);im = plot(TNR, 'XData', lrange);im.Parent.XScale = 'log';title('TNR');xlabel('Lambda');
+            drawnow();
+        end
+        [~, loc] = max(MCC); Lmax = lrange(loc);       
+    end 
+end
+
+
+
+function [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
     if ~parameters.optimize_hyper
     	bmax = 1000; kmax = 20;                 
     elseif strcmpi(parameters.optimization_method, 'manual')
         krange = logspace(-1,4,40);
         brange = logspace(0,6,40);
         [score, TPR, TNR, MCC] = deal(NaN(numel(krange),numel(brange)));
+        base_varargin{find(strcmp(base_varargin, 'CrossVal'))+1} = 'off';
+        base_varargin([find(strcmp(base_varargin, 'KFold')), find(strcmp(base_varargin, 'KFold'))+1]) = [];
         for k = 1:numel(krange)
-            parfor b = 1:numel(brange)
-                classificationSVM = fitcsvm(...
-                                            x_train, ...
-                                            y_train, ...
-                                            'KernelFunction'    , 'gaussian', ...
-                                            'KernelScale'       , krange(k), ...
-                                            'BoxConstraint'     , brange(b), ...
-                                            'Standardize'       , true, ...
-                                            'ClassNames'        , [false; true],...
-                                            'Cost', cost); % [0,10;1,0]
-                y_predict = classificationSVM.predict(x_test);
-                [score(k,b), TPR(k,b), TNR(k,b), MCC(k,b)] = get_classifier_score(y_test, y_predict);
+            fprintf(['optimization at : ',num2str(100*k/numel(krange)),' %%\n'])
+            clear fut
+            for b = 1:numel(brange)
+                temp_varargin           = [base_varargin, 'KernelScale', krange(k), 'BoxConstraint', brange(b)];
+                fut(b)                  = parfeval(func, 1, temp_varargin{:}); 
+            end            
+            for b = 1:numel(brange)
+                [idx,mdl]            = fetchNext(fut, 0.5);
+                if ~isempty(mdl)
+                    y_predict            = mdl.predict(x_test);                
+                    [score(k,idx), TPR(k,idx), TNR(k,idx), MCC(k,idx)] = get_classifier_score(y_test, y_predict);
+                end
             end
         end  
         MCC     = imfilter(MCC, fspecial('gaussian', 5, 5), 'replicate');
@@ -178,21 +209,25 @@ function [bmax, kmax] = hyperparameters_optimization(x_train, y_train, x_test, y
         [~, loc] = max(max(MCC));  bmax = brange(loc);
         [~, loc] = max(max(MCC')); kmax = krange(loc);        
     else
-        Mdl = fitcsvm(  x_train ,...
-                        y_train ,...
-                        'KernelFunction'    , 'gaussian', ...
-                        'Standardize'       , true, ...
-                        'ClassNames'        , [false; true],...
-                        'Cost'              , cost,...
-                        'OptimizeHyperparameters','auto' ,... 
-                        'HyperparameterOptimizationOptions',struct(...
+        try
+            Mdl = fitcsvm(  x_train ,...
+                            y_train ,...
+                            'KernelFunction'    , 'gaussian', ...
+                            'Standardize'       , true, ...
+                            'ClassNames'        , [false; true],...
+                            'Cost'              , cost,...
+                            'OptimizeHyperparameters','auto' ,... 
+                            'HyperparameterOptimizationOptions',struct(...
                                                                     'MaxObjectiveEvaluations',150,...
                                                                     'ShowPlots',parameters.rendering >= 3,...
                                                                     'MaxTime',Inf,...
                                                                     'UseParallel',true,...
                                                                     'Repartition',true)); 
-        kmax =  Mdl.HyperparameterOptimizationResults.XAtMinObjective.KernelScale;
-        bmax =  Mdl.HyperparameterOptimizationResults.XAtMinObjective.BoxConstraint;  
-    end
-              
+            kmax =  Mdl.HyperparameterOptimizationResults.XAtMinObjective.KernelScale;
+            bmax =  Mdl.HyperparameterOptimizationResults.XAtMinObjective.BoxConstraint;                                         
+        catch
+            parameters.optimization_method = 'manual';
+            [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
+        end
+    end              
 end

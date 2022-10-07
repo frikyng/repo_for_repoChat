@@ -53,7 +53,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end   
         
         %% Predict behaviour
-        [y_predict, y_test, cross_val_score, x_test, x_train, y_train] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, parameters);
+        [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, merge_params_obj(parameters, struct('behaviour',type_corrected)));
 
         %% Get accuracy score
         [score(el,1), score(el,2), score(el,3), score(el,4)] = get_classifier_score(y_test, y_predict);
@@ -76,6 +76,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.full_beh{el}    = raw_behaviour(el,:);
         out.beh_type{el}    = type_corrected;
         out.score{el}       = score(el,:);
+        out.model{el}       = model;
     end
     if numel(beh_types) > 1 && parameters.rendering >= 1
         labels = reordercats(categorical(beh_types),beh_types);
