@@ -1587,13 +1587,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 %% keep all tp
             end  
             
-            analysis_mode = erase(analysis_mode, {'peaks','quiet','active'});
-
-            beh      = {};
-            if contains(analysis_mode, obj.behaviours.types)
+            invert          = contains(analysis_mode, '~');
+            analysis_mode   = erase(analysis_mode, {'peaks','quiet','active','~','_'});  
+            
+            analysis_mode_no_win = strsplit(analysis_mode,{'[',']'});
+            analysis_mode_no_win = analysis_mode_no_win(1:3:end);
+            
+            beh             = {};            
+            if ~all(cellfun(@isempty, analysis_mode_no_win)) && any(contains(obj.behaviours.types, analysis_mode_no_win, 'IgnoreCase',true))
                 to_test = [];
                 for el = obj.behaviours.types
-                    if contains(analysis_mode, el{1})
+                    if contains(analysis_mode_no_win, el{1},'IgnoreCase',true) || contains(el{1},analysis_mode_no_win,'IgnoreCase',true)
                         to_test(end+1) = 1;
                     else
                         to_test(end+1) = 0;
@@ -1603,24 +1607,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
  
                 %% Check if there is window suffix
                 beh_end_loc = strfind(analysis_mode, beh_name{1}) + numel(beh_name{1});
-                if beh_end_loc < numel(analysis_mode) && strcmp(analysis_mode(beh_end_loc), '[')
-                    loc = strfind(analysis_mode,']');
-                    loc = loc(find(loc > beh_end_loc, 1, 'first'));
-                    range = analysis_mode(beh_end_loc:loc);
-                    bout_extra_win = str2num(range);
+                if ~isempty(beh_end_loc) && beh_end_loc < numel(analysis_mode) && strcmp(analysis_mode(beh_end_loc), '[')
+                    loc             = strfind(analysis_mode,']');
+                    loc             = loc(find(loc > beh_end_loc, 1, 'first'));
+                    range           = analysis_mode(beh_end_loc:loc);
+                    bout_extra_win  = str2num(range);
                 else
-                    bout_extra_win = obj.bout_extra_win;
+                    bout_extra_win  = obj.bout_extra_win;
                 end
 
                 %% Get behaviour bouts
-                [~, ~, beh] = obj.get_behaviours(beh_name); 
-                %                 if contains(analysis_mode, '~')
-                %                     smoothing = [50,0];
-                %                     obj.bout_extra_win = [0,0];
-                %                 else
-                %                     smoothing = [];
-                %                 end
-                [~, ~, active_tp] = obj.get_activity_bout(beh_name, true, [], contains(analysis_mode, '~'), '', bout_extra_win);
+                [~, ~, beh]         = obj.get_behaviours(beh_name); 
+                [~, ~, active_tp]   = obj.get_activity_bout(beh_name, true, [], invert, '', bout_extra_win);
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks
@@ -1629,7 +1627,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     tp = active_tp{1};
                 end
             end
-            analysis_mode = erase(analysis_mode, {'~'}); %% qq could also remove behaviours
         end
 
         function tp = set_crosscorr(obj, cc_mode)
@@ -1683,10 +1680,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 catch
                     error('unable to get rescaled data. try to run obj.rescale_traces()')
                 end
-
-            end
-            %signal = signal - nanmean(signal,2);
+            end           
             cc_mode = erase(cc_mode, {'ROIs','groups'});
+            
+            %% Subtract median if required
+            if contains(obj.cc_mode, 'subtracted')
+                signal = signal - nanmedian(signal,2);
+            end
+            cc_mode = erase(cc_mode, {'subtracted'});
 
             %% Get ref ROIs and trace
             if ~obj.use_hd_data
@@ -1970,7 +1971,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %obj.get_dimensionality(false, n_factor, timepoints, dim_red_type, weigthed_average)
         end
         
-        function [weighted_averages, data] = get_dimensionality(obj, data, dim_red_type, timepoints, n_factors, varargin)
+        function [weighted_averages, data] = get_dimensionality(obj, data, dim_red_type, timepoints, n_components, varargin)
             if nargin < 2 || isempty(data)
                 data                = obj.rescaled_traces;
             end            
@@ -1987,6 +1988,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 variable = timepoints;
                 if contains(variable, 'subtracted')
                     median_subtracted = true;
+                    variable = erase(variable, 'subtracted');
                 end
                 timepoints = obj.get_tp_for_condition(variable);
             else
@@ -1997,12 +1999,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             data                    = data(timepoints,:);
 
             %% Reset dimensionality field
-            if nargin < 5 || isempty(n_factors)
-                [~,~,~,~,explained] = pca(obj.rescaled_traces(:, ~all(isnan(obj.rescaled_traces), 1)));
-                n_factors           = find(cumsum(explained)  > 50, 1, 'first');
+            if nargin < 5 || isempty(n_components)
+                [~,~,~,~,explained]     = pca(obj.rescaled_traces(:, ~all(isnan(obj.rescaled_traces), 1)));
+                n_components            = find(cumsum(explained)  > 90, 1, 'first');
             end
             obj.dimensionality                  = {};
-            obj.dimensionality.n_factors        = n_factors;
+            obj.dimensionality.n_factors        = n_components;
             obj.dimensionality.dim_red_type     = dim_red_type;
             obj.dimensionality.variable         = variable;
 
@@ -2061,6 +2063,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.dimensionality.clust_meth         = [];
             obj.dimensionality.N_clust            = [];
 
+            %% Plot location of strongest component
             if obj.rendering
                 obj.plot_factor_tree();
             end
