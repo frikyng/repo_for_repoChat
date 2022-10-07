@@ -5,7 +5,8 @@ classdef behaviours_analysis < handle
         detrend_behaviour   = false;    % If true, behaviours are detrended before applying threshold
         detrend_win         = 100       % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
-        bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds. 
+        bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds.
+        beh_smoothing       = [1,0]     % The smoothing window for behaviour
     end
 
     methods
@@ -209,7 +210,6 @@ classdef behaviours_analysis < handle
                 concat_downsamp_beh = structfun(@(x) nanmean(x,1), concat_downsamp_beh, 'UniformOutput', false);
                 type = {strjoin(type)};
             end
-            
 
             %% Render extracted traces
             if rendering
@@ -290,9 +290,9 @@ classdef behaviours_analysis < handle
                 rendering = false;
             end
             if nargin < 4 || isempty(smoothing)
-                smoothing = 1;
+                smoothing = obj.beh_smoothing;
             elseif ~any(smoothing)
-                smoothing(1) = 1;
+                smoothing(1) = [1, 0];
             end
             if numel(smoothing) == 1
                 smoothing = [smoothing, 0];
@@ -318,17 +318,14 @@ classdef behaviours_analysis < handle
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
                 if ~isempty(beh.value)
-                    if any(obj.detrend_win)
-                        beh.value       = beh.value - movmin(beh.value, [obj.detrend_win, 0]);
-                    end
-                    beh_sm{idx}          = smoothdata(beh.value, 'gaussian', smoothing);
-                    beh_sm{idx}          = nanmean(beh_sm{idx},1);
+                    beh_sm{idx}         = smoothdata(beh.value, 'gaussian', smoothing);
+                    beh_sm{idx}         = nanmean(beh_sm{idx},1);
                     %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
                     %thr                = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
                     current_thr         = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
 
                     %% Define bouts
-                    active_tp{idx}       = abs(beh_sm{idx}) > abs(current_thr);
+                    active_tp{idx}      = abs(beh_sm{idx}) > abs(current_thr);
                     [starts, stops]     = get_limits(active_tp{idx}, beh_sm{idx});
 
                     %% Add some pts before and after each epoch
@@ -394,7 +391,7 @@ classdef behaviours_analysis < handle
         function set.detrend_behaviour(obj, detrend_behaviour)
             if islogical(detrend_behaviour) && detrend_behaviour
             	detrend_behaviour = @(x) movmin(x, [ceil(1/nanmedian(obj.timescale.sr)), 0]);
-            elseif islogical(detrend_behaviour) && ~detrend_behaviour 
+            elseif islogical(detrend_behaviour) || ~any(detrend_behaviour)
                 % keep as such
             elseif isnumeric(detrend_behaviour)
                 detrend_behaviour = @(x) movmin(x, [ceil(detrend_behaviour/nanmedian(obj.timescale.sr)), 0]);
