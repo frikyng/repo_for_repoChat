@@ -39,6 +39,11 @@ if any(arrayfun(@(x) contains(x.name, 'LiveEditorEvaluationHelper'), dbstack))
     return
 end
 
+%% Leave function if no figure available
+if isempty(findobj('type','figure'))
+    return
+end
+
 
 if nargin > 3
     warning('Incorrect number of input arguments. Leaving figures unchanged.')
