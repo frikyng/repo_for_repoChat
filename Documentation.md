@@ -2,17 +2,59 @@
 
 ## Multiple levels of analysis
 
-To analyse signals from a single recording, the easy way is to use the `load_experiment()` function. This function enable the extraction of signals and various normalization, smoothing and masking options. 
+To analyse signals from a single recording, the easy way is to use the `load_experiment()` function from the *microscope controller.* This generic function enable the extraction of signals from various type of data (point scan, line scan , patches, arboreal scanning , population imaging or volume imaging for example), and implement various normalization, smoothing and masking options. 
 
-However, if you wish to integrate the 3D spatial structure in the analysis process, signals need to be linked to their 3D location on the dendritic tree. This is handled using methods of an `arboreal_scan` object (see [here](#Analyse-a-recording-(arboreal_scan-objects))), which is essentially an object containing:
+However, for arboreal scanning experiment, if you wish to integrate the 3D spatial structure in the analysis process, signals need to be linked to their 3D location on the dendritic tree. This can be handled using an `arboreal_scan` object (see [here](#Analyse-a-recording-(arboreal_scan-objects))), which is essentially a MATLAB object containing:
 
 - The extracted signal (as provided by `load_experiment()`)
 - The tree structure and additional morphometric information (e.g. soma location, depth etc...)
 - Aligned behavioural variables (e.g. camera, encoder etc...)
 
-If you wish to compare data across multiple successive recordings, the data from multiple (matching) `arboreal_scan`objects can be stored in an `arboreal_scan_experiment` object (see [here](Analyse-an-experiment-(arboreal_scan_experiment-objects))). This will help analyse data cross multiple behavioural conditions. If you need to pool multiple recordings, it will be essential to guarantee that all ROIs are matching each other from the beginning to the end of the experiments (i.e. same mask, no drift etc....). This requires a thorough curation of your data, as explained in the [Data Curation](#Curation) chapter
+arboreal_scan objects are included in the main code of the microscope_controller. However, analysis procedures, and tools enabling the analysis of/across multiple recordings, or of/across multiple neurons are included in this toolbox.
+
+For example, If you wish to compare data across multiple successive recordings, the data from multiple (matching) `arboreal_scan`objects can be stored in an `arboreal_scan_experiment` object (see [here](Analyse-an-experiment-(arboreal_scan_experiment-objects))). This will help analyse data cross multiple behavioural conditions. If you need to pool multiple recordings, it will be essential to guarantee that all ROIs are matching each other from the beginning to the end of the experiments (i.e. same mask, no drift etc....). This requires a thorough curation of your data, as explained in the [Data Curation](#Curation) chapter
 
 Finally, to perform group data analysis across experiments, `arboreal_scan_experiment` objects can be regrouped in an `arboreal_scan_dataset` object
+
+
+
+## Demo Scripts
+
+In order to better understand the abilities of this toolbox, a number of demo scripts covering multiple aspects of the analysis are provided. 
+
+You will find demo script for
+
+* Curating your dataset
+
+​	`Demo_curation.mlx` will walk you through the key curation steps for an entire dataset. See additional comments in the in the [Curation](#Curation) chapter
+
+* Displaying results as matrices or on the tree structure
+
+
+
+* Relating Imaging signal with behavioural metrics
+
+
+
+* Exploring the dataset (smoothing, Normalization, display of common metrics)
+
+​		`Demo_analysis.mlx` will walk you through the most common analysis methods
+
+* Cross correlation
+
+
+
+* Dimensionality reduction
+
+
+
+* Clustering
+
+
+
+* Machine Learning
+
+
 
 ## Curation
 
