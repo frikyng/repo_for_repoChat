@@ -218,6 +218,15 @@ classdef arboreal_scan_plotting < handle
             end
             colormap(cmap);
 
+            p = plot([NaN, NaN; NaN, NaN]);
+            [~, objH] = legend(p, 'Excluded ROIs','Unassigned Cluster', 'Box', false, 'Location', 'northwest');             % Reorder handles
+            set(p, 'Vis', 'off');                                       % Make "junk" lines invisible
+            set(findobj(objH, 'Tag', 'Excluded ROIs'), 'Color', EXCLUDED_ROI_COLOR, 'LineWidth',4);
+            set(findobj(objH, 'Tag', 'Unassigned Cluster'), 'Color', UNASSIGNED_ROI_COLOR, 'LineWidth',4);
+%             pos = get(objH(3), 'Pos');                                  % Get text box position
+%                % Stretch box and change text
+            
+
             %% Display rearranged Loadings and Cluster limits    
             cla(map_handle);
             imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.sorted_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
