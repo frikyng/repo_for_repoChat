@@ -127,7 +127,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
-            if nargin < 1 || isnan(source_folder) 
+            if nargin < 1 || (~ischar(source_folder) && isnan(source_folder))
                 return % empty object when building whole dataset                
             elseif isempty(source_folder)
                 source_folder = pwd;
@@ -498,6 +498,46 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 end
             end
         end
+        
+        function set.filter_win(obj, filter_win)
+            %% Defines the gaussian filtering window to use across analyses
+            % -------------------------------------------------------------
+            % Syntax:
+            %   obj.filter_win = filter_win;
+            % -------------------------------------------------------------
+            % Inputs:
+            %   filter_win (FLOAT OR 2x1 FLOAT)
+            %   symetrical or asymetrical gaussian filter applied to all
+            %   traces. negative values indicates that the value is in
+            %   second, and conversion into timepoints is done
+            %   automatically
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   19/10/2022
+            %
+            % See also : 
+            
+            if all(isnumeric(filter_win)) && numel(filter_win) == 1 || numel(filter_win) == 2
+                try
+                    filter_win(filter_win < 0)  = filter_win(filter_win < 0) * nanmedian(1./obj.timescale.sr);
+                end
+                filter_win                  = abs(round(filter_win));                
+                if numel(filter_win)    == 1                 
+                    filter_win = [filter_win, filter_win];
+                end
+                obj.filter_win              = filter_win;
+            else
+                error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 11, window is converted in seconds')
+            end
+        end
+        
 
         function extracted_traces = get.extracted_traces(obj)
             %% Get extracted traces from individual arboreal_scans
@@ -2531,7 +2571,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.prepare_binning(condition); % eet obj.demo = 1 or obj.prepare_binning(condition, true); to display the figure wirh the bins
 
             %% Find peaks based on amplitude AND correlation
-            obj.find_events();
+            obj.find_events('', 0.5);
 
             %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
             obj.rescale_traces(); % note that signal rescaling is computed on peaks, not on the entire trace
