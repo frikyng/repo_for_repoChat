@@ -4,58 +4,58 @@ classdef arboreal_scan_dataset < handle
     properties
         source_folder
         experiments;
-        valid_expe = [];
+        valid_expe  = [];
+        beh_types   = {};
     end
     
     methods
         function obj = arboreal_scan_dataset(source_folder)
             if isempty(obj.experiments)
-                obj.experiments = arboreal_scan_experiment();% initial empty experiment
+                obj.experiments = arboreal_scan_experiment(NaN);% initial empty experiment
             end
             obj.source_folder = source_folder;
             
             %% Find arboreal_scan_experiments
-            fold = dir([source_folder,'/*-*-*_exp_*']);
+            fold = [dir([source_folder,'/**/*-*-*_exp_??'])];
             fold = fold([fold.isdir]);            
             for idx = 1:(numel(fold))%1:numel(fold)
                 files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-%                 if numel(files) == 0
-%                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
-%                     expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
-%                     expe.save(true);
-%                     files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-%                 end
                 
-               % for el = 1:numel(files)
-               fname = [files(1).folder,'/',files(1).name];
-               if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
-                   fprintf(['loading ',files(1).name,' ... please wait\n'])
-                   m = load(fname);  
-%                    test = m.obj;
-%                    close all
-%                    test.find_events
-%                    test.rescale_traces      
-%                    %% CHECK 3,9,15    for low gain,
-%                    %% CHeck 10 for low offset          
-%                    test.plot_detected_events 
-                   obj.experiments(idx) = m.obj;
-               end
-               
-                    
-                  % if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
-%                         if isempty(obj.experiments)
-%                             obj.experiments = m.obj;
-%                         else
-%                             %% SQUEEZE IDENTIFY HERE
-%                             try
-                            
-%                             catch
-%                                 1
-%                             end
-                  %  end
-                        %break
-                  %  end
-               % end
+                if ~isempty(files)
+                    %                 if numel(files) == 0
+                    %                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
+                    %                     expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+                    %                     expe.save(true);
+                    %                     files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
+                    %                 end
+
+                                   % for el = 1:numel(files)
+
+
+
+                   fname = [files(1).folder,'/',files(1).name];
+                   if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
+                       fprintf(['loading ',files(1).name,' ... please wait\n'])
+                       m = load(fname);  
+                       obj.experiments(idx) = m.obj;
+                   end
+
+
+                      % if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
+    %                         if isempty(obj.experiments)
+    %                             obj.experiments = m.obj;
+    %                         else
+    %                             %% SQUEEZE IDENTIFY HERE
+    %                             try
+
+    %                             catch
+    %                                 1
+    %                             end
+                      %  end
+                            %break
+                      %  end
+                   % end
+                end
             end       
         end
         
@@ -71,6 +71,11 @@ classdef arboreal_scan_dataset < handle
                  H5A.close(attr_id);
             end
             H5F.close(fid);
+        end
+        
+        function types = get_behaviour_types(obj)
+            types = arrayfun(@(x) x.behaviours.types,  obj.experiments, 'UniformOutput', false, 'ErrorHandler', @(x, y) []);  
+            types = unique([types{:}]);
         end
         
 
@@ -343,7 +348,7 @@ classdef arboreal_scan_dataset < handle
                 elseif strcmp(mode, 'dim')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dim_tree(0); 
                 elseif strcmp(mode, 'dist')
-                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dist_tree(0); 
+                    [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).ref.plot_dist_tree(0); 
                 elseif strcmp(mode, 'order')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_ord_tree(0); 
                 end
@@ -387,10 +392,11 @@ classdef arboreal_scan_dataset < handle
                     Y = shifted_z_coor+y_offset;
                     Z = all_values{expe}{req_z};
                     S = all_values{expe}{4};
-                    HP = surface('XData'    ,[X;X],...
-                                 'YData'    ,[Y;Y],...
-                                 'ZData'    ,[Z;Z],...
-                                 'CData'    ,[S;S],...
+                    %% QQ Need to add the NANs at the end of branches
+                    HP = surface('XData'    ,[X';X'],...
+                                 'YData'    ,[Y';Y'],...
+                                 'ZData'    ,[Z';Z'],...
+                                 'CData'    ,[S';S'],...
                                  'facecol'  ,'no',...
                                  'edgecol'  ,'interp',...
                                  'linew'    ,1); hold on;
