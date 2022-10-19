@@ -67,6 +67,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         rescaled_traces         % Rescaled Traces according to rescaling_info
         extracted_pop_conc      % Concatenated version of extracted_pop
         global_median_raw       % The median of extracted_traces_conc
+        global_median_rescaled  % The median of rescaled traces
         t                       % Pointer to obj.timescale.global_timescale
         n_ROIs                  % Total number of ROIs in the swc, including bad ones
         n_pop_ROIs              % Total number of population ROIs
@@ -126,7 +127,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
-            if nargin < 1 || isempty(source_folder)
+            if nargin < 1 || isnan(source_folder) 
+                return % empty object when building whole dataset                
+            elseif isempty(source_folder)
                 source_folder = pwd;
             end
             if nargin < 2 || isempty(keep_2D)
@@ -883,6 +886,30 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             global_median_raw = nanmedian(global_median_raw, 2);
         end
 
+        function global_median_rescaled = get.global_median_rescaled(obj)
+            %% Median trace of all non-excluded data, after rescaling
+            % -------------------------------------------------------------
+            % Syntax:
+            %   global_median_rescaled = obj.global_median_rescaled;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   global_median_rescaled (Tx1 SINGLE)
+            %       median rescale trace
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   14/04/2022
+
+            global_median_rescaled = nanmedian(obj.rescaled_traces, 2);
+        end
+        
+        
         function binned_data = get.binned_data(obj)
             binned_data = obj.binned_data;
             if isempty(binned_data)
