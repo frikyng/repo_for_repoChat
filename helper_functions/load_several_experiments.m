@@ -46,7 +46,7 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
         all_data = {};
         all_durations = {};
         fprintf('Please wait while loading all the recordings for the selected ROI\n')
-        [~, header] = import_ROIs(p, 'data_folder', data_folders{1}, 'repeats', 1);
+        [~, header] = import_ROI_set(p, 'data_folder', data_folders{1}, 'repeats', 1);
         parfor f_idx = 1:numel(data_folders)
             f                   = data_folders{f_idx};
             info                = get_recordings_info(f);
@@ -55,13 +55,13 @@ function data = load_several_experiments(ROIs, data_folders, use_mask)
             current_data        = [];
             current_duration    = 0;
             for trial = info.repeats
-                    %[results, header] = import_ROIs(p, 'data_folder', f{1}, 'repeats', trial);
+                    %[results, header] = import_ROI_set(p, 'data_folder', f{1}, 'repeats', trial);
                     results     = [];
                 for roi = ROIs % if multiple ROIs from a branch
                     fname       = dir([info.data_folder '/RibbonScan_ROI_',sprintf('%04d',roi),'_repeat_',sprintf('%04d',trial),'*.mat']); %load list of all the files (excluded concatenation and averages)
                     fname       = parse_paths([fname.folder,'/',fname.name]);
                     results     = cat(1, results, import_ROI(fname, merge_params_obj(p, info)));                
-                        %[results, header] = import_ROIs(p, 'data_folder', f{1}, 'repeats', trial);
+                        %[results, header] = import_ROI_set(p, 'data_folder', f{1}, 'repeats', trial);
                         %[temp, ~, ~, params] = load_experiment(p, 'data_folder', f{1});
                 end
                 current_data    = cat(4, current_data, results);
