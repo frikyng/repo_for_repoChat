@@ -22,6 +22,8 @@ Finally, to perform group data analysis across experiments, `arboreal_scan_exper
 
 In order to better understand the abilities of this toolbox, a number of demo scripts covering multiple aspects of the analysis are provided. 
 
+[SECTION IN PROGRESS - ADD ONE EXAMPLE PER CHAPTER]
+
 You will find demo script for
 
 * Curating your dataset
@@ -310,27 +312,27 @@ Once all of these extraction steps are complete, there are a few additional cont
 
 13.1.  Arboreal scan object
 
-If you want to use the default extraction settings for a given data folder (channel 2, no filtering, non-partial etc… see *process_ribbon_scan.m* default values), you can type directly: 
+If you want to use the default extraction settings for a given data folder (channel 2, no filtering, non-partial etc… see *extract_arboreal_scan.m* default values), you can type directly: 
 
-`process_ribbon_scan(‘Some/data/folder’)`
+`extract_arboreal_scan(‘Some/data/folder’)`
 
 13.2.  Extract all *arboreal_scan* objects for one or several experiments
 
-You most likely don’t want to analyse just a single data_folder but recordings from one or several experiments. You can use batch processing functions for that. For a single experiment, use `batch_process_ribbon_scan('Some/expe/folder')`
+You most likely don’t want to analyse just a single data_folder but recordings from one or several experiments. You can use batch processing functions for that. For a single experiment, use `batch_extract_arboreal_scan('Some/expe/folder')`
 
-For multiple experiments, use `meta_batch_process_ribbon_scan({'Some/expe/folder/ , Another/expe/folder/'})`
+For multiple experiments, use `meta_batch_extract_arboreal_scan({'Some/expe/folder/ , Another/expe/folder/'})`
 
 OR
 
-`meta_batch_process_ribbon_scan('Top/Folder')`
+`meta_batch_extract_arboreal_scan('Top/Folder')`
 
 13.3.  Input control
 
 If the settings file is not in your top folder, you need to specify it or your tree morphologies will be incorrect. 
 
-`meta_batch_process_ribbon_scan('Top/Folder/', ‘Path/to/settings.txt)`
+`meta_batch_extract_arboreal_scan('Top/Folder/', ‘Path/to/settings.txt)`
 
-You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *process_ribbon_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used.  
+You can also specify an export path (default is pwd) and a non-default set of analysis parameters (eg. to extract another channel or use another mask file etc…). Default extraction values are detailed in *extract_arboreal_scan*. If you wanted to change something, you could pass pairs of {argument, value} in the 2nd input. By default, ‘auto_mask’ and ‘auto_registration’ are used.  
 
 `expe = arboreal_scan_experiment(‘arboreal_scan/extracted/path')`;
 
@@ -575,7 +577,7 @@ To extract all data_folders of an experiment that share the same imaging configu
 %% Export arboreal_scans
 source_folder = 'path/to/expe_folder_or_higher_level'
 export_folder = 'some/folder/to/extract/individual/arboreal_scans'
-meta_batch_process_ribbon_scan(source_folder','','',export_folder)
+meta_batch_extract_arboreal_scan(source_folder','','',export_folder)
 
 %% Optionally, you may have to indicate the settings.txt file, and you can modulate the default extraction options
 -TO DOCUMENT

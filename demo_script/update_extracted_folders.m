@@ -1,7 +1,7 @@
-%% If you removed folders ater extraction in your original TOP FOLDER, clean the extracted folders from here
+%% If you removed folders after extraction in your original TOP FOLDER, clean the extracted folders from here
 
-TOP_FOLDER = 'D:\Curated Data\' % Top folder used for meta_batch_process_ribbon_scan
-extracted_folder= 'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER\Ribbon Scan paper\code for paper\26-10-2020\meta\' % export folder of meta_batch_process_ribbon_scan
+TOP_FOLDER = 'D:\Curated Data\' % Top folder used for meta_batch_extract_arboreal_scan
+extracted_folder= 'C:\Users\vanto\Documents\MATLAB\RIBBON_SCAN_PAPER\Ribbon Scan paper\code for paper\26-10-2020\meta\' % export folder of meta_batch_extract_arboreal_scan
 
 
 [~, day_folders] = list_day_folders(TOP_FOLDER, false);

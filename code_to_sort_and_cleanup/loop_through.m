@@ -10,7 +10,7 @@ for idx = numel(fold):-1:1 %71 --> double cell, 16 failing
         %         expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
         %%         if contains(errors{idx}.message, 'value')
         %             [~,~,expe_f] = parse_paths(expe.ref.data_folder, true);
-        %             meta_batch_process_ribbon_scan(expe_f,'', '','C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans');
+        %             meta_batch_extract_arboreal_scan(expe_f,'', '','C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans');
         %         end
         
         file = dir([fold(idx).folder,'/',fold(idx).name,'/*-*-*_exp_*.mat']);

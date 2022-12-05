@@ -244,7 +244,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                             end
                         end
 
-                        err = meta_batch_process_ribbon_scan(obj.source_folder,optional_settings_path, optional_analysis_params, fold);% QQ PLEASE CHECK IF THIS STILL WORKS
+                        err = meta_batch_extract_arboreal_scan(obj.source_folder,optional_settings_path, optional_analysis_params, fold);% QQ PLEASE CHECK IF THIS STILL WORKS
                         if isempty(err{1})
                             obj.source_folder       = fold;
                             obj.update(true,keep_2D);

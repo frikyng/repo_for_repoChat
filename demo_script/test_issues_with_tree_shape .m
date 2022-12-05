@@ -19,5 +19,5 @@ for el = fliplr(1:numel(expe_folders))
 end
 
 
-meta_batch_process_ribbon_scan
+meta_batch_extract_arboreal_scan
 obj = arboreal_scan_experiment(expe_folders{end});
