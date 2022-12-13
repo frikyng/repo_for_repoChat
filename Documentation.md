@@ -884,6 +884,42 @@ ADD FIGURES
 
 ADD IMAGE COMPRESSION
 
+
+
+# Plot median trace
+
+
+
+
+
+
+
+# Baseline detrending
+
+Changes of signal intensity can occur during the course of the experiment. They can have multiple non-biological cause that you can try to mitigate. Baseline detrending will assume that the lowest value recorded in a given ROI correspond to the F0 of your sample. This value should not change over time, and we will consider that any recorded change is due to external factors (eg. bleaching or change of focus) that linearly decrease the intensity of the signal captured. baseline detrending will rectify the signal over time by applying a gain factor. Different methods are available.
+
+To use detrending, set `obj.detrending` to a non-zero value.
+
+## Continuous linear and polynomial fit
+
+These is the simplest method. A polynomial fit is applied to the baseline of each ROI. The baseline value is estimated using after applying a large `movmin` filter on each ROI trace, in order to get values as close as possible to F0. `obj.detrend = 1` use a linear fit, `obj.detrend = 2` uses a quadratic fit etc... 
+
+## breakpoints
+
+If you specified "breakpoints" (i.e. known interruption in your recordings that cause abrupt changes of gain, using`obj.breakpoints`), the linear and  polynomial fit is done between each breakpoint independently. For example, if you have one breakpoint in the middle of the experiment and use linear detrending, a linear fit is done on the first half, and a second linear fit is done on the second half.
+
+## Block correction per trial
+
+Another option is to normalize each trial independently. To do this, set `obj.detrend = -1`. This is done ROI by ROI, as the gain can change differently across ROIs if it is due to bleaching or movements. To do this, F0 is estimated for each trial (per ROI), and a linear regression between the median F0 for this ROI and individual trials returns the gain factor for each trial
+
+## Block normalization per trial
+
+This use the same principle as above, but applies MATLAB median interquartile normalization to each trial.
+
+
+
+
+
 # Analyse a dataset (arboreal_scan_dataset objects)
 
 

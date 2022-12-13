@@ -66,15 +66,19 @@ classdef arboreal_scan_plotting < handle
 
         function plot_median_traces(obj, rescaled) 
             if nargin < 2 || isempty(rescaled)
-                rescaled = true;
+                rescaled = obj.is_rescaled;
             end
             if rescaled && ~obj.is_rescaled
                 obj.rescale_traces
             end                
+            %             if ~isfield(obj.binned_data, 'median_traces')
+            %                 obj.set_median_traces(rescaled);
+            %             end
             if ~isfield(obj.binned_data, 'median_traces')
-                obj.set_median_traces(rescaled);
+                traces = nanmedian(obj.extracted_traces_conc, 2);
+            else
+                traces = obj.binned_data.median_traces;
             end
-            traces = obj.binned_data.median_traces;
             figure(1001);cla();plot(obj.t, traces); hold on;
             legend(obj.binned_data.bin_legend); hold on;
             if obj.is_rescaled

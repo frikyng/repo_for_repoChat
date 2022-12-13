@@ -41,6 +41,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         bad_ROI_thr     = 0;
         cc_mode         = 'groups_peaks'; % or raw
         detrend         = false;
+        is_detrended    = false; % is set to True once you ran the detrending once.
         is_rescaled     = false; % is set to True once you ran the rescaling step.
         default_handle
         rescaling_method= 'by_trials_on_peaks'; 
@@ -60,7 +61,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
     end
 
     properties (Dependent = true, Transient = true)
-        updated_data_path            % If update_folder is used, the updated filpath
+        updated_data_path       % If update_folder is used, the updated filpath
         extracted_traces        % Concatenated version of each obj.arboral_scan.simple_data
         extracted_pop           % Concatenated version of each obj.arboral_scan.simple_pop_data
         extracted_traces_conc   % Concatenated version of extracted_traces
@@ -318,9 +319,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.cc_mode         = 'groups_peaks'; % or raw
             obj.detrend         = false;
             obj.is_rescaled     = false; % is set to True once you ran the rescaling step.
-            obj.rescaling_method= 'by_trials';
+            obj.rescaling_method= 'by_trials_on_peaks';
             obj.breakpoints     = []; % if you had a disruptive event during the experiment, a first scaling is done with large blocks
 
+            
             %% All the fields computed in
             obj.binned_data     = [];	% Defines how ROIs are grouped
             obj.rescaling_info  = [];   % Defines how each ROi get rescaled to match the cell median
@@ -458,6 +460,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
+            obj.is_detrended = false; %if breakpoints are changed, the detrended needs a refresh too
             for rec = 1:numel(obj.arboreal_scans)
                 obj.arboreal_scans{rec}.batch_params.breakpoints = sort(breakpoints);
             end
@@ -524,7 +527,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %
             % See also : 
             
-            if all(isnumeric(filter_win)) && numel(filter_win) == 1 || numel(filter_win) == 2
+            
+            if all(isnumeric(filter_win)) && numel(filter_win) == 2 && all(filter_win == obj.filter_win)
+                %% no change, pass                
+            elseif all(isnumeric(filter_win)) && numel(filter_win) == 1 || numel(filter_win) == 2 
                 try
                     filter_win(filter_win < 0)  = filter_win(filter_win < 0) * nanmedian(1./obj.timescale.sr);
                 end
@@ -533,6 +539,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     filter_win = [filter_win, filter_win];
                 end
                 obj.filter_win              = filter_win;
+                if isfield(obj.binned_data, 'median_traces')
+                    warning('Changing the filter window affects several preprocessing steps. Metaanalysises fields were reset')
+                    obj.reset();
+                end
             else
                 error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 11, window is converted in seconds')
             end
@@ -570,8 +580,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% If expe was interrupted signal gain changed, we fix it here
-            if ~isempty(obj.breakpoints) || obj.detrend
+            if (~isempty(obj.breakpoints) || obj.detrend)% && ~obj.is_detrended
             	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
+                if isfield(obj.binned_data, 'median_traces') && ~obj.is_detrended
+                    warning('Changing the detrending method affects several preprocessing steps. Meta analysises fields were reset')
+                    obj.reset();
+                end                
             end
 
             %% Time smoothing if required
@@ -1005,6 +1019,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 bad_ROI_list = obj.get_voxel_for_ROI(bad_ROI_list');
             end
         end
+        
+        function set.detrend(obj, value)
+            if value ~= obj.detrend
+                obj.is_detrended = false;
+                obj.detrend = value;
+                obj.rescaled_traces; % force detrending update
+            end
+        end
 
 
         function set.use_hd_data(obj, use_hd_data)
@@ -1036,12 +1058,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %--------------------------------------------------------------
             % Revision Date:
             %   17/06/2022
-
-            obj.use_hd_data = false;
+            
             if ~isempty(obj.ref.full_data) && use_hd_data
                 obj.use_hd_data = true;
             elseif isempty(obj.ref.full_data) && use_hd_data
+                obj.use_hd_data = false;
                 warning('unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object. Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).')
+            else
+                obj.use_hd_data = false;
             end
         end
 
@@ -1077,6 +1101,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
 
             extracted_traces = fix_gain_changes(obj, extracted_traces);
+            obj.is_detrended = true;
         end
 
         %% #############################
@@ -1187,18 +1212,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin >= 2 && ~isempty(method)
                 obj.rescaling_method = method;
             end
-            if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
-                if isempty(obj.event)
-                    warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events()')   
-                    return
-                end
-                pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
-                smoothing               = [pk_width*2,0];
-            elseif (nargin < 3 || isempty(smoothing)) && obj.use_hd_data
-                %pass
-            elseif numel(smoothing) == 1
-                smoothing = [smoothing, 0];
-            end
+            smoothing = 0;
+%             if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
+%                 if isempty(obj.event)
+%                     warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events()')   
+%                     return
+%                 end
+%                 pk_width                = nanmedian(vertcat(obj.event.peak_width{:}));
+%                 smoothing               = [pk_width*2,0];
+%             elseif (nargin < 3 || isempty(smoothing)) && obj.use_hd_data
+%                 %pass
+%             elseif numel(smoothing) == 1
+%                 smoothing = [smoothing, 0];
+%             end
 
             %% Prepare the trace to use (whoe trace cocnatenated, or individidual trials)
             invalid                     = ~ismember(1:obj.n_ROIs, obj.ref.indices.valid_swc_rois') | ismember(1:obj.n_ROIs, obj.bad_ROI_list);
@@ -1298,10 +1324,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         function [global_median, all_traces_per_bin] = set_median_traces(obj, use_rescaled)
             if (nargin < 2 || isempty(use_rescaled) || use_rescaled) && ~isempty(obj.rescaling_info)
-                traces = obj.rescaled_traces;
+                traces          = obj.rescaled_traces;
                 obj.is_rescaled = true;
             else
-                traces = obj.extracted_traces_conc;
+                traces          = obj.extracted_traces_conc;
                 obj.is_rescaled = false;
             end
 
@@ -1322,7 +1348,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.binned_data.median_traces   = all_traces_per_bin;
 
             if obj.rendering
-                obj.plot_median_traces();arrangefigures([1,2]);
+                obj.plot_median_traces(obj.is_rescaled);arrangefigures([1,2]);
             end
         end
 
@@ -2139,7 +2165,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             weighted_averages = obj.get_weight_map();
             
             %% Plot weight-tree for each component
-            obj.plot_dim_tree(1:obj.dimensionality.n_factors)
+            if obj.rendering
+                if obj.dimensionality.n_factors > 9
+                    warning('only the first 9 dimensions were displayed. To see more type obj.plot_dim_tree(1:obj.dimensionality.n_factors)')
+                end
+                obj.plot_dim_tree(1:max(obj.dimensionality.n_factors, 9));
+            end
         end
 
         function cluster_factors(obj, clust_meth, N_clust)
@@ -2285,7 +2316,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             n_col = ceil(numel(comp) / n_row);
 
             %% Plot components (or strongest factor location if comp == 0)
-            tiledlayout(n_row, n_col, 'Padding', 'none', 'TileSpacing', 'compact'); 
+            tiledlayout(n_row, n_col, 'Padding', 'none', 'TileSpacing', 'none'); 
             for comp_idx = 1:numel(comp)
                 ax = nexttile; % a bit beter than subplot, but if you have matlab < 2019b, you can use the line below
                 %ax = subplot(n_row, n_col, comp_idx);
@@ -2509,7 +2540,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 %% Plot normalized excluded traces
                 ax = subplot(1,2,2);
                 color_code = repmat([0.5,0.5,0.5], obj.n_ROIs, 1);
-                color_code(find(obj.bad_ROI_list),:) = repmat([1,0,0], sum(obj.bad_ROI_list), 1);
+                color_code(obj.bad_ROI_list,:) = repmat([1,0,0], sum(obj.bad_ROI_list), 1);
+                excl = ~ismember(obj.ref.indices.swc_list(:,1), obj.ref.indices.valid_swc_list(:,1));
+                color_code(excl,:) = repmat([0.8,0.8,0.8], sum(excl), 1);
                 plot_many_traces(smoothdata(obj.extracted_traces_conc,'gaussian',[20,0]), ax);
                 colororder(ax, color_code);
                 
@@ -2571,7 +2604,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.prepare_binning(condition); % eet obj.demo = 1 or obj.prepare_binning(condition, true); to display the figure wirh the bins
 
             %% Find peaks based on amplitude AND correlation
-            obj.find_events('', 0.5);
+            obj.find_events();
 
             %% Rescale each trace with a unique value across recordings (which would be specific of that region of the tree).
             obj.rescale_traces(); % note that signal rescaling is computed on peaks, not on the entire trace
@@ -2583,7 +2616,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.compute_similarity();
 
             %% Correct for decay to avoid overestimating peak amplitude
-            obj.fit_events();
+            %obj.fit_events();
 
             %% Detect and display peak histogram distribution (mean and individual groups)
             obj.get_events_statistics();
@@ -2598,8 +2631,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.get_dimensionality([],'phate','peaks_subtracted',[]); 
             
             %% Clustering
-            obj.cluster_factors('dbscan', [])
-           
+            obj.cluster_factors('dbscan', [])           
 
             %% Optionally, if external variables need an update, do it here
             %obj.update_external_metrics(60)
@@ -2613,7 +2645,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_analysis = true
+%             obj.auto_save_analysis = true
             if obj.auto_save_figures
                 obj.save_figures();
             end
