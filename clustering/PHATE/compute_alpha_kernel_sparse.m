@@ -82,7 +82,7 @@ end
 disp(['Number of samples below the threshold from 1st iter: ' num2str(length(idx_thresh))])
 
 % Loop increasing k by factor of 20 until we cover 90% of the data
-while length(idx_thresh)<.9*N
+while length(idx_thresh)<.9*N && ~isempty(idx_thresh)
     k_knn=min(20*k_knn,N);
     data_pc2=data_pc(~below_thresh,:);
     epsilon2=epsilon(~below_thresh);
