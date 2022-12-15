@@ -2180,7 +2180,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 if obj.dimensionality.n_factors > 9
                     warning('only the first 9 dimensions were displayed. To see more type obj.plot_dim_tree(1:obj.dimensionality.n_factors)')
                 end
-                obj.plot_dim_tree(1:max(obj.dimensionality.n_factors, 9));
+                obj.plot_dim_tree(1:min(obj.dimensionality.n_factors, 9));
             end
         end
 
