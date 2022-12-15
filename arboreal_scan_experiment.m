@@ -1388,8 +1388,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function norm_cumsum = get_events_statistics(obj)
-
-            peaks = obj.event.fitting.post_correction_peaks;
+            if isfield(obj.event, 'fitting')
+                peaks = obj.event.fitting.post_correction_peaks;
+            else
+                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
+            end
 
             %% Detect and display peak histogram distribution (mean and individual groups)
             max_peaks = max(peaks(:));
@@ -1425,8 +1428,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function norm_vmr = assess_variability(obj)
+            if isfield(obj.event, 'fitting')
+                peaks = obj.event.fitting.post_correction_peaks;
+                times = obj.event.fitting.peak_times;
+            else
+                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
+                times = obj.t(vertcat(obj.event.peak_time{:}));
+            end
+            
             %sr = nanmedian(diff(obj.timescale{expe}.global_timescale));
-            vmr = nanvar(obj.event.fitting.post_correction_peaks,[],2)./nanmean(obj.event.fitting.post_correction_peaks, 2);
+            vmr = nanvar(peaks,[],2)./nanmean(peaks, 2);
             %cv  = nanstd(obj.event.fitting.post_correction_peaks,[],2)./nanmean(obj.event.fitting.post_correction_peaks, 2); % (maybe chack snr at one point?  mu / sigma)
             %fano = []; % windowed VMR. usually for spike trains
             [~, idx] = sort(vmr,'descend');
@@ -1437,7 +1448,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %         drawnow;%pause(0.1)
             %     end
 
-            figure(1009);cla();plot(obj.event.fitting.post_correction_peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
+            figure(1009);cla();plot(peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
 
             R = max(range(obj.binned_data.median_traces));
             %norm_vmr = vmr/range(vmr);
@@ -1445,7 +1456,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.variability.index_of_disp = norm_vmr;
             figure(1010);clf();
             ax1 = subplot(2,1,1);plot(obj.t, obj.binned_data.median_traces); ylabel('Amplitude'); hold on;set(gcf,'Color','w');ylim([-R/20,R + R/20]);title('bin traces'); hold on;
-            ax2 = subplot(2,1,2);plot(obj.event.fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
+            ax2 = subplot(2,1,2);plot(times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
             hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
@@ -1468,7 +1479,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %             temp = behaviour(round(obj.event.fitting.peak_pos));
             %             hold on;plot(obj.t(obj.event.fitting.peak_pos), temp,'-vr');
 
-            figure(1011);cla();scatter(nanmedian(obj.event.fitting.post_correction_peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w')
+            figure(1011);cla();scatter(nanmedian(peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w')
         end
 
         %% #############################################
