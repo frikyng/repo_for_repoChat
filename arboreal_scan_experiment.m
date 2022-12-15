@@ -2315,6 +2315,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             figure(fig_handle);clf();
 
+            %% If you asked more dimensions than tavailable diemsnions, clip the list
+            if any(comp)
+                comp(comp > size(obj.dimensionality.LoadingsPM, 2)) = [];
+            end
+            
             %% Recover Factors / Loadings
             LoadingsPM  = obj.dimensionality.LoadingsPM;
             Valid_ROIs  = obj.dimensionality.all_ROIs(obj.dimensionality.valid_trace_idx);
