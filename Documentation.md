@@ -1,3 +1,9 @@
+[toc]
+
+
+
+
+
 # Arboreal Scanning Curation & Analysis Pipeline Overview
 
 ## Multiple levels of analysis
@@ -357,25 +363,23 @@ This processing pipeline loads multiple recordings and rescales traces with each
 
 Use a loop:
 
-`top_export_folder = '…/extracted_arboreal_scans/';`
+```matlab
+top_export_folder 	= '…/extracted_arboreal_scans/';
+fold 				= dir([top_export_folder,'/*-*-*_exp_*']);
+fold 				= fold([fold.isdir]);
+for idx = 1:numel(fold)
+    expe 			= arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+    expe.rendering 	= true; % set to false if you don't want to see the all figures
+    % at this stage, you can adjust also the smoothing and detrending
+    expe.process(); 		% adjust binning options here
+    expe.save(true); 		% save the object afeter processign (or not)
+	close all
+end
+```
 
-`fold = dir([top_export_folder,'/*-*-*_exp_*']);`
+There's a demo script that can extract_all the experiment and save them (run it overnight for example, so the next day the reloading will be faster)
 
-`fold = fold([fold.isdir]);`
-
-`for idx = 1:numel(fold)`
-
-` expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);`
-
-`expe.process();`
-
-`expe.save(true);`
-
-`close all`
-
-`end`
-
-
+see `extract_all_expe.m`
 
 **15.**  **Meta analysis**. You can later reuse the extracted features from each tree to build figures. To analyse individual trees after the meta analysis extraction step, reload summary.mat. Then use `results.plot_dim_tree(neuron_id, 1)`. 
 

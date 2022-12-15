@@ -8,7 +8,7 @@ fold                = fold([fold.isdir]);
 
 %% Set analysis settings
 process             = true;
-full_process = true; % if false, we use the custom list of preocessing set (see "else" condition in the loop)
+full_process        = true; % if false, we use the custom list of preocessing set (see "else" condition in the loop)
 
 %% Process
 errors = {};
@@ -22,7 +22,7 @@ for fold_idx = numel(fold):-1:1
             
             %% Full processing
             if process && full_process
-            	obj.process({'depth',50},[ceil(1/nanmedian(expe.timescale.sr)), 0]); %% Add grouping settings here
+            	obj.process({'depth',50},[ceil(1/nanmedian(obj.timescale.sr)), 0]); %% Add grouping settings here
             elseif process
             %% Manual step by step rocessing
                 obj.rescaling_method = 'peaks_trials';
