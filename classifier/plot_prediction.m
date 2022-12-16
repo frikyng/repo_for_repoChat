@@ -9,8 +9,7 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
         score = NaN;
     end
     if nargin < 9 || isempty(Fig_nb)
-        existing = sort(arrayfun(@(x) x.Number, findobj('type','figure')));
-        Fig_nb = existing(find(diff(existing) > 1, 1, 'first')) + 1;        
+        Fig_nb = next_fig;
     end
     
     %% Split data between train and test
@@ -46,7 +45,7 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
     else
         plot(timepoints(train_tp), normalize(y_train, 'medianiqr')); hold on;
         plot(timepoints(test_tp), normalize(y_predict, 'medianiqr'),'g'); hold on
-        plot(timepoints(test_tp), normalize(smoothdata(y_predict, 'gaussian' , 10), 'medianiqr'),'b--')
+        %plot(timepoints(test_tp), normalize(smoothdata(y_predict, 'gaussian' , 10), 'medianiqr'),'b--')
     end
 
     ax3 = subplot(3,1,3); 
