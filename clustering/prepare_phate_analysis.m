@@ -49,7 +49,7 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
         obj.reset();
         obj.prepare_binning({'distance',50});
     end
-    if isempty(obj.event.peak_time)
+    if isempty(obj.event) || isempty(obj.event.peak_time)
         obj.find_events();
         obj.rescaling_info = {};
     end
