@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle)
+function bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
@@ -16,6 +16,9 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
         else
             additional_handle = [];
         end
+    end
+    if nargin < 5 || isempty(condition_labels)
+        condition_labels = '';
     end
 
     N_behaviours    = 1;
@@ -61,8 +64,9 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
     %value = cell2mat(cellfun(@(x) cell2mat(cellfun(@(y) y.(result_fieldname)), x)'), result, 'UniformOutput', false));
 
     %% Get mean value if multiple iterations of more than one variable
-    meanvalue   = squeeze(nanmean(value,2));
-    sem_values  = squeeze(nanstd(value,[], 2)./sqrt(size(value, 2)));
+    meanvalue   = permute(nanmean(value,2),[1,3,2]);
+    sem_values  = permute(nanstd(value,[], 2)./sqrt(size(value, 2)),[1,3,2]);
+
 
     %% Generate figure
     figure();hb = bar(labels, meanvalue);hold on; colororder(viridis(N_conditions))
@@ -79,6 +83,11 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
 
     %% Adjust plot limits
     %ylim([-10,50]);hold on;
-
+    
+    if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
+        legend(condition_labels);
+    elseif  ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
+        error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
+    end
 end
 
