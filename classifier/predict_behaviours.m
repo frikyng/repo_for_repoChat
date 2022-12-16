@@ -3,7 +3,7 @@
 
 %% Cell 2019-09-17_exp_1 anticorelated to running
 
-function out = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, varargin)
+function [out, data] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = '' 
     end
@@ -54,10 +54,10 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace, be
     data = data';
 
     %     %% Correlation of the different ROIs with each other
-    %     figure();imagesc(corr(Ca'))
+    %     figure();imagesc(corr(data'))
     % 
     %     %% Correlation of the Ca2+ values per event
-    %     figure();imagesc(corr(Ca))
+    %     figure();imagesc(corr(data))
 
     %% Get all behaviours at these tp
     behaviours              = [];
@@ -120,14 +120,14 @@ function out = predict_behaviours(obj, use_classifier, method, type_of_trace, be
     behaviour_list   = strrep(behaviour_list, '_', '\_'); % reformat strings to be usable in titles and legends
 
 %     %% Correlation of the different behaviours with each other
-%     figure();imagesc(corr(all_beh'))
+%     figure();imagesc(corr(processed_behaviours'))
 % 
 %     %% Correlation of the behaviours values per event
-%     figure();imagesc(corr(all_beh))
+%     figure();imagesc(corr(processed_behaviours))
 
     %Soma_ROIs   = find(ismember(1:size(data, 1), obj.ref.indices.somatic_ROIs)); % somatic ROIs, but ignoring the NaNs
     All_ROIs    = 1:size(data, 1);
-    out = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs),2), parameters);
+    out         = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs),2), parameters);
 end
 
 
