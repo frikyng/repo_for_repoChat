@@ -231,8 +231,12 @@ classdef arboreal_scan_plotting < handle
 %                % Stretch box and change text
             
 
-            %% Display rearranged Loadings and Cluster limits    
-            cla(map_handle);
+            %% Display rearranged Loadings and Cluster limits 
+            if ~isvalid(map_handle)
+                map_handle = figure(999);map_handle = gca();cla();
+            else
+                cla(map_handle);
+            end
             imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.sorted_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
             axis(map_handle,'tight')
             for el = 1:numel(unique(obj.dimensionality.cluster_idx))
@@ -244,7 +248,11 @@ classdef arboreal_scan_plotting < handle
             title(map_handle, 'Factor/Loadings/Components');ylabel('ROI (sorted)')
             
             %% Display average weightings
-            cla(trace_handle);
+            if ~isvalid(trace_handle)
+                trace_handle = figure(7777);trace_handle = gca();cla();
+            else
+                cla(trace_handle);
+            end
             cluster_traces = obj.get_cluster_traces();
             for gp = 1:size(cluster_traces, 1)
                 plot(trace_handle, obj.t, cluster_traces(gp,:));hold(trace_handle, 'on')
@@ -305,6 +313,9 @@ classdef arboreal_scan_plotting < handle
 
             
             %% Display average weightings
+            if ~isvalid(trace_handle) % for some reason, when running within a live script the handle gets deleted during thhis fnction
+                trace_handle = figure(7777);trace_handle = gca();
+            end
             cla(trace_handle);
             for w = weights_to_show
                 plot(trace_handle, obj.t, weighted_averages(w, :));hold(trace_handle, 'on');
