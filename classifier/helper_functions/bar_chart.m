@@ -50,6 +50,10 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
             end            
         end        
     end
+    
+    INVALID = all(cellfun(@isempty, value),2);
+    value(INVALID, : ) = [];
+    result{1}{1}.(labels_or_label_fieldname)(INVALID) = [];
 
     if ischar(labels_or_label_fieldname)
     	labels = reordercats(categorical(result{1}{1}.(labels_or_label_fieldname)),result{1}{1}.(labels_or_label_fieldname));
