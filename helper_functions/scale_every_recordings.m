@@ -19,7 +19,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
         demo = 0;
     end
     if nargin < 3 || isempty(pk_locs)
-        error('to check and revise')
+        %error('to check and revise')
         %% Autoestimate peak detection level
 
         %% Filter signal
@@ -46,7 +46,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     else
         bsl_percentile = 50; % since we alrady use a range for the baseline, we just stick to the median value
     end
-    if nargin < 5 || isempty(smoothing)
+    if nargin < 5 || isempty(smoothing) || ~any(smoothing)
         % no smoothing, pass
     else
         all_traces_per_rec                  = cellfun(@(x) smoothdata(x,'gaussian',smoothing), all_traces_per_rec, 'UniformOutput', false);
@@ -65,11 +65,12 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     %% For each recording, get the best scaling factor per bin matching the cell-wide median
     best_ind_scal           = {};
     best_ind_offset         = {};
-    ncores                  = (feature('numcores') * double(~(demo == 2)));
+    ncores                  = (feature('numcores') * double(~(demo >= 2)));
     tp                      = [cellfun(@(x) size(x, 1), all_traces_per_rec), inf];
     N_pks                   = zeros(size(all_traces_per_rec))'; % for weights, if you use them
     N_pt_bsl                = zeros(size(all_traces_per_rec))'; % for weights, if you use them
 
+    
     parfor (rec = 1:numel(all_traces_per_rec), ncores)
     %for rec = 1:numel(all_traces_per_rec)
         all_traces_in_rec       = all_traces_per_rec{rec};
@@ -80,7 +81,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
         tp_range        = [(sum(tp(1:rec-1))+1),sum(tp(1:rec))];
         pk_tp_current   = pk_locs(pk_locs > tp_range(1) & pk_locs < tp_range(2)) - tp_range(1)+1;
         bsl_tp_current  = bsl_range(bsl_range > tp_range(1) & bsl_range < tp_range(2)) - tp_range(1)+1;        
-        N_pks(rec)       = numel(pk_tp_current);
+        N_pks(rec)      = numel(pk_tp_current);
         N_pt_bsl(rec)   = numel(bsl_tp_current);
 
 %         
@@ -113,15 +114,18 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
 
                 if ~isempty(pk_tp_current)
                     try
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
                     catch % very rare ;  not sure why
                        % peak_times_in_record = [peak_times_in_record;peak_times_in_record]; % otherwise following function sem to crash
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo == 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                    end
+                    if demo >= 3
+                        uiwait(figure(6663))
                     end
                 else                    
                     best_ind_scal{rec}(trace_idx) = NaN;
                 end
-                
+
                 %% #### DEBUG
                 %% Show why we need to do scaling on events --> bsl noise scaling way too variable
                 %   figure();plot(offset_median .\ current_trace)
