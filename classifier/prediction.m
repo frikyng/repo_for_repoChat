@@ -1,7 +1,3 @@
-%% Need to discuss 
-%% 'Solver' — Optimization routine --> 'ISDA' | 'L1QP' | 'SMO'
-%% 'Weights' — Observation weights --> numeric vector | name of variable in Tbl % should we use SNR?
-
 function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, method, cost, parameters)
     if nargin < 6 || isempty(parameters)
         parameters = DEFAULT_CLASSIFIER_OPTION;
@@ -19,11 +15,8 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
     y_train     = YData(:, train_tp);               % Variable to predict used for training  
     y_test      = YData(:, test_tp);                % Variable to predict used for testing (ground truth)     
 
-    %% Set default Hyperparameter optimization options
-    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS;
-    
     %% Run the correst classifier or regression
-    if strcmp(method, 'svm') 
+    if strcmpi(method, 'svm') 
         %% https://fr.mathworks.com/help/stats/support-vector-machine-classification.html
         base_varargin = {   x_train         , ...
                             y_train         , ...
@@ -54,21 +47,25 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 
         %% Estimate accuracy of the cross-validated model, and of the predicted values vs ground thruth
         score = kfoldLoss(model)*100; % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
-        fprintf(['The model out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
-    elseif strcmp(method, 'linear')        
+        %fprintf(['The model out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
+    elseif strcmpi(method, 'linear')        
         base_varargin = {   x_train         , ...
-                            y_train         , ...  
-                            'Learner'       , 'leastsquares',...
+                            y_train         , ...                              
                             'Regularization','ridge',...
                             'PostFitBias'   , true,...
                             'PassLimit'     , 10};
+        
+        %% If you manualy set the solver, adjust it here
+        if ~isempty(parameters.solver)                
+            base_varargin = [base_varargin, 'Solver', parameters.solver, 'Learner', 'leastsquares'];   
+        end
 
         %% Set training model
         if islogical(y_train)
             func = @fitclinear;
             base_varargin = [base_varargin, {'Cost', cost, 'ClassNames', [false; true]}];
         else
-            updated_varargin = base_varargin;
+            updated_varargin = [base_varargin, 'Solver', parameters.solver, 'Learner', 'logistic'];   ;
             func = @fitrlinear;
         end
 
@@ -86,24 +83,29 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 
         %% Estimate accuracy of the cross-validated model, and of the predicted values vs ground thruth
         score = kfoldLoss(model)*100; % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
-        fprintf(['The out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
-
+        %fprintf(['The out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
     
-    elseif strcmp(method, 'forest')
+    elseif strcmpi(method, 'forest')
         classificationTree = TreeBagger(500, x_train, y_train, 'OOBPrediction', 'on','Method', 'classification','Cost', cost); 
         y_predict = str2double(classificationTree.predict(x_test));  
-    elseif strcmp(method, 'glm')  
-            mdl =  fitglm(x_train,y_train,'linear','Distribution','normal');
-            [y_predict,~] = predict(mdl,x_test)
-            mask = ones(size(mdl.Coefficients.SE)-1);
-            mask = abs(mdl.Coefficients.SE(2:end)) < 0.001;
-            mdl2 = removeTerms(mdl, mask')
-            score  = NaN
-            [y_predict2,~] = predict(mdl2,x_test)
-            assignin('base','p',mdl.Coefficients.pValue)
-            assignin('base','SE',mdl.Coefficients.SE)
-            assignin('base','tStat',mdl.Coefficients.tStat)
-            assignin('base','Estimate',mdl.Coefficients.Estimate)
+    elseif strcmpi(method, 'glm')  
+            model =  fitglm(x_train,y_train,'linear','Distribution','inverse gaussian'); %  'binomial' | 'poisson' | 'gamma' | 'inverse gaussian'
+            [y_predict,~] = predict(model,x_test);
+            score = NaN;
+            % perform cross-validation, and return average MSE across folds
+            %mse = crossval('mse', x_train,y_train', 'Predfun',fcn, 'kfold',10);
+            % compute root mean squared error
+            %avrg_rmse = sqrt(mse)
+
+%             mask = ones(size(mdl.Coefficients.SE)-1);
+%             mask = abs(mdl.Coefficients.SE(2:end)) < 0.001;
+%             mdl2 = removeTerms(mdl, mask')
+%             score  = NaN
+%             [y_predict2,~] = predict(mdl2,x_test)
+%             assignin('base','p',mdl.Coefficients.pValue)
+%             assignin('base','SE',mdl.Coefficients.SE)
+%             assignin('base','tStat',mdl.Coefficients.tStat)
+%             assignin('base','Estimate',mdl.Coefficients.Estimate)
             %obj.ref.plot_value_tree(SE, find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)))
             
 %             [y_predict,~] = predict(mdl,x_test)
@@ -130,6 +132,9 @@ function y_predict = get_consensus_prediction(Model, x_test)
 end
 
 function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
+    %% Set default Hyperparameter optimization options
+    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS;    
+
     if ~parameters.optimize_hyper
     	Lmax = 1e-4;    
     elseif strcmpi(parameters.optimization_method, 'native')

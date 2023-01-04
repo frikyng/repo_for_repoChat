@@ -29,7 +29,23 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     else
         parameters = DEFAULT_CLASSIFIER_OPTION(parameters);
     end
-
+    
+    USABLE_ROW = ~all(isnan(observation_data),2);
+    INVALID = any(isnan(observation_data(USABLE_ROW,:)),1);
+    observation_data(:,INVALID) = [];
+    predictor_data(:,INVALID) = [];
+    timepoints(INVALID) = []
+    
+    %% Shuffle predictor if required.
+    if strcmpi(parameters.shuffling, 'events') || strcmpi(parameters.shuffling, 'both')
+        predictor_data = predictor_data(:,randperm(size(predictor_data,2)));
+    end
+    if strcmpi(parameters.shuffling, 'ROIs') || strcmpi(parameters.shuffling, 'both')
+        for tp = 1:size(predictor_data,2)
+            predictor_data(:,tp) = predictor_data(randperm(size(predictor_data,1)), tp);
+        end
+    end
+    
     %% Get a random set of timepoints for traing vs testing
     partition     = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout); % randperm(numel(timepoints));       
     score       = [];
@@ -51,6 +67,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         else
             cost = [];
         end   
+        
+        if all(isnan(current_var))
+            warning([type_corrected, ' has only NaNs'])
+            continue
+        end
         
         %% Predict behaviour
         [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, merge_params_obj(parameters, struct('behaviour',type_corrected)));
