@@ -1,3 +1,5 @@
 
 *.asv
 *.bkp
+*.fig
+*.png
