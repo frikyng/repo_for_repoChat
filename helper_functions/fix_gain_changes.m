@@ -1,3 +1,4 @@
+
 %% Rescale traces
 % - if expe.detrend == -1, for each ROI, we rescale the F0 of each trial to the median F0 of the ROI
 % - if expe.detrend > 0  , for each ROI, we compute a fit of the baseline
@@ -16,11 +17,19 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         figure(667788);clf();ax1 = subplot(1,3,1);imagesc(temp'); caxis([0, max_v]);
     end
     
+    if ischar(expe.detrend) && strcmp(expe.detrend, 'auto')
+        F0         = cell2mat(cellfun(@(x) prctile(x - real_low + eps, 1)', extracted_traces, 'UniformOutput', false));    
+        ref        = nanmedian(F0, 2);
+        scaling_fact = F0 .\ ref;    
+        [expe.breakpoints,~] = findchangepts(scaling_fact);
+        expe.detrend = 1;
+    end
+    
     if expe.detrend == -1   
         %% Detrending using linear regression
         F0         = cell2mat(cellfun(@(x) prctile(x - real_low + eps, 1)', extracted_traces, 'UniformOutput', false));    
         ref        = nanmedian(F0, 2);
-        scaling_fact = F0 .\ ref;
+        scaling_fact = F0 .\ ref;    
         for trial = 1:numel(extracted_traces)
             for row = 1:size(extracted_traces{1},2)                
                 extracted_traces{trial}(:, row) = (extracted_traces{trial}(:, row) - real_low + eps).*scaling_fact(row,trial) + real_low - eps;
@@ -121,7 +130,8 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
             elseif expe.detrend == -2  
                 figure();subplot(2,1,1);imagesc(vertcat(slope_gain{1}{:})');ylabel('ROI');xlabel('trial');title('Detrending - median interquartile normalization');        
             else
-                figure();subplot(2,1,1);plot(horzcat(slope_gain{1}{:}));ylabel('gain');xlabel('timpoints');title('Detrending - gain correction');
+                all_gains = cellfun(@(x) horzcat(x{:}), slope_gain, 'UniformOutput', false);
+                figure();subplot(2,1,1);plot(horzcat(all_gains{:}));ylabel('gain');xlabel('timpoints');title('Detrending - gain correction');
             end
             hold on; subplot(2,1,2);plot(nanmedian(temp,2),'r'); hold on; plot(nanmedian(cat(1, extracted_traces{:}),2), 'k')
         end

@@ -226,7 +226,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 keep_2D = false;
             end
             if nargin < 3 || isempty(bypass) || ~bypass
-                quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESSED DATA. Continue?','Update?','Yes','No','No');
+                quest = questdlg('WARNING : UPDATING SOURCES WILL DELETE ALL PROCESSED DATA (unless no folder needs updating). Continue?','Update?','Yes','No','No');
             else
                 quest = 'Yes';
             end
@@ -255,6 +255,19 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     else
                         return
                     end
+                else
+                    %% Check if all existing arboreal_scans are included
+                    lastFolders_existing_as = cellfun(@(x) strsplit(fileparts(x.data_folder),'/'), obj.arboreal_scans, 'UniformOutput', false);
+                    lastFolders_existing_as = cellfun(@(x) x{end}, lastFolders_existing_as, 'UniformOutput', false);
+                    
+                    lastFolders_extracted = cellfun(@(x) strsplit(fileparts(x),'/'), obj.extracted_data_paths, 'UniformOutput', false);
+                    lastFolders_extracted = cellfun(@(x) x{end}(end-7:end), lastFolders_extracted, 'UniformOutput', false);
+                    
+                    if numel(lastFolders_existing_as) ~= numel(lastFolders_extracted) || any(cellfun(@(x,y) any(x ~= y), lastFolders_extracted,lastFolders_existing_as))
+                        % at least one mismatch. Will need update
+                    else
+                        return
+                    end
                 end
                 obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
 
@@ -268,6 +281,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 for el = fliplr(find(obj.need_update))
                     add_tree(el, keep_2D);
                 end
+                obj.need_update(:) = false;
             end
 
             function add_tree(pos, keep_2D)
@@ -428,7 +442,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
 
             if isfield(obj.batch_params, 'breakpoints') && ~isempty(obj.batch_params.breakpoints)
-                breakpoints = obj.batch_params.breakpoints; %find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.updated_data_path));
+                breakpoints = obj.batch_params.breakpoints;
             else
                 breakpoints = [];
             end
@@ -441,9 +455,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   obj.breakpoints = breakpoints;
             % -------------------------------------------------------------
             % Inputs:
-            %   breakpoints (1xN CELL ARRAY OF CHAR)
-            %   Numerical list of experiment number that interrupted the
-            %   experiment. for example obj.breakpoints = [2,6,9];
+            %   breakpoints (1xN INT OR 1xN CELL ARRAY OF CHAR)
+            %       Numerical list of experiment number that interrupted the
+            %   experiment, or expe tag. for example :
+            %       obj.breakpoints = [2,6,9];
+            %       obj.breakpoints = {'12-59-59,'13-05-01'};
             % -------------------------------------------------------------
             % Outputs:
             % -------------------------------------------------------------
@@ -461,6 +477,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
 
             obj.is_detrended = false; %if breakpoints are changed, the detrended needs a refresh too
+            if isnumeric(breakpoints)
+                breakpoints = sort(breakpoints);
+                breakpoints = obj.extracted_data_paths(breakpoints);
+                breakpoints = cellfun(@(x) strsplit(fileparts(x),'/'), breakpoints, 'UniformOutput', false);
+                breakpoints = cellfun(@(x) x{end}(end-7:end), breakpoints, 'UniformOutput', false);
+                %find(cellfun(@(x) contains(x, obj.batch_params.breakpoints),obj.updated_data_path));
+            end
             for rec = 1:numel(obj.arboreal_scans)
                 obj.arboreal_scans{rec}.batch_params.breakpoints = sort(breakpoints);
             end
@@ -496,8 +519,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 obj.bad_ROI_thr = value;
                 a = dbstack();
-                if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting
-                    obj.find_bad_ROIs();
+                if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting or initializing
+                  %  obj.find_bad_ROIs();
                 end
             end
         end
@@ -539,7 +562,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     filter_win = [filter_win, filter_win];
                 end
                 obj.filter_win              = filter_win;
-                if isfield(obj.binned_data, 'median_traces')
+                if isfield(obj.binned_data, 'median_traces') && ~isempty(obj.binned_data.median_traces) %empty upon initialization, in which case we do not care
                     warning('Changing the filter window affects several preprocessing steps. Metaanalysises fields were reset')
                     obj.reset();
                 end
@@ -2434,7 +2457,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
                 obj.arboreal_scans{rec}.update_segment_signals(new_method);
                 obj.arboreal_scans{rec}.simple_data = [];
-                obj.need_update(rec)                    = true;
+                obj.need_update(rec)                = true;
             end
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
         end
