@@ -5,6 +5,8 @@
 %       drift using a polynomial fit of order "expe.detrend£ (e.g.
 %       expe.detrend = 1 is a linear fit). This is then converted into a
 %       "gain function" that will amplify or dim the signal accordingly
+% - if expe.detrend == 'auto', breakpoints are identified automatically,
+%   then a linear detrending per block is applied
 % - if breakpoints_idx is not empty, the fit is done per block of trials,
 %   as defined by the breakpoints_idx limits.
 
@@ -21,7 +23,7 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         F0         = cell2mat(cellfun(@(x) prctile(x - real_low + eps, 1)', extracted_traces, 'UniformOutput', false));    
         ref        = nanmedian(F0, 2);
         scaling_fact = F0 .\ ref;    
-        [expe.breakpoints,~] = findchangepts(scaling_fact);
+        [expe.breakpoints,~] = findchangepts(scaling_fact(~all(isnan(scaling_fact),2),:));
         expe.detrend = 1;
     end
     
@@ -125,13 +127,14 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         ax3 = subplot(1,3,3);imagesc(temp' - cat(1, extracted_traces{:})');caxis([-max_v, max_v]);   
         linkaxes([ax1, ax2, ax3], 'xy')  
         if expe.detrend
+            figure(667799);clf();
             if expe.detrend == -1  
-                figure();subplot(2,1,1);imagesc(vertcat(slope_gain{1}{:})');ylabel('ROI');xlabel('trial');title('Detrending - linear gain per trial');
+                subplot(2,1,1);imagesc(vertcat(slope_gain{1}{:})');ylabel('ROI');xlabel('trial');title('Detrending - linear gain per trial');
             elseif expe.detrend == -2  
-                figure();subplot(2,1,1);imagesc(vertcat(slope_gain{1}{:})');ylabel('ROI');xlabel('trial');title('Detrending - median interquartile normalization');        
+                subplot(2,1,1);imagesc(vertcat(slope_gain{1}{:})');ylabel('ROI');xlabel('trial');title('Detrending - median interquartile normalization');        
             else
                 all_gains = cellfun(@(x) horzcat(x{:}), slope_gain, 'UniformOutput', false);
-                figure();subplot(2,1,1);plot(horzcat(all_gains{:}));ylabel('gain');xlabel('timpoints');title('Detrending - gain correction');
+                subplot(2,1,1);plot(horzcat(all_gains{:}));ylabel('gain');xlabel('timpoints');title('Detrending - gain correction');
             end
             hold on; subplot(2,1,2);plot(nanmedian(temp,2),'r'); hold on; plot(nanmedian(cat(1, extracted_traces{:}),2), 'k')
         end
