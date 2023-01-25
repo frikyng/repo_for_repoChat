@@ -27,6 +27,13 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         expe.detrend = 1;
     end
     
+%     F0         = cell2mat(cellfun(@(x) prctile(x - real_low + eps, 1)', extracted_traces, 'UniformOutput', false));    
+%     ref        = nanmedian(F0, 2);
+%     scaling_fact = F0 .\ ref;    
+%     invalid = range(scaling_fact,2) > 0.2;
+%     expe.bad_ROI_list = find(invalid);
+%     
+%     
     if expe.detrend == -1   
         %% Detrending using linear regression
         F0         = cell2mat(cellfun(@(x) prctile(x - real_low + eps, 1)', extracted_traces, 'UniformOutput', false));    

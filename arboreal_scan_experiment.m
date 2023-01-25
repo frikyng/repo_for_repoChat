@@ -477,7 +477,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
 
             obj.is_detrended = false; %if breakpoints are changed, the detrended needs a refresh too
-            if isnumeric(breakpoints)
+            if isnumeric(breakpoints) && ~isempty(breakpoints)
                 breakpoints = sort(breakpoints);
                 breakpoints = obj.extracted_data_paths(breakpoints);
                 breakpoints = cellfun(@(x) strsplit(fileparts(x),'/'), breakpoints, 'UniformOutput', false);
@@ -603,7 +603,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% If expe was interrupted signal gain changed, we fix it here
-            if (~isempty(obj.breakpoints) || obj.detrend)% && ~obj.is_detrended
+            if (~isempty(obj.breakpoints) || ~isempty(obj.detrend))% && ~obj.is_detrended
             	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
                 if isfield(obj.binned_data, 'median_traces') && ~obj.is_detrended
                     warning('Changing the detrending method affects several preprocessing steps. Meta analysises fields were reset')
@@ -1082,9 +1082,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   17/06/2022
             
-            if ~isempty(obj.ref.full_data) && use_hd_data
+            if use_hd_data && ~isempty(obj.ref.full_data)
                 obj.use_hd_data = true;
-            elseif isempty(obj.ref.full_data) && use_hd_data
+            elseif use_hd_data && isempty(obj.ref.full_data)
                 obj.use_hd_data = false;
                 warning('unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object. Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).')
             else
@@ -2684,7 +2684,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Save figure and/or analysis
-%             obj.auto_save_analysis = true
+            obj.auto_save_analysis = true
             if obj.auto_save_figures
                 obj.save_figures();
             end
