@@ -34,6 +34,9 @@ function [out, data] = predict_behaviours(obj, use_classifier, method, type_of_t
     
     use_hd_data     = false;
     time_filter     = 0;
+    detrend_behaviours = true
+    smooth_behaviours = 1
+    pt_per_s        = 1/nanmedian(obj.timescale.sr);
 
     %% Make sure preprocessing was done correctly
     rendering       = obj.rendering;
@@ -67,33 +70,37 @@ function [out, data] = predict_behaviours(obj, use_classifier, method, type_of_t
     for type_idx = 1:numel(behaviour_list)
         type = behaviour_list(type_idx);
         
-        %% Get original bhaviour
-        [~,~,original_beh]   = obj.get_behaviours(type{1},'',true,true,true);
+        %% Get original behaviour
+        warning('off')
+        if contains(type{1}, 'baseline')
+            % Never detrend baseline
+            [~,~,original_beh]   = obj.get_behaviours(type{1},'',false,true,true);            
+            %original_beh.value = original_beh.value-nanmean(original_beh.value);
+        else
+            [~,~,original_beh]   = obj.get_behaviours(type{1},'',detrend_behaviours,true,true);
+        end
+        
+        %% Adjust name
         if iscell(type) && iscell(type{1})
             type = type{1}{1};
             behaviour_list{type_idx} = type;
         end
+        if isempty(original_beh.value)
+            warning(['Behaviour ',type{1},' Not found. Check for Typo and see if it is listed in Obj.behaviours']);
+            continue
+        end
         
         %% Median smoothing on all behaviour but trigger to remove small blips
-        if ~contains(type, 'trigger')
-            current_beh         = smoothdata(original_beh.value, 'movmedian', 10); 
-        else
+        if contains(type, 'trigger')
+            current_beh         = smoothdata(original_beh.value, 'gaussian', [smooth_behaviours*pt_per_s/nanmedian(diff(obj.t)),0]); 
+        elseif contains(type, 'baseline')
             current_beh         = original_beh.value;
+        else
+            current_beh         = smoothdata(original_beh.value, 'movmedian', smooth_behaviours*pt_per_s);
+            
+            %% Gaussian smoothing to denoise behaviour
+            current_beh         = smoothdata(current_beh, 'gaussian', smooth_behaviours*pt_per_s*5); 
         end
-
-        %% Gaussian smoothin to denoise behaviour
-        current_beh         = smoothdata(current_beh, 'gaussian', 50);
-
-        %% Behaviour normalization
-        %         if ~contains(type, 'trigger')
-        %             try
-        %                 beh = normalize(beh,'medianiqr') ; % this fails when there are a lot of similar values
-        %             catch
-        %                 beh = beh;
-        %             end
-        %         else
-        %             beh = beh;
-        %         end
 
         %% Threshold to binarize behaviour for the classifier
         if any(contains(type, {'RT3D_MC','BodyCam_Eye','BodyCam_Laser'}))
