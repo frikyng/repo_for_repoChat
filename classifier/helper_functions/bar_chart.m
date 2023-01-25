@@ -56,10 +56,13 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
     result{1}{1}.(labels_or_label_fieldname)(INVALID) = [];
 
     if ischar(labels_or_label_fieldname)
-    	labels = reordercats(categorical(result{1}{1}.(labels_or_label_fieldname)),result{1}{1}.(labels_or_label_fieldname));
+        labels = result{1}{1}.(labels_or_label_fieldname);
+        labels = strrep(labels, '_', '\_');        
+    	labels = reordercats(categorical(labels),labels);
     else
         labels % [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
     end
+   
     
     if ~isempty(additional_handle) % qq if non scalar output, need to be adjusted       
         value = cellfun(@(y) additional_handle(y), value);
@@ -86,7 +89,7 @@ function bar_chart(result, labels_or_label_fieldname, result_fieldname, addition
     
 
     %% Adjust plot limits
-    %ylim([-10,50]);hold on;
+    ylim([-10,100]);hold on;
     
     if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
         legend(condition_labels);
