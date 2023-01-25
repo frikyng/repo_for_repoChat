@@ -62,7 +62,7 @@ classdef behaviours_analysis < handle
             end
         end
 
-        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average)
+        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, shuffle_size)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -146,6 +146,13 @@ classdef behaviours_analysis < handle
             if nargin < 6 || isempty(average)
                 average = false;
             end
+            if nargin < 7 || isempty(shuffle_size)
+                shuffle = false;
+                block_size = NaN;
+            else
+                shuffle    = true;
+                block_size = shuffle_size;
+            end
             
             obj.detrend_behaviour = detrend_sig;
 
@@ -155,6 +162,13 @@ classdef behaviours_analysis < handle
             concat_downsamp_beh.value   = [];
             temp                        = {};
 
+            %% Identify if shuffling will be needed
+            shuffle                     = shuffle || any(contains(type, 'shuffle'));
+            if shuffle && isnan(block_size)
+                block_size = 522
+            end
+            type                        = erase(type,  {' shuffle','shuffle ','_shuffle','shuffle_','shuffle'});
+            
             %% Check if at least one variable name is valid
             all_beh                     = obj.behaviours;
             type                        = all_beh.types(contains(all_beh.types, type, 'IgnoreCase', ignorecase));
@@ -200,6 +214,15 @@ classdef behaviours_analysis < handle
                 concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
             end
             
+            if shuffle
+                tp = NaN(1,ceil(numel(concat_downsamp_beh.time)/block_size)*block_size);
+                tp(1:numel(concat_downsamp_beh.time)) = 1:numel(concat_downsamp_beh.time);                 
+                idx = reshape(tp,block_size,[]);   
+                idx = idx(:,randperm(size(idx,2)));
+                idx = idx(~isnan(idx));   
+                concat_downsamp_beh.value = concat_downsamp_beh.value(idx);
+            end
+            
             if average
                 new = {};
                 for rec = 1:numel(downsamp_beh{1})
@@ -214,14 +237,16 @@ classdef behaviours_analysis < handle
             %% Render extracted traces
             if rendering
                 figure(1026);clf();
+                ax_list = {};
                 for beh = 1:numel(type)                 
-                    subplot(numel(type),1,beh)
+                    ax_list{end+1} = subplot(numel(type),1,beh);
                     for rec = 1:numel(raw_beh{beh})
                         if ~isempty(downsamp_beh{beh}{rec}.time)
                             plot(downsamp_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec), downsamp_beh{beh}{rec}.value);hold on;
                         end
                     end
                 end
+                linkaxes([ax_list{:}], 'x')
             end
 
             function out = cellerror_empty(~,varargin)
