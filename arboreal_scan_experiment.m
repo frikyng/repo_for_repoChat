@@ -255,7 +255,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     else
                         return
                     end
-                else
+                elseif ~isempty(obj.arboreal_scans)
                     %% Check if all existing arboreal_scans are included
                     lastFolders_existing_as = cellfun(@(x) strsplit(fileparts(x.data_folder),'/'), obj.arboreal_scans, 'UniformOutput', false);
                     lastFolders_existing_as = cellfun(@(x) x{end}, lastFolders_existing_as, 'UniformOutput', false);
