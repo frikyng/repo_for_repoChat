@@ -3,7 +3,7 @@
 
 %% Cell 2019-09-17_exp_1 anticorelated to running
 
-function [out, data] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, varargin)
+function [out, data, ROI_groups] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = '' 
     end
@@ -42,18 +42,23 @@ function [out, data] = predict_behaviours(obj, use_classifier, method, type_of_t
     rendering       = obj.rendering;
     obj.rendering   = false;
     [obj, source_signal, ~, timepoints] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
+    % holder = source_signal(:,1); figure;plot(source_signal(:,1));hold on; scatter(timepoints, holder(timepoints),'r','filled')
+    % figure();hist(reshape(source_signal(timepoints,:),[],1),100); % TOMMY uncomment to see distribution of predictors
     obj.rendering   = rendering;
 
     %% Get the signal for the selected timepoints and ROIs
     %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
-    invalid_ROIs     = ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list); % remove excluded branches AND bad_ROIs based on correlation)
+    invalid_ROIs     = obj.ref.indices.valid_swc_rois(ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
     source_signal(:, invalid_ROIs) = NaN;
     data             = NaN(numel(timepoints), numel(ROI_groups));
     for gp_idx = 1:numel(ROI_groups)
+        ROI_groups{gp_idx}(ismember(ROI_groups{gp_idx}, obj.bad_ROI_list)) = [];
         data(:, gp_idx) =  nanmean(source_signal(timepoints, ROI_groups{gp_idx}),2)';        
     end
     
-    data(:, all(isnan(data),1)) = [];
+    fully_invalid_group = cellfun(@isempty, ROI_groups)' | all(isnan(data),1);
+    ROI_groups(fully_invalid_group) = [];
+    data(:, fully_invalid_group) = [];
     data = data';
 
     %     %% Correlation of the different ROIs with each other
