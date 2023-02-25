@@ -34,7 +34,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     INVALID = any(isnan(observation_data(USABLE_ROW,:)),1);
     observation_data(:,INVALID) = [];
     predictor_data(:,INVALID) = [];
-    timepoints(INVALID) = []
+    timepoints(INVALID) = [];
     
     %% Shuffle predictor if required.
     if strcmpi(parameters.shuffling, 'events') || strcmpi(parameters.shuffling, 'both')
@@ -46,17 +46,22 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end
     end
     
-    %% Get a random set of timepoints for traing vs testing
-    partition     = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout); % randperm(numel(timepoints));       
+    %% Get a random set of timepoints for training vs testing
+    if ~parameters.holdout
+        partition     = [];
+    else
+        partition     = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout);
+    end
     score       = [];
     out         = {};
     for el = 1:numel(beh_types)
         type                = strrep(beh_types{el},' ','_');
         type_corrected      = strrep(type,'\_','_');
         current_var         = observation_data(el,:);
-        assignin('base',    ['var',type_corrected], observation_data(el,:))
-        assignin('base',    ['var',type_corrected], observation_data(el,:))
-        assignin('base',    ['var',type_corrected], observation_data(el,:))
+        current_var         = normalize(current_var);
+        assignin('base',    ['var',type_corrected], observation_data(el,:))    % why 3 rows of the same?
+        
+        
         assignin('base',    'Predictors',           predictor_data(roi_subset,:))
 
         %% Compute cost matrix
@@ -77,7 +82,14 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, merge_params_obj(parameters, struct('behaviour',type_corrected)));
 
         %% Get accuracy score
-        [score(el,1), score(el,2), score(el,3), score(el,4)] = get_classifier_score(y_test, y_predict);
+        if isempty(y_test)
+            %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
+            parameters.rendering = 1;
+            temp = kfoldLoss(model, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
+            score(el,:) = repmat(nanmean(temp), 1, 4);
+        else        
+            [score(el,1), score(el,2), score(el,3), score(el,4)] = get_classifier_score(y_test, y_predict);
+        end
         
         %% Plot training result
         if ~isempty(raw_behaviour)
@@ -92,7 +104,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.calcium         = calcium_ref;
         out.bin_beh{el}     = current_var;
         out.peak_tp{el}     = timepoints;
-        out.train_range{el} = training(partition);
+        if ~isempty(y_test)
+            out.train_range{el} = training(partition);
+        else
+            out.train_range{el} = [];
+        end
         out.prediction{el}  = y_predict;
         out.full_beh{el}    = raw_behaviour(el,:);
         out.beh_type{el}    = type_corrected;
@@ -101,8 +117,13 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     end
     if numel(beh_types) > 1 && parameters.rendering >= 1
         labels = reordercats(categorical(beh_types),beh_types);
-        figure(1000);clf();bar(labels, score(:,4));
+        %figure(1000);clf();bar(labels, score(:,4));
     else
        % fprintf(['Prediction score is ',num2str(out.score{el}(end)),'\n'])
     end
     arrangefigures; drawnow
+end
+
+function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
+    score = corr(y_true, y_pred);
+end
