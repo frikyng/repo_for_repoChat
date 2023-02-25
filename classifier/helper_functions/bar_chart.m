@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels)
+function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
