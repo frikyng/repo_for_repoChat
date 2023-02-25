@@ -12,7 +12,9 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
         type_of_trace = 'raw'; % 
     end
     
-    if ~any(contains(type_of_trace, {'rescaled', 'subtracted'}))
+    if isnumeric(type_of_trace)
+        % pass
+    elseif ~any(contains(type_of_trace, {'rescaled', 'subtracted'}))
         type_of_trace = [type_of_trace,'_raw'];
     end
     
@@ -80,7 +82,11 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
     end
 
     %% Select signal source (RAW or rescaled traces or shuffled)
-    if contains(type_of_trace, 'raw')
+    if isnumeric(type_of_trace)
+        source_signal = obj.rescaled_traces;
+        source_signal(:, obj.bad_ROI_list) = NaN;
+        source_signal = source_signal - nanmedian(obj.rescaled_traces,2);
+    elseif contains(type_of_trace, 'raw')
         source_signal = obj.extracted_traces_conc;
         source_signal(:, obj.bad_ROI_list) = NaN;
     elseif contains(type_of_trace, 'rescaled')
@@ -92,7 +98,7 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
         source_signal = source_signal - nanmedian(obj.rescaled_traces,2);
     end
 
-    if contains(type_of_trace, 'shuffle')
+    if ~isnumeric(type_of_trace) && contains(type_of_trace, 'shuffle')
         %% randomize/permute/shuffle all data points in time series for each ROI separately (i.e. destroy all correlation)
         % see rand_shuffle_PHATE_loadings.m
     end
