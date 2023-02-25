@@ -49,6 +49,22 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         for trial = 1:numel(extracted_traces)
             [extracted_traces{trial}, slope_gain{1}{trial}] = normalize(extracted_traces{trial}, 1, 'medianiqr');
         end
+    elseif expe.detrend == -3 
+
+        %% dF/F0 for the signal channel
+        Fb                          = repmat(nanmin(temp(:)),size(temp,1),1)-1;  
+        temp                        = temp - Fb;
+        F0                          = movmin(temp, 300,1) + eps;%repmat(signal_baseline,1,timepoints);
+        temp                        = (temp - F0) ./ (F0);
+        
+        counter = 1;
+        for trial = 1:numel(extracted_traces)
+            tp = expe.timescale.tp(trial);
+            extracted_traces{trial} = temp(counter:counter+tp-1,:);
+            counter = counter + tp;
+        end
+        return
+        
     else
         tp_start    = cumsum([1, expe.timescale.tp]); % pt start of trials
         breakpoints_idx = find(cellfun(@(x) ~isempty(expe.breakpoints) && contains(x, expe.breakpoints),expe.updated_data_path));
