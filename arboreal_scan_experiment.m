@@ -4,7 +4,7 @@
 %% TO DO :
 % - improve update system when changing folder.
 % - enable loading if we just have a folder with arboreal_scans objects
-% - add warning if source folde ris the actual raw experiment
+% - add warning if source folder is the actual raw experiment
 % - add doc to load_Several_Experiment
 
 %% TO CHECK:
@@ -1694,6 +1694,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function [tp, beh, analysis_mode] = get_tp_for_condition(obj, analysis_mode)
+            beh             = {};  
+            
+            %% If you pass manual set of inputs, use that
+            if isnumeric(analysis_mode)
+                tp          = false(1,numel(obj.t));
+                tp(analysis_mode) = true;
+                beh = {};
+                analysis_mode = 'manual';
+                return
+            end
+            
             %% Get signal time range     
             tp          = true(1,numel(obj.t));
             using_peaks = false;
@@ -1719,8 +1730,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             
             analysis_mode_no_win = strsplit(analysis_mode,{'[',']'});
             analysis_mode_no_win = analysis_mode_no_win(1:3:end);
-            
-            beh             = {};            
+                  
             if ~all(cellfun(@isempty, analysis_mode_no_win)) && any(contains(obj.behaviours.types, analysis_mode_no_win, 'IgnoreCase',true))
                 to_test = [];
                 for el = obj.behaviours.types
