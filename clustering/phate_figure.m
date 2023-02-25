@@ -77,8 +77,8 @@ function cluster_idx = phate_figure(obj, Low_D_Data, epsilon, original_Data, Fig
         m = nanmedian(original_Data(:,ROIs(cluster_idx == clust_idx)),2);
         high = find(m - median(m) > 3)';
         down = find(m - median(m) < -3)';
-        scatter(t(down),v(down), 50, 'g^','filled');hold on
-        scatter(t(high),v(high), 50, 'rv','filled');hold on
+        scatter(t(high),v(high), 50, 'g^','filled');hold on
+        scatter(t(down),v(down), 50, 'rv','filled');hold on
         pause(1);
         %cla() 
     end  
