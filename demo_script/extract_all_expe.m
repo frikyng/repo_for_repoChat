@@ -1,5 +1,7 @@
 %% Use this script to build all arboreal_scan_experiments objects 
 %% automatically, rescale peaks, extract events and save the updated object.
+%
+% Prior to this, you should have run meta_batch_extract_arboreal_scan
 
 %% List extracted directories
 top_export_folder   = 'C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans_thin_mask\extracted_arboreal_scans';
@@ -22,7 +24,7 @@ for fold_idx = numel(fold):-1:1
             
             %% Full processing
             if process && full_process
-            	obj.process({'depth',50},[ceil(1/nanmedian(obj.timescale.sr)), 0]); %% Add grouping settings here
+            	obj.process({'distance',50},[ceil(1/nanmedian(obj.timescale.sr)), 0]); %% Add grouping settings here
             elseif process
             %% Manual step by step rocessing
                 obj.rescaling_method = 'peaks_trials';
