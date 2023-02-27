@@ -30,11 +30,15 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         parameters = DEFAULT_CLASSIFIER_OPTION(parameters);
     end
     
-    USABLE_ROW = ~all(isnan(observation_data),2);
-    INVALID = any(isnan(observation_data(USABLE_ROW,:)),1);
-    observation_data(:,INVALID) = [];
-    predictor_data(:,INVALID) = [];
-    timepoints(INVALID) = [];
+    USABLE_BEH                      = ~all(isnan(observation_data),2);
+    INVALID_TP                      = any(isnan(observation_data(USABLE_BEH,:)),1);
+    observation_data(:,INVALID_TP)  = [];
+    predictor_data(:,INVALID_TP)    = [];
+    timepoints(INVALID_TP)          = [];
+    
+    if any(find(all(isnan(predictor_data'))))
+        warning('Some predictors cotnains only NaN. This should be filtered out before caling this function');
+    end
     
     %% Shuffle predictor if required.
     if strcmpi(parameters.shuffling, 'events') || strcmpi(parameters.shuffling, 'both')
