@@ -8,7 +8,8 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.svm_kernel               = 'gaussian' ; % gaussian or linear
     params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
     params.shuffling                = ''    ; % set events to shuffle timpoints, and ROIs to shuffle the spatial structure, and both to do all
-    
+    params.title                    = ''    ; % set final bar chart title
+
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
         varargin = varargin{1};
@@ -49,6 +50,9 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
         end
         if(strcmpi(varargin{i},'shuffling'))
             params.shuffling = lower(varargin{i+1});
+        end
+        if(strcmpi(varargin{i},'title'))
+            params.title = lower(varargin{i+1});
         end
     end
     end

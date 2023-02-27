@@ -188,6 +188,9 @@ else
     
     out{iter}         = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, regularization, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs),2), parameters);
     
+    if ml_parameters.rendering
+        bar_chart(out, 'beh_type');
+        title(ml_parameters.title)
     end
       
 end
