@@ -668,6 +668,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
             extracted_traces_conc(isinf(extracted_traces_conc))    = NaN;
+            extracted_traces_conc = normalize_sig(extracted_traces_conc,[],'extra_label',100,'norm_method','dF/F0_d');
             %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
@@ -2188,17 +2189,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Store results
-            obj.dimensionality.LoadingsPM         = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
-            obj.dimensionality.specVarPM          = specVarPM;
-            obj.dimensionality.T                  = T;                % Rotation matrix
-            obj.dimensionality.stats              = stats;            % Factoran stats
-            obj.dimensionality.F                  = F;                % components
-            obj.dimensionality.all_ROIs           = all_ROIs;         % first occurences
-            obj.dimensionality.mask               = timepoints;
+            obj.dimensionality.LoadingsPM           = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
+            obj.dimensionality.specVarPM            = specVarPM;
+            obj.dimensionality.T                    = T;                % Rotation matrix
+            obj.dimensionality.stats                = stats;            % Factoran stats
+            obj.dimensionality.F                    = F;                % components
+            obj.dimensionality.all_ROIs             = all_ROIs;         % first occurences
+            obj.dimensionality.mask                 = timepoints;
 
-            obj.dimensionality.cluster_idx        = [];
-            obj.dimensionality.clust_meth         = [];
-            obj.dimensionality.N_clust            = [];
+            obj.dimensionality.cluster_idx          = [];
+            obj.dimensionality.clust_meth           = [];
+            obj.dimensionality.N_clust              = [];
+            obj.dimensionality.clust_groups         = {};
 
             %% Plot location of strongest component
             if obj.rendering
@@ -2228,14 +2230,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Clear previous results
             obj.dimensionality.cluster_idx      = [];
             obj.dimensionality.clust_meth       = clust_meth;
-            obj.dimensionality.N_clust          = N_clust;
+            obj.dimensionality.N_clust        	= N_clust;
+            obj.dimensionality.clust_groups     = {};
             obj.dimensionality.epsilon       	= [];
             obj.dimensionality.labels           = [];
 
             %% If N cluster is 0, skip clustering
             if obj.dimensionality.N_clust == 0
-                obj.dimensionality.cluster_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
-                obj.dimensionality.sorted_idx = (1:size(obj.dimensionality.LoadingsPM, 1))';
+                obj.dimensionality.cluster_idx  = (1:size(obj.dimensionality.LoadingsPM, 1))';
+                obj.dimensionality.sorted_idx   = (1:size(obj.dimensionality.LoadingsPM, 1))';
+                obj.dimensionality.clust_groups = {1:size(obj.dimensionality.LoadingsPM, 1)};
                 return
             end
 
@@ -2299,12 +2303,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             elseif strcmp(obj.dimensionality.clust_meth, 'strongest')
                 %% To assign to strongest component
                 for row = 1:size(LoadingsPM,1)
-                    [~, maxloc] = max(LoadingsPM(row, :));
-                    LoadingsPM(row, :) = 0;
-                    LoadingsPM(row, maxloc) = 1;
+                    [~, maxloc]                     = max(LoadingsPM(row, :));
+                    LoadingsPM(row, :)              = 0;
+                    LoadingsPM(row, maxloc)         = 1;
                 end
             else
-                obj.dimensionality.cluster_idx = [];
+                obj.dimensionality.cluster_idx      = [];
+                obj.dimensionality.clust_groups     = {};
             end
             
             %% Sort clusters by number of elements
@@ -2325,6 +2330,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.dimensionality.cluster_idx      = idx_sorted;       % stored group ids (reordered by number of element)
             [~, obj.dimensionality.sorted_idx]  = sort(idx_sorted); % get ROI index to reorder the data by group
 
+            %% Now, build groups
+            obj.dimensionality.clust_groups     = {};
+            for el = 1:obj.dimensionality.N_clust
+                obj.dimensionality.clust_groups{el} = find(obj.dimensionality.cluster_idx == el);
+            end
+            
             %% Plot clusters
             if obj.rendering                
                 obj.plot_cluster_tree();
