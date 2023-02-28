@@ -58,12 +58,6 @@ classdef arboreal_scan_plotting < handle
             figure_list = [1001:1035, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
             
-        function plot_original_data(obj)
-            figure(1055);clf();plot(obj.t, obj.extracted_traces_conc,'Color',[0.9,0.9,0.9]); hold on
-            hold on;title('Original Data and average');set(gcf, 'Color', 'w')
-            plot(obj.t, nanmean(obj.extracted_traces_conc,2),'r');            
-        end
-
         function plot_median_traces(obj, rescaled) 
             if nargin < 2 || isempty(rescaled)
                 rescaled = obj.is_rescaled;
@@ -170,6 +164,13 @@ classdef arboreal_scan_plotting < handle
             rescaled_traces = obj.rescaled_traces(:,valid_ROIS);            
             figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
             figure(1033);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
+        end
+        
+        function plot_original_traces(obj)            
+            valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
+            rescaled_traces = obj.extracted_traces_conc(:,valid_ROIS);            
+            figure(1055);cla();plot(obj.t, rescaled_traces);title('original traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1056);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('original traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_similarity(obj)
