@@ -1262,6 +1262,17 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.rescaling_method = method;
             end
             smoothing = 0;
+            
+            if isempty(obj.event)
+                warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events() first');
+                answ = questdlg({'RESCALING REQUIRES DETECTED EVENTS','To rescale traces, you must run obj.find_events() first; Run peak detection now?'},'','Yes','No','Yes');
+                if strcmp(answ, 'Yes')
+                    obj.find_events();
+                else
+                    return
+                end
+            end
+            
 %             if (nargin < 3 || isempty(smoothing)) && ~obj.use_hd_data
 %                 if isempty(obj.event)
 %                     warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events()')   
