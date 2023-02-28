@@ -70,6 +70,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         global_median_raw       % The median of extracted_traces_conc
         global_median_rescaled  % The median of rescaled traces
         t                       % Pointer to obj.timescale.global_timescale
+        tp                      % Imaging timpoints
         n_ROIs                  % Total number of ROIs in the swc, including bad ones
         n_pop_ROIs              % Total number of population ROIs
         ref                     % A pointer to the first extracted arboreal scan, for conveniency
@@ -782,6 +783,30 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             t = obj.timescale.global_timescale;
         end
+        
+        function tp = get.tp(obj)
+            %% Return the number of imaging timepoint
+            % -------------------------------------------------------------
+            % Syntax:
+            %   timescale = obj.timescale;
+            % -------------------------------------------------------------
+            % Inputs:
+            % -------------------------------------------------------------
+            % Outputs:
+            %   t (1xT DOUBLE)
+            %       equivalent to sum(obj.timescale.tp). Use it to
+            %       simplify your code
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   28/02/2023
+
+            tp = sum(cellfun(@(x) x.analysis_params.timepoints, obj.arboreal_scans));
+        end
 
         function ref = get.ref(obj)
             %% Quick handle for the first arboreal_scan
@@ -1276,7 +1301,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
                 elseif contains(obj.rescaling_method, 'trials')
                     t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
-                    t_for_baseline          = find(~ismember(1:numel(obj.t),unique([obj.event.t_win_no_overlap{:}])));
+                    t_for_baseline          = find(~ismember(1:obj.tp,unique([obj.event.t_win_no_overlap{:}])));
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
                 end                
 %             else
@@ -1699,7 +1724,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             
             %% If you pass manual set of inputs, use that
             if isnumeric(analysis_mode)
-                tp          = false(1,numel(obj.t));
+                tp          = false(1,obj.tp);
                 tp(analysis_mode) = true;
                 beh = {};
                 analysis_mode = 'manual';
@@ -1707,7 +1732,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
             
             %% Get signal time range     
-            tp          = true(1,numel(obj.t));
+            tp          = true(1,obj.tp);
             using_peaks = false;
             if contains(analysis_mode, 'peaks') %% event time
                 tp              = ~tp;
