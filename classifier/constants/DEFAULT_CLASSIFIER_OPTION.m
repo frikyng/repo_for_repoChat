@@ -9,13 +9,14 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
     params.shuffling                = ''    ; % set events to shuffle timpoints, and ROIs to shuffle the spatial structure, and both to do all
     params.title                    = ''    ; % set final bar chart title
+    params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
 
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
         varargin = varargin{1};
     end
     
-    %% Update aparameters if required
+    %% Update parameters if required
     if nargin > 0 && iscell(varargin) && ~isstruct(varargin{1}) && rem(numel(varargin), 2)
         error('input option must be an even number of cells')
     elseif nargin > 0 && isstruct(varargin{1})
@@ -53,6 +54,9 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
         end
         if(strcmpi(varargin{i},'title'))
             params.title = lower(varargin{i+1});
+        end
+        if(strcmpi(varargin{i},'alpha'))
+            params.alpha = lower(varargin{i+1});
         end
     end
     end
