@@ -14,7 +14,7 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
     temp        = vertcat(extracted_traces{:}); % get traces
     real_low    = nanmin(temp(:)); % real dark noise level (won't change if gain change as it is not amplified by PMT's)
     temp        = temp - real_low + eps; % remove dark noise. eps to prevent division by 0
-    max_v      = prctile(temp(:),90);%max(cellfun(@(x) nanmax(x(:)), extracted_traces));
+    max_v       = prctile(temp(:),90);%max(cellfun(@(x) nanmax(x(:)), extracted_traces));
     if expe.rendering
         figure(667788);clf();ax1 = subplot(1,3,1);imagesc(temp'); caxis([0, max_v]);
     end
@@ -146,8 +146,8 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
     end
     
     if expe.rendering
-        ax2 = subplot(1,3,2);imagesc(cat(1, extracted_traces{:})');caxis([real_low, max_v]);   
-        ax3 = subplot(1,3,3);imagesc(temp' - cat(1, extracted_traces{:})');caxis([-max_v, max_v]);   
+        ax2 = subplot(1,3,2);imagesc(cat(1, extracted_traces{:})');%hold on;caxis([-max_v, max_v]);
+        ax3 = subplot(1,3,3);imagesc(temp' - cat(1, extracted_traces{:})');hold on;caxis([0, max_v]); 
         linkaxes([ax1, ax2, ax3], 'xy')  
         if expe.detrend
             figure(667799);clf();
