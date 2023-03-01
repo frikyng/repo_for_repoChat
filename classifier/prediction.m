@@ -1,4 +1,4 @@
-function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, method, regularization, cost, parameters)
+function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, method,cost, parameters)
     if nargin < 6 || isempty(parameters)
         parameters = DEFAULT_CLASSIFIER_OPTION;
     else
