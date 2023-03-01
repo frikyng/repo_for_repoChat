@@ -1,15 +1,19 @@
 %% In ML code, preparing behaviour takes time. This function can be used to list the behaviours once (No TP filter applied) and pass it to 
 
-function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepare_behaviour_data(obj, behaviour_list)
+function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepare_behaviour_data(obj, behaviour_list, detrend_behaviours, smooth_behaviours)
     if nargin < 2 || isempty(behaviour_list)
         behaviour_list   = obj.behaviours.types;
     elseif ~iscell(behaviour_list)
         behaviour_list = {behaviour_list};
     end
-    detrend_behaviours      = true;
-    smooth_behaviours       = 1;
-    pt_per_s                = 1/nanmedian(obj.timescale.sr);
+    if nargin < 3 || isempty(detrend_behaviours)    
+        detrend_behaviours      = true;
+    end
+    if nargin < 4 || isempty(smooth_behaviours)    
+        smooth_behaviours       = 1;
+    end
     
+    pt_per_s                = 1/nanmedian(obj.timescale.sr);    
     raw_behaviours          = [];
     beh_thr                 = [];
     for type_idx = 1:numel(behaviour_list)
@@ -36,10 +40,14 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
         end
         
         %% Median smoothing on all behaviour but trigger to remove small blips
-        if contains(type, 'trigger')
+        if contains(type, 'trigger') && smooth_behaviours
             current_beh         = smoothdata(original_beh.value, 'gaussian', [smooth_behaviours*pt_per_s/nanmedian(diff(obj.t)),0]); 
         elseif contains(type, 'baseline')
             current_beh         = original_beh.value;
+        elseif ~smooth_behaviours
+            current_beh         = original_beh.value;
+            current_beh(isnan(current_beh)) = 0;
+            current_beh(current_beh == 0) = randn(sum(current_beh == 0),1) * (rms(current_beh)/100);
         else
             current_beh         = smoothdata(original_beh.value, 'movmedian', smooth_behaviours*pt_per_s);
             
