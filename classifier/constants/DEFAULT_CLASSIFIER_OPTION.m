@@ -9,7 +9,7 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
     params.shuffling                = ''    ; % set events to shuffle timpoints, and ROIs to shuffle the spatial structure, and both to do all
     params.title                    = ''    ; % set final bar chart title
-    params.alpha                    = 0.5   ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
+    params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
 
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})

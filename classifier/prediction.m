@@ -54,16 +54,39 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         score = kfoldLoss(model)*100; % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
         %fprintf(['The model out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
     elseif strcmpi(method, 'linear')        
-        base_varargin = {   x_train         , ...
+        if isempty(parameters.alpha,'') % no regularization?
+            base_varargin = {   x_train         , ...
                             y_train         , ...                              
-                            'Regularization','ridge',...
                             'PostFitBias'   , true,...
-                            'PassLimit'     , 10};
-        
+                            'PassLimit'     , 10,...
+                            'Learner'       , 'leastsquares'}; % default is no regularization, no standardization (e.g. data is not mean centered)
+        elseif parameters.alpha == 0 % ridge regularization
+            base_varargin = {   x_train         , ...
+                            y_train         , ...                              
+                            'PostFitBias'   , true,...
+                            'PassLimit'     , 10,...
+                            'Learner'       , 'leastsquares',...
+                            'Regularization', 'ridge'}; 
+        elseif parameters.alpha == 1 % lasso regularization
+            base_varargin = {   x_train         , ...
+                            y_train         , ...                              
+                            'PostFitBias'   , true,...
+                            'PassLimit'     , 10,...
+                            'Learner'       , 'leastsquares',...
+                            'Regularization', 'lasso'};
+        else
+            error('regularization method not implemented')
+        end
+                              
         %% If you manualy set the solver, adjust it here
         if ~isempty(parameters.solver)                
             base_varargin = [base_varargin, 'Solver', parameters.solver];   
         end
+        
+        %% IF eleastic Net, adjust alpha
+        %         if ~isempty(parameters.alpha) && parameters.alpha ~= 1 && parameters.alpha ~= 0 % ~isnan(parameters.alpha) %
+        %             base_varargin = [base_varargin, {'Alpha', parameters.alpha}];
+        %         end
 
         %% Set training model
         if islogical(y_train)
@@ -86,6 +109,68 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         end
     
         score = [];
+        
+    %% still linear regression but we need to use lasso function and fitrlinear doesn't have alpha as parameter
+    elseif strcmpi(method, 'elastic')
+       error('to review')
+       %convert roi_subset into array of strings so lasso is happy
+       %for alpha = [0.1,0.9]
+       roi_subset = [1:111];
+       roi_subset_cell = num2cell(roi_subset);
+       list_ROIs_lasso =cellfun(@num2str,roi_subset_cell,'un',0);
+       
+       % run lasso, each value in the columns of the first output corresponds to a particular regularization
+       % coefficient in Lambda, using a geometric sequence of Lambdas 
+       [rglrzd_Lambda_coefs, FitInfo] = lasso( x_train         , ...
+                                          y_train         , ... 
+                                          'CV', 10        , ...
+                                          'PredictorNames', list_ROIs_lasso,...
+                                          'Alpha', 0.5);   %...       % params.alpha or use 'Alpha', alpha, where alpha can be between 0 and 1
+                                      
+
+        % Lasso plot with x-validated fits
+        % look at this plot across a range of alphas
+        %lassoPlot(rglrzd_Lambda_coefs,FitInfo,'PlotType','CV'); legend('show');
+        
+        % Display variable names (or ROI list) in a model that corresponds to minimum x-validated mean squared error
+        idxLambdaMinMSE = FitInfo.IndexMinMSE;
+        minMSEModelPredictors = FitInfo.PredictorNames(rglrzd_Lambda_coefs(:,idxLambdaMinMSE)~=0);
+        
+        % get betas that correspond to optimal model (from MinMSE of whatever lambda)
+        coef_minMSE = rglrzd_Lambda_coefs(:,idxLambdaMinMSE);
+        coef0_minMSE = FitInfo.Intercept(idxLambdaMinMSE);
+        
+        y_predict = x_test*coef_minMSE + coef0_minMSE;
+        score = NaN;
+        model = NaN;
+        
+%         hold on
+%         scatter(y_test,y_predict,'red');scatter(x_test,y_test,'blue')
+%         plot(y_test,y_test)
+%         plot((x_test*coef_minMSE + coef0_minMSE), y_predict)
+%         xlabel('Test')
+%         ylabel('Predict')
+%         hold off
+                    
+        % Display variable names (or ROI list) in sparsest model within one SE of minimum MSE
+        % (this 1SE from the minMSE is a heuristic that is widely accepted by the lasso community and accords with parsimony)
+        % but this heuristic doesn't work in this cell.. just gives empty array
+%         idxLambda1SE = FitInfo.Index1SE;
+%         sparseModelPredictors = FitInfo.PredictorNames(rglrzd_Lambda_coefs(:,idxLambda1SE)~=0);
+        
+         % get betas that correspond to optimal model (from 1MSE of whatever lambda)
+%         coef_1SE = rglrzd_Lambda_coefs(:,idxLambda1SE);
+%         coef0_1SE = FitInfo.Intercept(idxLambda1SE);
+        
+%         y_predict = x_test*coef_1SE + coef0_1SE;
+%         hold on
+%         scatter(y_test,y_predict)
+%         plot(y_test,y_test)
+%         xlabel('Test')
+%         ylabel('Predict')
+%         hold off
+        
+     %%    
     elseif strcmpi(method, 'forest')
         classificationTree = TreeBagger(500, x_train, y_train, 'OOBPrediction', 'on','Method', 'classification','Cost', cost); 
         y_predict = str2double(classificationTree.predict(x_test));  
