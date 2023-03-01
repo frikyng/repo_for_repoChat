@@ -669,7 +669,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
             extracted_traces_conc(isinf(extracted_traces_conc))    = NaN;
-            extracted_traces_conc = normalize_sig(extracted_traces_conc,[],'extra_label',100,'norm_method','dF/F0_d');
             %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
