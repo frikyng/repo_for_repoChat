@@ -16,10 +16,15 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     if nargin < 4 || isempty(type_of_trace)
         type_of_trace   = 'subtracted_peaks'; % ['subtracted' OR 'rescaled' OR 'raw'] AND ['peaks' or '']. eg 'subtracted_peaks' , or 'raw'
     end
+    build_beh           = true;
     if nargin < 5 || isempty(behaviour_list)
-        behaviour_list   = obj.behaviours.types;
-    elseif ~iscell(behaviour_list)
-        behaviour_list = {behaviour_list};
+        % pass      
+    elseif isstruct(behaviour_list)
+        raw_behaviours = behaviour_list.raw_behaviours;
+        beh_thr        = behaviour_list.beh_thr;
+        formatted_behaviour_list = behaviour_list.formatted_behaviour_list;
+        behaviour_list = behaviour_list.original_behaviour_list;
+        build_beh      = false;
     end
     if nargin < 6 || isempty(ROI_groups)
         ROI_groups   = num2cell(obj.ref.indices.valid_swc_rois);
@@ -43,26 +48,13 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     
     use_hd_data             = false;
     time_filter             = 0;
-    detrend_behaviours      = true;
-    smooth_behaviours       = 1;
-    pt_per_s                = 1/nanmedian(obj.timescale.sr);
 
     %% Make sure preprocessing was done correctly
     rendering       = obj.rendering;
     obj.rendering   = false;
+
+    [obj, source_signal, ~, timepoints, lag]    = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
     
-    if ischar(type_of_trace) && contains(type_of_trace, '_lag')
-        % Regular expression to extract number after "lag"
-        expr = '(?<=lag)[+-]?\d+';
-        % Extract number from each string
-        lag = str2num(regexp(type_of_trace, expr, 'match', 'once'));
-        type_of_trace = erase(type_of_trace,{['_lag',num2str(lag)],['_lag_',num2str(lag)]});
-    else
-        lag = 0;
-    end
-
-    [obj, source_signal, ~, timepoints] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
-
     beh_timepoints                              = timepoints + lag; % if lag == 0 then points are the same
     timepoints(beh_timepoints < 1)              = [];
     beh_timepoints(beh_timepoints < 1)          = [];
@@ -73,74 +65,20 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     % figure();hist(reshape(source_signal(timepoints,:),[],1),100); % TOMMY uncomment to see distribution of predictors
     obj.rendering   = rendering;
     
-    %% Get all behaviours at these tp
-    behaviours              = [];
-    raw_behaviours          = [];
-    processed_behaviours    = [];
-    
-    for type_idx = 1:numel(behaviour_list)
-        type = behaviour_list(type_idx);
-        
-        %% Get original behaviour
-        warning('off')
-        if contains(type{1}, 'baseline')
-            % Never detrend baseline
-            [~,~,original_beh]   = obj.get_behaviours(type{1},'',false,true,true);            
-            %original_beh.value = original_beh.value-nanmean(original_beh.value);
-        else
-            [~,~,original_beh]   = obj.get_behaviours(type{1},'',detrend_behaviours,true,true);
-        end
-        
-        %% Adjust name
-        if iscell(type) && iscell(type{1})
-            type = type{1}{1};
-            behaviour_list{type_idx} = type;
-        end
-        if isempty(original_beh.value)
-            warning(['Behaviour ',type{1},' Not found. Check for Typo and see if it is listed in Obj.behaviours']);
-            continue
-        end
-        
-        %% Median smoothing on all behaviour but trigger to remove small blips
-        if contains(type, 'trigger')
-            current_beh         = smoothdata(original_beh.value, 'gaussian', [smooth_behaviours*pt_per_s/nanmedian(diff(obj.t)),0]); 
-        elseif contains(type, 'baseline')
-            current_beh         = original_beh.value;
-        else
-            current_beh         = smoothdata(original_beh.value, 'movmedian', smooth_behaviours*pt_per_s);
-            
-            %% Gaussian smoothing to denoise behaviour
-            current_beh         = smoothdata(current_beh, 'gaussian', smooth_behaviours*pt_per_s*5); 
-            
-            current_beh(current_beh == 0) = randn(sum(current_beh == 0),1) * (rms(current_beh)/100);
-        end
-
-        
-        %% Threshold to binarize behaviour for the classifier
-        if any(contains(type, {'RT3D_MC','BodyCam_Eye','BodyCam_Laser'}))
-            thr = nanmedian(current_beh);
-        else
-            thr = nanmax(current_beh) - (range(current_beh) * 0.9);
-        end
-
-        %% Plot behaviour and threshold
-        above = current_beh > thr;
-        below = ~above;
-        above_beh = current_beh;above_beh(below) = NaN;
-        below_beh = current_beh;below_beh(above) = NaN;
-        %figure();plot(above_beh, 'g');hold on;plot(below_beh, 'r');hold on;title(type{1});hold on; plot([0,numel(current_beh)],[thr, thr],'k--');
-
-        raw_behaviours      = [raw_behaviours; current_beh];
-        behaviours          = [behaviours; current_beh(beh_timepoints)];
-        if use_classifier
-            processed_behaviours= logical([processed_behaviours; current_beh(beh_timepoints) > thr]);
-        else
-            processed_behaviours= [processed_behaviours; current_beh(beh_timepoints)];
-        end
+    %% Get all behaviours
+    if ~build_beh
+        %% If we already had the extracted behaviours, at this stage we just update the formatted name 
+    	behaviour_list = formatted_behaviour_list;
+    else
+        [~, raw_behaviours, beh_thr, behaviour_list] = prepare_behaviour_data(obj, behaviour_list);
     end
-    behaviour_list   = strrep(behaviour_list, '_', '\_'); % reformat strings to be usable in titles and legends
-
     
+    %% Filter timepoints
+    processed_behaviours = raw_behaviours(:, beh_timepoints);
+    if use_classifier
+        processed_behaviours = logical(processed_behaviours > beh_thr');
+    end
+
     %% Get the signal for the selected timepoints and ROIs
     %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
     invalid_ROIs_logical    = ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list);
@@ -203,9 +141,8 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         end
     end
 
-    meanvalue = [];
+    meanvalue = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
     if ml_parameters.rendering
-        meanvalue = bar_chart(out, 'beh_type');
         title(ml_parameters.title)
     end
 end

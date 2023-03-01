@@ -1,4 +1,4 @@
-function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
+function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
     if nargin < 1 || isempty(path_or_obj)
         path_or_obj = ''; % i.e. current matlab folder. It must then be an extracted arboreal scan folder
     end
@@ -11,12 +11,38 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
     if nargin < 4 || isempty(type_of_trace)
         type_of_trace = 'raw'; % 
     end
+
+    %% If you pass a 2x1 cell array, where one cells ar ethe usual filters, and one is an additional timpoint filter, seperate them out first
+    post_filter     = [];
+    if iscell(type_of_trace) && numel(type_of_trace) == 2
+        filter_idx      = cellfun(@isnumeric, type_of_trace) | cellfun(@islogical, type_of_trace);
+        if any(filter_idx)
+            post_filter     = type_of_trace{filter_idx};        
+            type_of_trace   = type_of_trace{~filter_idx};
+            if islogical(post_filter)
+                post_filter = find(post_filter);
+            end
+        end
+    end
     
+    %% Make sure syntax for the regular variable is correct
     if isnumeric(type_of_trace)
-        % pass
+        % pass    
     elseif ~any(contains(type_of_trace, {'rescaled', 'subtracted'}))
         type_of_trace = [type_of_trace,'_raw'];
     end
+    
+    %% Extract lag variable if required. This is NOT applied to the timepoints but out put as a sperated variable, to apply yourself
+    if ischar(type_of_trace) && contains(type_of_trace, '_lag')
+        % Regular expression to extract number after "lag"
+        expr = '(?<=lag)[+-]?\d+';
+        % Extract number from each string
+        lag = str2num(regexp(type_of_trace, expr, 'match', 'once'));
+        type_of_trace = erase(type_of_trace,{['_lag',num2str(lag)],['_lag_',num2str(lag)]});
+    else
+        lag = 0;
+    end
+    
     
     %% Get object if it needs loading/building
     if ischar(path_or_obj)
@@ -63,7 +89,6 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
     if isempty(obj.variability)
         obj.compute_similarity();
     end
-    %close all
 
     %% Define wether to use HD data or LD data, if using HD,
     if use_hd_data
@@ -73,8 +98,6 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
         end
         obj.rescale_traces(); %% run once
     end
-   % close all
-
 
     %% If using all voxels, remove bad_ROIs_list field because it is designed for full segments
     if obj.use_hd_data    
@@ -129,4 +152,9 @@ function [obj, source_signal, signal_indices, timepoints] = prepare_phate_analys
     
     %% Get the timepoints
     timepoints = find(obj.get_tp_for_condition(type_of_trace));
+    
+    %% Apply final filter if required
+    if ~isempty(post_filter)
+        timepoints = timepoints(ismember(timepoints, post_filter));
+    end
 end
