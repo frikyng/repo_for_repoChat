@@ -78,7 +78,16 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end   
         
         if all(isnan(current_var))
-            warning([type_corrected, ' has only NaNs'])
+            warning([type_corrected, ' has only NaNs']);
+            out.calcium         = calcium_ref;
+            out.bin_beh{el}     = current_var;
+            out.peak_tp{el}     = timepoints;
+            out.train_range{el} = [];  
+            out.prediction{el}  = [];
+            out.full_beh{el}    = raw_behaviour(el,:);
+            out.beh_type{el}    = type_corrected;
+            out.score{el}       = NaN(1,4);
+            out.model{el}       = {};
             continue
         end
         
