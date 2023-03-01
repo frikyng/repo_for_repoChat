@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels)
+function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
@@ -19,6 +19,9 @@ function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, 
     end
     if nargin < 5 || isempty(condition_labels)
         condition_labels = '';
+    end
+    if nargin < 6 || isempty(rendering)
+        rendering = true;
     end
 
     N_behaviours    = 1;
@@ -52,8 +55,8 @@ function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, 
     end
     
     INVALID = all(cellfun(@isempty, value),2);
-    value(INVALID, : ) = [];
-    result{1}{1}.(labels_or_label_fieldname)(INVALID) = [];
+    %value(INVALID, : ) = [];
+    %result{1}{1}.(labels_or_label_fieldname)(INVALID) = [];
 
     if ischar(labels_or_label_fieldname)
         labels = result{1}{1}.(labels_or_label_fieldname);
@@ -76,25 +79,27 @@ function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, 
 
 
     %% Generate figure
-    figure();hb = bar(labels, meanvalue);hold on; colororder(viridis(N_conditions))
-    
-    %% Add error bars. This needs a trick for catehorical data
-    nbars = size(meanvalue, 2);
-    x = [];
-    for i = 1:nbars
-        x = [x ; hb(i).XEndPoints];
-        scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.3); hold on;
-    end
-    errorbar(x',meanvalue,sem_values,'k','linestyle','none');hold on;
-    
+    if rendering
+        figure();hb = bar(labels, meanvalue);hold on; colororder(viridis(N_conditions))
 
-    %% Adjust plot limits
-    ylim([-10,100]);hold on;
-    
-    if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
-        legend(condition_labels);
-    elseif  ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
-        error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
+        %% Add error bars. This needs a trick for catehorical data
+        nbars = size(meanvalue, 2);
+        x = [];
+        for i = 1:nbars
+            x = [x ; hb(i).XEndPoints];
+            scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.3); hold on;
+        end
+        errorbar(x',meanvalue,sem_values,'k','linestyle','none');hold on;
+
+
+        %% Adjust plot limits
+        ylim([-10,100]);hold on;
+
+        if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
+            legend(condition_labels);
+        elseif  ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
+            error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
+        end
     end
 end
 
