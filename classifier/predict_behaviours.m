@@ -119,12 +119,18 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
             out{iter}         = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
         end
     else  
-        % now, as long as you don't have all the ROIs in ROI_groups to
-        % start with, we build alternative randomized groups
-        if ~all(cellfun(@numel, ROI_groups) == 1) && numel(unique(vertcat(ROI_groups{:}))) ~= sum(~fully_invalid_group)
-            rand_ROI_pool      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, vertcat(ROI_groups{:})) & ~ismember(obj.ref.indices.valid_swc_rois, invalid_ROIs)); %list of valid ROIs excluding ROI groups
-        else % when you pass all ROIs (so all group size == 1), randomization for leftover ROIs makes no sense so we just randomize ROIs
-            rand_ROI_pool      = cell2mat(ROI_groups);
+        %% we build alternative randomized groups. 
+        % If rand_ROI_groups == 1, groups are generated using all ROIs
+        % If rand_ROI_groups == -1, groups are generated excluding all ROIs
+        % Not that if you pass all the ROIs and 
+        if rand_ROI_groups == 1
+            rand_ROI_pool      = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
+        elseif rand_ROI_groups == -1
+            rand_ROI_pool      = find(obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, vertcat(ROI_groups{:})) & ~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list))); %list of valid ROIs excluding ROI groups
+        end
+        % when you pass all ROIs (so all cells in ROI_groups size == 1), randomization for leftover ROIs makes no sense so we just randomize ROIs
+        if isempty(rand_ROI_pool)
+            error('No ROI left for randomization')
         end
         for iter = 1:n_iter
             try
