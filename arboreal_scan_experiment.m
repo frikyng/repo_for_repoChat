@@ -1346,6 +1346,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
         function rescaled_traces = get.rescaled_traces(obj)
+            %% Rescale traces using precomputed rescaling info
+            % NaN the ROIs in bad_ROI_list 
+            % Nan the points between two recordings to prevent some stitching artefact or help you find these locations
             if isempty(obj.rescaling_info) || ~obj.is_rescaled
                 warning('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first.\n');
                 obj.is_rescaled = false;
@@ -2145,6 +2148,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
         
         function [weighted_averages, data] = get_dimensionality(obj, data, dim_red_type, timepoints, n_components, varargin)
+            
+            % obj.get_dimensionality() always removes data rows that have too many NaNs.  They end up flagged as ~valid_trace_idx. This includes
+            % rows that are fully NaN's 
+            % rows that have more than 4 times the median number of NaNs (basically, low quality rows that would flicker on and off because of posthoc MC for example)
+            % 
+            % The rows being deleted depends on your usage of the function.
+            % If you directly provide the data, this is the only filter applied, so it is up to you to discard the bad rows, either from the start, or by NaNing them (this will impact valid_trace_idx sequence, but not the final result)
+            % If you do not provide the data, data is obtained from obj.rescaled_traces, which always automatically NaN obj.bad_ROI_list
             if nargin < 2 || isempty(data)
                 data                = obj.rescaled_traces;
             end            

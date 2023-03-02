@@ -45,8 +45,11 @@ function groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional)
                     [~, rois]   = sort(obj.dimensionality.LoadingsPM(:,phat_comp));
                     rois        = rois(1:abs(cutoff));
                 end
-            end        
-            groups{counter}     = find(rois);
+            end
+            
+            %% Store ROIs numbers
+            valid_ROIs_idx      = find(obj.dimensionality.valid_trace_idx); % ROIs that were actually used in the dim reduction
+            groups{counter}     = valid_ROIs_idx(rois);
         end
     end
 end
