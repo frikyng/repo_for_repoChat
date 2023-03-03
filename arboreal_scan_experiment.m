@@ -1172,7 +1172,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 values = obj.rescaled_traces;
             end
             if nargin < 3 || isempty(timepoints)
-                timepoints = 1:size(obj.rescaled_traces,1);
+                timepoints = 1:size(values,1);
             end
             if nargin < 4 || isempty(ROIs)
             	ROIs =  obj.ref.indices.complete_ROIs_list(:,1);
@@ -1181,10 +1181,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             	color_range = [nanmin(values(:)),nanmax(values(:))];
             end
 
-            %% Get the ROIs to display
-            ROI_idx           = obj.ref.indices.complete_ROIs_list(:,1);
-
-            obj.ref.animate_tree(values, timepoints, ROI_idx, color_range)
+            obj.ref.animate_tree(values, timepoints, ROIs, color_range)
         end
 
         %% #############################
@@ -2444,7 +2441,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         cmap = jet(nanmax(values));
                         cmap = cmap(values, :);
                     end  
-
+                    
                     if obj.use_hd_data
                         [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(split_values_per_voxel(values(comp_idx, :), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',ax,tree_type,cmap);
                     else
