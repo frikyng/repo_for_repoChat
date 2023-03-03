@@ -116,7 +116,8 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
 
     if ~rand_ROI_groups
         for iter = 1:n_iter
-            out{iter}         = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}.used_ROIs     = ROI_groups;
         end
     else  
         %% we build alternative randomized groups. 
@@ -143,7 +144,8 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
             for gp_idx = 1:numel(ROI_groups_rdm)
                 data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups_rdm{gp_idx}),2)';        
             end                
-            out{iter}         = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}.used_ROIs     = ROI_groups_rdm;
         end
     end
 
