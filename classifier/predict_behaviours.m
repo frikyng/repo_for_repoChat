@@ -3,7 +3,7 @@
 
 %% Cell 2019-09-17_exp_1 anticorelated to running
 
-function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, n_iter,rand_ROI_groups, varargin)
+function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, n_iter, rand_ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = ''; 
     end
@@ -149,8 +149,15 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         end
     end
 
-    meanvalue = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
+    [meanvalue,~, fig_handle] = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
     if ml_parameters.rendering
         title(ml_parameters.title)
     end
+    if ml_parameters.savefig
+        if islogical(ml_parameters.savefig)
+            save_myfig(fig_handle,ml_parameters.title,{'png','pdf'})
+        elseif ischar(ml_parameters.savefig)
+            save_myfig(fig_handle,[ml_parameters.savefig, ml_parameters.title],{'png','pdf'})
+        end
+    end    
 end

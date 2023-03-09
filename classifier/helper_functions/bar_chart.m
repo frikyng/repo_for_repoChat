@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering)
+function [meanvalue, sem_values, fig_handle] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
@@ -79,8 +79,11 @@ function [meanvalue, sem_values] = bar_chart(result, labels_or_label_fieldname, 
 
 
     %% Generate figure
+    fig_handle = [];
     if rendering
-        figure();hb = bar(labels, meanvalue);hold on; colororder(viridis(N_conditions))
+        fig_handle = figure();
+        hb = bar(labels, meanvalue);hold on;
+        colororder(viridis(N_conditions))
 
         %% Add error bars. This needs a trick for catehorical data
         nbars = size(meanvalue, 2);

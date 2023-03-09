@@ -10,7 +10,9 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.shuffling                = ''    ; % set events to shuffle timpoints, and ROIs to shuffle the spatial structure, and both to do all
     params.title                    = ''    ; % set final bar chart title
     params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
-
+    params.save                     = false ; % If true, the result is saved
+    params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+    
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
         varargin = varargin{1};
@@ -23,41 +25,51 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
         params = varargin{1};
     elseif nargin > 0        
         %% Update default if any
-    for i = 1:length(varargin)
-        if(strcmpi(varargin{i},'holdout'))
-            params.holdout = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'kFold'))
-            params.kFold = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'optimize_hyper'))
-            params.optimize_hyper = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'rendering'))
-            params.rendering = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'svm_kernel'))
-            params.svm_kernel = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'optimization_method'))
-            params.optimization_method = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'solver'))
-            if ischar(varargin{i+1})
-                params.solver = lower(varargin{i+1});
-            else
-                params.solver = cellfun(@lower, varargin{i+1}, 'UniformOutput', false); % for multiple solver sequences
+        for i = 1:length(varargin)
+            if(strcmpi(varargin{i},'holdout'))
+                params.holdout = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'kFold'))
+                params.kFold = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'optimize_hyper'))
+                params.optimize_hyper = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'rendering'))
+                params.rendering = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'svm_kernel'))
+                params.svm_kernel = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'optimization_method'))
+                params.optimization_method = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'solver'))
+                if ischar(varargin{i+1})
+                    params.solver = lower(varargin{i+1});
+                else
+                    params.solver = cellfun(@lower, varargin{i+1}, 'UniformOutput', false); % for multiple solver sequences
+                end
+            end
+            if(strcmpi(varargin{i},'shuffling'))
+                params.shuffling = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'title'))
+                params.title = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'alpha'))
+                params.alpha = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'save'))
+                params.save = lower(varargin{i+1});
+            end
+            if(strcmpi(varargin{i},'savefig'))
+                params.savefig = lower(varargin{i+1});
             end
         end
-        if(strcmpi(varargin{i},'shuffling'))
-            params.shuffling = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'title'))
-            params.title = lower(varargin{i+1});
-        end
-        if(strcmpi(varargin{i},'alpha'))
-            params.alpha = lower(varargin{i+1});
-        end
     end
+    
+    if any(params.savefig) && ~params.rendering
+        params.rendering = 1;
     end
 end
