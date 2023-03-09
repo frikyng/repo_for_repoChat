@@ -157,6 +157,9 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         if islogical(ml_parameters.savefig)
             save_myfig(fig_handle,ml_parameters.title,{'png','pdf'})
         elseif ischar(ml_parameters.savefig)
+            if contains(ml_parameters.savefig, '.mat')
+                ml_parameters.savefig = parse_paths(fileparts(ml_parameters.savefig));
+            end
             save_myfig(fig_handle,[ml_parameters.savefig, ml_parameters.title],{'png','pdf'})
         end
     end    
