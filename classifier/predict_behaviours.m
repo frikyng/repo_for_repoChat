@@ -134,7 +134,9 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         end
         % when you pass all ROIs (so all cells in ROI_groups size == 1), randomization for leftover ROIs makes no sense so we just randomize ROIs
         if isempty(rand_ROI_pool)
-            error('No ROI left for randomization')
+            disp('WARNING : No ROI left for randomization')
+            rand_ROI_groups     = 1;
+            rand_ROI_pool       = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
         end
         for iter = 1:n_iter
             try
@@ -144,7 +146,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
                     ROI_groups_rdm     = cellfun(@(x) rand_ROI_pool(randperm(numel(rand_ROI_pool),x)), cellfun(@numel, ROI_groups, 'UniformOutput', false), 'UniformOutput', false); % size matched groups from ROI_pool
                 end
             catch
-                disp('Not enough non-used ROIs available. Using all ROIs instead for randomization')
+                disp('WARNING : Not enough non-used ROIs available. Using all ROIs instead for randomization')
                 ok = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list));
                 if single_matrix_input % when input was matrix
                     ROI_groups_rdm     = num2cell(ok(randperm(numel(ok),numel(ROI_groups))));

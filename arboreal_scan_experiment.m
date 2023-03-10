@@ -2402,7 +2402,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Now, build groups
             obj.dimensionality.clust_groups     = {};
             for el = 1:obj.dimensionality.N_clust
-                obj.dimensionality.clust_groups{el} = find(obj.dimensionality.cluster_idx == el);
+                obj.dimensionality.clust_groups{el} = find(obj.dimensionality.cluster_idx == el)';
             end
             
             %% Plot clusters
