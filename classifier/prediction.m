@@ -9,6 +9,9 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
     if isempty(partition) % if we just do many kfolds
         train_tp    = 1:numel(YData);
         test_tp     = [];
+    elseif isstruct(partition)
+    	train_tp    = partition.x_train;
+        test_tp     = partition.x_test;
     else % if we hold out data for final testing
         train_tp    = find(training(partition));
         test_tp     = find(test(partition));
@@ -98,12 +101,22 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 
         Lambda        = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
         base_varargin = [base_varargin, {'Lambda', Lambda}];
-        base_varargin = [base_varargin, {'KFold', 5}]; 
+        if parameters.kFold > 1
+            base_varargin = [base_varargin, {'KFold', parameters.kFold}]; 
+        end
            
         %% Train models
         model         = func(base_varargin{:});
-
-        y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+        
+        %% Get predictove score
+        if parameters.kFold > 1
+            y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+        elseif ~isempty(x_test)
+            y_predict     = model.predict(x_test);
+        else
+            y_predict     = model.predict(x_train);
+        end
+        
         if islogical(y_train)
             y_predict = logical(round(y_predict));
         end

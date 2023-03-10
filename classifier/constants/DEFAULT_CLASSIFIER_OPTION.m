@@ -8,6 +8,7 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.svm_kernel               = 'gaussian' ; % gaussian or linear
     params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
     params.shuffling                = ''    ; % set events to shuffle timpoints, and ROIs to shuffle the spatial structure, and both to do all
+    params.block_shuffling          = 0     ; % If non 0, then we do block shuffling using this window size. holdout must be > 0. kFold must be 1  
     params.title                    = ''    ; % set final bar chart title
     params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
     params.save                     = false ; % If true, the result is saved
@@ -66,10 +67,19 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
             if(strcmpi(varargin{i},'savefig'))
                 params.savefig = lower(varargin{i+1});
             end
+            if(strcmpi(varargin{i},'block_shuffling'))
+                params.block_shuffling = lower(varargin{i+1});
+            end
         end
     end
     
     if any(params.savefig) && ~params.rendering
         params.rendering = 1;
     end
+    if params.block_shuffling && params.kFold > 1
+        error('params.kFold > 1 not supported for block shuffling')
+    end  
+    if (params.block_shuffling || params.kFold == 1) && params.holdout == 0
+        error('When using block_shuffling or KFold == 1, you must specify holdout > 0')
+    end    
 end

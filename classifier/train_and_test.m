@@ -37,10 +37,10 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     timepoints(INVALID_TP)          = [];
     
     if any(find(all(isnan(predictor_data'))))
-        warning('Some predictors cotnains only NaN. This should be filtered out before caling this function');
+        warning('Some predictors contains only NaN. This should be filtered out before caling this function');
     end
     
-    %% Shuffle predictor if required.
+    %% Shuffle predictor if required.     
     if strcmpi(parameters.shuffling, 'events') || strcmpi(parameters.shuffling, 'both')
         predictor_data = predictor_data(:,randperm(size(predictor_data,2)));
     end
@@ -51,11 +51,14 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     end
     
     %% Get a random set of timepoints for training vs testing
-    if ~parameters.holdout
+    if parameters.block_shuffling
+        partition = block_shuffle(predictor_data, observation_data, timepoints, round(parameters.block_shuffling), size(raw_behaviour, 2), parameters.holdout);
+    elseif ~parameters.holdout
         partition     = [];
     else
         partition     = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout);
     end
+
     score       = [];
     out         = {};
     for el = 1:numel(beh_types)
@@ -95,12 +98,12 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, merge_params_obj(parameters, struct('behaviour',type_corrected)));
 
         %% Get accuracy score
-        if isempty(y_test)
+        if isempty(y_test) && parameters.kFold > 1
             %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
             parameters.rendering = 1;
             temp = kfoldLoss(model, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
             score(el,:) = repmat(nanmean(temp), 1, 4);
-        else        
+        else
             [score(el,1), score(el,2), score(el,3), score(el,4)] = get_classifier_score(y_test, y_predict);
         end
         
@@ -117,8 +120,10 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.calcium         = calcium_ref;
         out.bin_beh{el}     = current_var;
         out.peak_tp{el}     = timepoints;
-        if ~isempty(y_test)
+        if ~isempty(y_test) && ~parameters.block_shuffling
             out.train_range{el} = training(partition);
+        elseif parameters.block_shuffling
+            out.train_range{el} = partition.x_test;
         else
             out.train_range{el} = [];
         end
@@ -139,4 +144,40 @@ end
 
 function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
     score = corr(y_true, y_pred);
+end
+
+
+function partition = block_shuffle(data, processed_behaviours, timepoints, shuffle_window_pts, total_tp, holdout)
+% [data, processed_behaviours, timepoints]
+
+	%% Cut data into windows
+    win_start = 1:shuffle_window_pts:total_tp;
+    windows  = {};
+    for t = win_start
+         current_win = t:t+shuffle_window_pts-1;
+         windows{end+1} = timepoints(ismember(timepoints, current_win));      
+    end
+    windows = windows(~cellfun(@(x) isempty(x), windows));
+    
+    %% Shuffle windows
+    windows = windows(randperm(numel(windows)));
+    
+    %% Extract held out blocks
+    n_pts_target = ceil(numel(timepoints) * holdout);
+    n_cells_to_use = find(cumsum(cellfun(@(x) numel(x), windows)) < n_pts_target, 1, 'last');
+    heldout_batch = windows(1:n_cells_to_use);
+    training_batch = windows(n_cells_to_use+1:end);
+
+    partition = {};
+    partition.x_train = [training_batch{:}];
+    partition.x_test  = [heldout_batch{:}];
+    
+    [~, partition.x_train] = ismember(partition.x_train, timepoints);
+    [~, partition.x_test] = ismember(partition.x_test, timepoints);
+%     %% Rearrange order
+%     timepoints = [windows{:}]; 
+%     data = data(:, timepoints);
+%     processed_behaviours = processed_behaviours(:,timepoints);
+%     
+
 end

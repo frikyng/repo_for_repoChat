@@ -51,7 +51,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     
     use_hd_data             = false;
     time_filter             = 0;
-
+    
     %% Make sure preprocessing was done correctly
     rendering       = obj.rendering;
     obj.rendering   = false;
@@ -118,7 +118,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     All_ROIs    = 1:size(data, 1);
 
     if ~rand_ROI_groups
-        for iter = 1:n_iter
+        for iter = 1:n_iter               
             out{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
             out{iter}.used_ROIs     = ROI_groups;
         end
@@ -156,7 +156,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
             end
             for gp_idx = 1:numel(ROI_groups_rdm)
                 data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups_rdm{gp_idx}),2)';        
-            end                
+            end   
             out{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
             out{iter}.used_ROIs     = ROI_groups_rdm;
         end
