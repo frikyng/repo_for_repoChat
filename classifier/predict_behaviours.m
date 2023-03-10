@@ -3,7 +3,7 @@
 
 %% Cell 2019-09-17_exp_1 anticorelated to running
 
-function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, n_iter,rand_ROI_groups, varargin)
+function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, n_iter, rand_ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = ''; 
     end
@@ -26,10 +26,13 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         behaviour_list = behaviour_list.original_behaviour_list;
         build_beh      = false;
     end
+    single_matrix_input = false;
     if nargin < 6 || isempty(ROI_groups)
         ROI_groups   = num2cell(obj.ref.indices.valid_swc_rois);
+        single_matrix_input = true;
     elseif ~iscell(ROI_groups)
         ROI_groups   = num2cell(ROI_groups);    % does this force groups to be cell array regardless of input type?
+        single_matrix_input = true;
     end
     if iscolumn(ROI_groups)
         ROI_groups = ROI_groups';
@@ -116,17 +119,18 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
 
     if ~rand_ROI_groups
         for iter = 1:n_iter
-            out{iter}         = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}.used_ROIs     = ROI_groups;
         end
     else  
         %% we build alternative randomized groups. 
-        % If rand_ROI_groups == 1, groups are generated using all ROIs
-        % If rand_ROI_groups == -1, groups are generated excluding all ROIs
-        % Not that if you pass all the ROIs and 
+        % 0/false does no randomization
+        % 1 randomize groups using all valid ROIs
+        % -1 randomize groups using all valid ROIs, excluding the ROIs listed in the groups. Groups are sized matched
         if rand_ROI_groups == 1
-            rand_ROI_pool      = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
+            rand_ROI_pool      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
         elseif rand_ROI_groups == -1
-            rand_ROI_pool      = find(obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, vertcat(ROI_groups{:})) & ~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list))); %list of valid ROIs excluding ROI groups
+            rand_ROI_pool      = obj.ref.indices.valid_swc_rois((~ismember(obj.ref.indices.valid_swc_rois, horzcat(ROI_groups{:}))) & (~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list))); %list of valid ROIs excluding ROI groups
         end
         % when you pass all ROIs (so all cells in ROI_groups size == 1), randomization for leftover ROIs makes no sense so we just randomize ROIs
         if isempty(rand_ROI_pool)
@@ -134,21 +138,40 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         end
         for iter = 1:n_iter
             try
-                ROI_groups_rdm     = cellfun(@(x) rand_ROI_pool(randperm(numel(rand_ROI_pool),x)), cellfun(@numel, ROI_groups, 'uni', false), 'UniformOutput', false); % size matched groups from ROI_pool
+                if single_matrix_input % when input was matrix
+                    ROI_groups_rdm     = num2cell(rand_ROI_pool(randperm(numel(rand_ROI_pool),numel(ROI_groups))));
+                else
+                    ROI_groups_rdm     = cellfun(@(x) rand_ROI_pool(randperm(numel(rand_ROI_pool),x)), cellfun(@numel, ROI_groups, 'UniformOutput', false), 'UniformOutput', false); % size matched groups from ROI_pool
+                end
             catch
-                warning('Not enough non-used ROIs available. Using all ROIs instead for randomization')
-                ok = obj.ref.indices.valid_swc_rois(~invalid_ROIs_logical);
-                ROI_groups_rdm     = cellfun(@(x) ok(randperm(numel(ok),x)), cellfun(@numel, ROI_groups, 'uni', false), 'UniformOutput', false); % size matched groups from ROI_pool
+                disp('Not enough non-used ROIs available. Using all ROIs instead for randomization')
+                ok = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list));
+                if single_matrix_input % when input was matrix
+                    ROI_groups_rdm     = num2cell(ok(randperm(numel(ok),numel(ROI_groups))));
+                else
+                    ROI_groups_rdm     = cellfun(@(x) ok(randperm(numel(ok),x)), cellfun(@numel, ROI_groups, 'UniformOutput', false), 'UniformOutput', false); % size matched groups from ROI_pool
+                end
             end
             for gp_idx = 1:numel(ROI_groups_rdm)
                 data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups_rdm{gp_idx}),2)';        
             end                
-            out{iter}         = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            out{iter}.used_ROIs     = ROI_groups_rdm;
         end
     end
 
-    meanvalue = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
+    [meanvalue,~, fig_handle] = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
     if ml_parameters.rendering
         title(ml_parameters.title)
     end
+    if ml_parameters.savefig
+        if islogical(ml_parameters.savefig)
+            save_myfig(fig_handle,ml_parameters.title,{'png','pdf'})
+        elseif ischar(ml_parameters.savefig)
+            if contains(ml_parameters.savefig, '.mat')
+                ml_parameters.savefig = parse_paths(fileparts(ml_parameters.savefig));
+            end
+            save_myfig(fig_handle,[ml_parameters.savefig, ml_parameters.title],{'png','pdf'})
+        end
+    end    
 end

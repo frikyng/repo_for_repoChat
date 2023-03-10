@@ -94,7 +94,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   source_folder (STR) - Optional - Default is current folder
             %       Path to the raw or extracted recordings. It can be :
             %           * a folder containing extracted arboreal_scans
-            %             objects (recommended)
+            %             objects (recommended). If an axisting extracted
+            %             arboreal_scan_experiment is available, the code
+            %             will as if you want to load it.
+            %           * an exisiting arboreal_scan_experiment (.mat file)
             %           * an experiment folder, in which case data will be
             %             extracted using additional varargin
             %   keep_2D (BOOL) - Optional, default is False
@@ -139,8 +142,31 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Fix paths
-            obj.source_folder       = parse_paths(source_folder);
-
+            source_folder       = parse_paths(source_folder);
+            
+            %% Check if there is already an aorboreal_scan_experiment. 
+            if contains(source_folder, '.mat')
+                obj             = importdata(source_folder, 'obj'); %instead of load. This assign directly the object to obj.
+                source_folder   = fileparts(source_folder);
+                obj.source_folder = parse_paths(source_folder);  
+                return
+            else
+                [~, tag] = fileparts(fileparts(source_folder));
+                if isfile([source_folder, tag, '.mat'])
+                    answ = questdlg('Existing extracted file detected. Do you want to reload existing file or rebuild it?','','Reload','Rebuild','Abort','Reload');
+                    if strcmp(answ, 'Abort')
+                        return
+                    elseif strcmp(answ, 'Reload')
+                        source_folder   = [source_folder, tag, '.mat'];
+                        obj             = importdata(source_folder, 'obj'); %instead of load. This assign directly the object to obj.
+                        source_folder   = fileparts(source_folder);
+                        obj.source_folder = parse_paths(source_folder);
+                        return
+                    end
+                end
+                obj.source_folder = parse_paths(source_folder);                
+            end
+   
             %% Get a list of extracted arboreal scans in the source folder
             obj.extracted_data_paths= list_sources(obj);
             obj.need_update         = true(1, numel(obj.extracted_data_paths)); % you're building the object, so they all need an update
@@ -1172,7 +1198,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 values = obj.rescaled_traces;
             end
             if nargin < 3 || isempty(timepoints)
-                timepoints = 1:size(obj.rescaled_traces,1);
+                timepoints = 1:size(values,1);
             end
             if nargin < 4 || isempty(ROIs)
             	ROIs =  obj.ref.indices.complete_ROIs_list(:,1);
@@ -1181,10 +1207,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             	color_range = [nanmin(values(:)),nanmax(values(:))];
             end
 
-            %% Get the ROIs to display
-            ROI_idx           = obj.ref.indices.complete_ROIs_list(:,1);
-
-            obj.ref.animate_tree(values, timepoints, ROI_idx, color_range)
+            obj.ref.animate_tree(values, timepoints, ROIs, color_range)
         end
 
         %% #############################
@@ -2444,7 +2467,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                         cmap = jet(nanmax(values));
                         cmap = cmap(values, :);
                     end  
-
+                    
                     if obj.use_hd_data
                         [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(split_values_per_voxel(values(comp_idx, :), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',ax,tree_type,cmap);
                     else

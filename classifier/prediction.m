@@ -239,7 +239,7 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
         base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
         
         if isempty(x_test)
-            base_varargin = [base_varargin, {'KFold', 5}];
+            base_varargin = [base_varargin, {'KFold', HyperparameterOptimizationOptions.KFold}];
             Timeout = 3;
         else
             Timeout = 0.5;
