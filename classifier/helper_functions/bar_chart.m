@@ -103,6 +103,8 @@ function [meanvalue, sem_values, fig_handle] = bar_chart(result, labels_or_label
         elseif  ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
             error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
         end
+        
+        set(fig_handle, 'Color', 'w'); hold on;
     end
 end
 

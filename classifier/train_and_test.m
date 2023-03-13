@@ -52,11 +52,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     
     %% Get a random set of timepoints for training vs testing
     if parameters.block_shuffling
-        partition = block_shuffle(predictor_data, observation_data, timepoints, round(parameters.block_shuffling), size(raw_behaviour, 2), parameters.holdout);
+        partition       = block_shuffle(timepoints, round(parameters.block_shuffling), size(raw_behaviour, 2), parameters.holdout);
     elseif ~parameters.holdout
-        partition     = [];
+        partition       = [];
     else
-        partition     = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout);
+        partition       = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout);
     end
 
     score       = [];
@@ -147,8 +147,7 @@ function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
 end
 
 
-function partition = block_shuffle(data, processed_behaviours, timepoints, shuffle_window_pts, total_tp, holdout)
-% [data, processed_behaviours, timepoints]
+function partition = block_shuffle(timepoints, shuffle_window_pts, total_tp, holdout)
 
 	%% Cut data into windows
     win_start = 1:shuffle_window_pts:total_tp;
