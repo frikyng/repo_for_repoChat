@@ -1817,7 +1817,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
                 %% Get behaviour bouts
                 [~, ~, beh]         = obj.get_behaviours(beh_name); 
-                [~, ~, active_tp]   = obj.get_activity_bout(beh_name, true, [], invert, '', bout_extra_win);
+                [~, ~, active_tp]   = obj.get_activity_bout(beh_name, true, invert, '', bout_extra_win);
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks

@@ -2,11 +2,12 @@ classdef behaviours_analysis < handle
     %% Subclass of arboreal_scan_experiment
     properties
         behaviours                      % List of available behaviours
-        detrend_behaviour   = false;    % If true, behaviours are detrended before applying threshold
-        detrend_win         = 100       % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true
+        detrend_behaviour   = false;    % If true, behaviours are detrended using movmin function before applying threshold
+        detrend_win         = -100      % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
         bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds.
-        beh_smoothing       = [1,0]     % The smoothing window for behaviour
+        beh_smoothing       = [-1,0]    % The smoothing window for behaviour. Values < 1 are in seconds
+        multi_beh_func      = @nanmean  % The function applied to behaviours that contains multiple arrays (along dim 1)
     end
 
     methods
@@ -46,23 +47,65 @@ classdef behaviours_analysis < handle
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
             behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
             %behaviours.valid_behaviours(:,beh) = cellfun(@(y) isfield(y, behaviours.types{beh}), behaviours.external_var)' & cellfun(@(y) ~isempty(y.(behaviours.types{beh}).value), behaviours.external_var)' & cellfun(@(y) ~all(isnan(y.(behaviours.types{beh}).value(:))), behaviours.external_var)';
-            if isa(obj.detrend_behaviour, 'function_handle')
-                for rec = 1:numel(behaviours.external_var)
-                    for beh = 1:Max_var
-                        if isfield(behaviours.external_var{rec}, behaviours.types{beh})
-                            temp = behaviours.external_var{rec}.(behaviours.types{beh}).value;
-                            if ~isempty(temp)
-                                behaviours.external_var{rec}.(behaviours.types{beh}).value = temp - obj.detrend_behaviour(temp);
-                            end
-                        else
-                           % warning(['Missing behaviour "',behaviours.types{beh},'" for recording ',num2str(rec)], 'backtrace' )
-                        end
-                    end
+%             if isa(obj.detrend_behaviour, 'function_handle') && any(obj.detrend_win)
+%                 for rec = 1:numel(behaviours.external_var)
+%                     for beh = 1:Max_var
+%                         if isfield(behaviours.external_var{rec}, behaviours.types{beh})
+%                             temp = behaviours.external_var{rec}.(behaviours.types{beh}).value;
+%                             if ~isempty(temp)
+%                                 behaviours.external_var{rec}.(behaviours.types{beh}).value = temp - obj.detrend_behaviour(temp);
+%                             end
+%                         else
+%                            % warning(['Missing behaviour "',behaviours.types{beh},'" for recording ',num2str(rec)], 'backtrace' )
+%                         end
+%                     end
+%                 end
+%             end
+        end
+        
+        function set.beh_smoothing(obj, beh_smoothing)
+            %% Defines the gaussian filtering window for behaviours
+            % -------------------------------------------------------------
+            % Syntax:
+            %   obj.beh_smoothing = beh_smoothing;
+            % -------------------------------------------------------------
+            % Inputs:
+            %   beh_smoothing (FLOAT OR 2x1 FLOAT)
+            %   symetrical or asymetrical gaussian filter applied to all
+            %   traces. negative values indicates that the value is in
+            %   second, and conversion into timepoints is done
+            %   automatically
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   19/10/2022
+            %
+            % See also : 
+            
+            
+            if all(isnumeric(beh_smoothing)) && numel(beh_smoothing) == 2 && all(beh_smoothing == obj.beh_smoothing)
+                %% no change, pass                
+            elseif all(isnumeric(beh_smoothing)) && numel(beh_smoothing) == 1 || numel(beh_smoothing) == 2 
+                try
+                    beh_smoothing(beh_smoothing < 0)  = beh_smoothing(beh_smoothing < 0) * nanmedian(1./obj.timescale.sr);
                 end
+                beh_smoothing                  = abs(round(beh_smoothing));                
+                if numel(beh_smoothing)    == 1                 
+                    beh_smoothing = [beh_smoothing, beh_smoothing];
+                end
+                obj.beh_smoothing              = beh_smoothing;
+            else
+                error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 11, window is converted in seconds')
             end
         end
 
-        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, shuffle_size)
+        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, shuffle_size, smoothing)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -83,14 +126,20 @@ classdef behaviours_analysis < handle
             %       Default is false
             %       * If true, a moving min value of 1s is removed from the
             %       entire signal.
-            %       * If Int, a moving min value of the set number of point
-            %       is removed from the entire signal
+            %       * If Int, a moving min value is subtracted from the
+            %       entire signal. Use a value > 0 to set the moving windo
+            %       in points, and < 0 to set a moving window in s
             %       * If function_handle, the function is applied to every
             %       recording and every behaviour. see get.beaviours
             %   ignorecase (BOOL) - Optional - Default is false
             %       If true, the case in the behaviour names is ignored
             %   average (BOOL) - Optional - Default is false
             %       If true, all requested beahviours are averaged
+            %   smoothing (INT or 2x1 INT) - Optional - Default is 
+            %       obj.beh_smoothing. If > 0, defines a smoothing window
+            %       in points. If < 0 defines a smoothing window in
+            %       seconds. Smoothing is a guassian filter. If 2x1 INT,
+            %       an asymmetrical filter is set.
             % -------------------------------------------------------------
             % Outputs:
             %   extracted_traces (1xN CELL ARRAY of 1xP CELLS ARRAY of STRUCT)
@@ -107,6 +156,9 @@ classdef behaviours_analysis < handle
             %       timescale
             % -------------------------------------------------------------
             % Extra Notes:
+            %  * To plot all behaviours
+            %    detrend = true;smoothing = false
+            %    obj.get_behaviours({''},true,detrend,'','','',smoothing)
             %  * If you make a typo in the behaviour selection and at least
             %    one variable is returned, you won't be informed
             %  * Behaviours are extracted from individual
@@ -116,8 +168,10 @@ classdef behaviours_analysis < handle
             %   [~, ~, ori] = obj.get_behaviours('EyeCam_R_forelimb', true, true)
             %   [~, ~, detrend] = obj.get_behaviours('EyeCam_R_forelimb', true, false)
             %   figure();plot(ori.value'); hold on; plot(detrend.value')
-            %  * If a behaviour has multiple variables, the average is
+            %  * If a behaviour has multiple variables, the *average* is
             %    returned. You can change that section of the code
+            %  * obj.beh_smoothing is applied to every behaviour unless you
+            %   specify a value
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -136,9 +190,11 @@ classdef behaviours_analysis < handle
             end
             if nargin < 3 || isempty(rendering)
                 rendering = false;
-            end
-            if nargin < 4 || isempty(detrend_sig)
-                detrend_sig = false;
+            end            
+            if nargin >= 4 && ~isempty(detrend_sig)
+                initial_detrend         = obj.detrend_behaviour;  % backup initial detrending
+                obj.detrend_behaviour   = detrend_sig;    % handle all the special cases     
+                cleanupObj = onCleanup(@() restore_detrend(obj, initial_detrend));
             end
             if nargin < 5 || isempty(ignorecase)
                 ignorecase = false;
@@ -147,14 +203,20 @@ classdef behaviours_analysis < handle
                 average = false;
             end
             if nargin < 7 || isempty(shuffle_size)
-                shuffle = false;
-                block_size = NaN;
+                shuffle     = false;
+                block_size  = NaN;
             else
-                shuffle    = true;
-                block_size = shuffle_size;
+                shuffle     = true;
+                block_size  = shuffle_size;
             end
-            
-            obj.detrend_behaviour = detrend_sig;
+            if nargin < 8 || isempty(smoothing)
+                smoothing = obj.beh_smoothing;
+            else
+                bkp_smoothing = obj.beh_smoothing;
+                obj.beh_smoothing = smoothing;
+                smoothing = obj.beh_smoothing;
+                obj.beh_smoothing = bkp_smoothing;
+            end
 
             %% Initialize variables
             downsamp_beh                = {};
@@ -165,7 +227,7 @@ classdef behaviours_analysis < handle
             %% Identify if shuffling will be needed
             shuffle                     = shuffle || any(contains(type, 'shuffle'));
             if shuffle && isnan(block_size)
-                block_size = 522
+                block_size = mode(obj.timescale.tp)
             end
             type                        = erase(type,  {' shuffle','shuffle ','_shuffle','shuffle_','shuffle'});
             
@@ -187,33 +249,40 @@ classdef behaviours_analysis < handle
                 for rec = 1:numel(raw_beh{beh})
                     %% If behaviour timescale is longer than recording, clip it
                     if ~isempty(raw_beh{beh}{rec}.time)                        
-                        clipping_idx = find((raw_beh{beh}{rec}.time - obj.timescale.durations_w_gaps(rec) ) > 0, 1, 'first');
+                        clipping_idx        = find((raw_beh{beh}{rec}.time - obj.timescale.durations_w_gaps(rec) ) > 0, 1, 'first');
                         if ~isempty(clipping_idx)
-                            raw_beh{beh}{rec}.time = raw_beh{beh}{rec}.time(1:clipping_idx);
+                            raw_beh{beh}{rec}.time  = raw_beh{beh}{rec}.time(1:clipping_idx);
                             raw_beh{beh}{rec}.value = raw_beh{beh}{rec}.value(1:clipping_idx);
                         end
                     end
                     downsamp_beh{beh}{rec}.time     = interpolate_to(raw_beh{beh}{rec}.time, obj.timescale.tp(rec));
                     downsamp_beh{beh}{rec}.value    = interpolate_to(raw_beh{beh}{rec}.value, obj.timescale.tp(rec));
                     if isempty(downsamp_beh{beh}{rec}.time)
-                        downsamp_beh{beh}{rec}.time = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
-                        downsamp_beh{beh}{rec}.value = NaN(1,obj.timescale.tp(rec));
+                        downsamp_beh{beh}{rec}.time     = linspace(0, obj.timescale.durations(rec), obj.timescale.tp(rec));
+                        downsamp_beh{beh}{rec}.value    = NaN(1,obj.timescale.tp(rec));
                     end
-
-                    %downsampd_beh{beh}{rec}.value = smoothdata(downsampd_beh{beh}{rec}.value, 'movmean', [5, 0]);
-                    temp.time = [temp.time, downsamp_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
-                    value = downsamp_beh{beh}{rec}.value;
+                    if any(smoothing)
+                        downsamp_beh{beh}{rec}.value    = smoothdata(downsamp_beh{beh}{rec}.value, 'gaussian', smoothing);
+                    end
+                    if isa(obj.detrend_behaviour, 'function_handle') && any(obj.detrend_win)
+                        %baseline_estimate(downsamp_beh{beh}{rec}.value', obj.detrend_win(1)/10, obj.detrend_win(1))
+                        downsamp_beh{beh}{rec}.value = downsamp_beh{beh}{rec}.value - obj.detrend_behaviour(downsamp_beh{beh}{rec}.value);
+                    end
+                    
+                    temp.time               = [temp.time, downsamp_beh{beh}{rec}.time + obj.timescale.t_start_nogap(rec)];
+                    value                   = downsamp_beh{beh}{rec}.value;
 
                     if size(value, 1) > 1 % if your behavioural metrics is made of multiple arrays
-                        value = nanmean(value, 1);
+                        value                   = obj.multi_beh_func(value); 
                     end
-                    temp.value = [temp.value, value];
+                    temp.value              = [temp.value, value];
                 end
 
-                concat_downsamp_beh.time = [concat_downsamp_beh.time ;temp.time];
-                concat_downsamp_beh.value = [concat_downsamp_beh.value ;temp.value];
+                concat_downsamp_beh.time    = [concat_downsamp_beh.time     ;temp.time];
+                concat_downsamp_beh.value   = [concat_downsamp_beh.value    ;temp.value];
             end
             
+            %% Block shuffling of behaviour
             if shuffle
                 tp = NaN(1,ceil(numel(concat_downsamp_beh.time)/block_size)*block_size);
                 tp(1:numel(concat_downsamp_beh.time)) = 1:numel(concat_downsamp_beh.time);                 
@@ -223,18 +292,19 @@ classdef behaviours_analysis < handle
                 concat_downsamp_beh.value = concat_downsamp_beh.value(idx);
             end
             
+            %% Average of all selected behaviours
             if average
                 new = {};
                 for rec = 1:numel(downsamp_beh{1})
                     new{rec}.value = nanmean(cell2mat(cellfun(@(x) x{rec}.value', downsamp_beh, 'UniformOutput', false)), 2)';
                     new{rec}.time = downsamp_beh{1}{rec}.time;
                 end
-                downsamp_beh = {new};
+                downsamp_beh        = {new};
                 concat_downsamp_beh = structfun(@(x) nanmean(x,1), concat_downsamp_beh, 'UniformOutput', false);
-                type = {strjoin(type)};
+                type                = {strjoin(type)};
             end
 
-            %% Render extracted traces
+            %% Plot extracted behaviours
             if rendering
                 figure(1026);clf();
                 ax_list = {};
@@ -249,7 +319,7 @@ classdef behaviours_analysis < handle
                 linkaxes([ax_list{:}], 'x')
             end
 
-            function out = cellerror_empty(~,varargin)
+            function out = cellerror_empty(~,varargin) % missing behaviour management
                 out = {};
                 out.time = [];
                 out.value = [];
@@ -260,9 +330,13 @@ classdef behaviours_analysis < handle
                 range_idx           = strfind(type, '[');
                 type(range_idx:end) = [];
             end
+
+            function restore_detrend(obj, initial_detrend)
+                obj.detrend_behaviour   = initial_detrend;  % restore initial default option
+            end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, smoothing, invert, thr, window)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, invert, thr, window)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -280,9 +354,6 @@ classdef behaviours_analysis < handle
             %       insensitive.
             %   rendering (BOOL) - Optional - Default is false
             %       If true, display the selected behaviours
-            %   smoothing (INT) - Optional - Default is 1
-            %       if > 1, behavioural signal is smoothed uisng a gaussian
-            %       filter
             %   invert (BOOL) - Optional - Default is false
             %       * If true, the detected behaviours is inverted
             %   thr (FLOAT) - Optional - Default is
@@ -314,25 +385,17 @@ classdef behaviours_analysis < handle
             if nargin < 3 || isempty(rendering)
                 rendering = false;
             end
-            if nargin < 4 || isempty(smoothing)
-                smoothing = obj.beh_smoothing;
-            elseif ~any(smoothing)
-                smoothing(1) = [1, 0];
-            end
-            if numel(smoothing) == 1
-                smoothing = [smoothing, 0];
-            end
-            if nargin < 5 || isempty(invert)
+            if nargin < 4 || isempty(invert)
                 invert = contains(beh_types, '~');   
             elseif numel(invert) == 1
                 invert = repmat(invert, 1, numel(beh_types));
             end
-            if nargin < 6 || isempty(thr)
+            if nargin < 5 || isempty(thr)
                 % pass
             else
                 obj.beh_thr = thr;
             end 
-            if nargin < 7 || isempty(window)
+            if nargin < 6 || isempty(window)
                 window = obj.bout_extra_win;
             elseif numel(window) == 1
                 window = [window, window];
@@ -343,7 +406,7 @@ classdef behaviours_analysis < handle
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
                 if ~isempty(beh.value)
-                    beh_sm{idx}         = smoothdata(beh.value, 'gaussian', smoothing);
+                    beh_sm{idx}         = beh.value;
                     beh_sm{idx}         = nanmean(beh_sm{idx},1);
                     %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
                     %thr                = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
@@ -414,14 +477,19 @@ classdef behaviours_analysis < handle
         end
 
         function set.detrend_behaviour(obj, detrend_behaviour)
-            if islogical(detrend_behaviour) && detrend_behaviour
-            	detrend_behaviour = @(x) movmin(x, [ceil(1/nanmedian(obj.timescale.sr)), 0]);
+            if isa(detrend_behaviour, 'function_handle')
+                % keep as such
+            elseif islogical(detrend_behaviour) && detrend_behaviour
+                obj.detrend_win     = ceil(100/nanmedian(obj.timescale.sr));
+            	detrend_behaviour   = @(x) movmin(x, [obj.detrend_win, 0]);
             elseif islogical(detrend_behaviour) || ~any(detrend_behaviour)
                 % keep as such
-            elseif isnumeric(detrend_behaviour)
-                detrend_behaviour = @(x) movmin(x, [ceil(detrend_behaviour/nanmedian(obj.timescale.sr)), 0]);
-            elseif isa(detrend_behaviour, 'function_handle')
-                % keep as such
+            elseif isnumeric(detrend_behaviour) && any(detrend_behaviour > 0)
+                obj.detrend_win     = detrend_behaviour(1);
+                detrend_behaviour   = @(x) movmin(x, [obj.detrend_win, 0]);
+            elseif isnumeric(detrend_behaviour) && any(detrend_behaviour < 0)
+                obj.detrend_win     = ceil(abs(detrend_behaviour(1))/nanmedian(obj.timescale.sr));
+                detrend_behaviour   = @(x) movmin(x, [obj.detrend_win, 0]);
             else
                 error('detrend_behaviour must be a boolean, a value in seconds or a function handle')
             end
@@ -433,10 +501,6 @@ classdef behaviours_analysis < handle
                 bout_extra_win = [bout_extra_win, bout_extra_win];
             end
             obj.bout_extra_win = bout_extra_win;
-        end
-
-        function detrend_win = get.detrend_win(obj)
-            detrend_win = double(obj.detrend_behaviour) * obj.detrend_win;
         end
     end
 end

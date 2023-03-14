@@ -77,7 +77,8 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
         params.rendering = 1;
     end
     if params.block_shuffling && params.kFold > 1
-        error('params.kFold > 1 not supported for block shuffling')
+        warning('params.kFold > 1 not supported for block shuffling. Kfold set to 1')
+        params.kFold = 1;
     end  
     if (params.block_shuffling || params.kFold == 1) && params.holdout == 0
         error('When using block_shuffling or KFold == 1, you must specify holdout > 0')

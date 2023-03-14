@@ -149,6 +149,8 @@ end
 
 function partition = block_shuffle(timepoints, shuffle_window_pts, total_tp, holdout)
 
+    shuffle_window_pts = abs(shuffle_window_pts);
+
 	%% Cut data into windows
     win_start = 1:shuffle_window_pts:total_tp;
     windows  = {};
