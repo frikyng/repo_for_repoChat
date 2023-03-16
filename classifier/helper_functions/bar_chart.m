@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function [meanvalue, sem_values, fig_handle] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering)
+function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering, do_stats)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
@@ -22,6 +22,9 @@ function [meanvalue, sem_values, fig_handle] = bar_chart(result, labels_or_label
     end
     if nargin < 6 || isempty(rendering)
         rendering = true;
+    end
+    if nargin < 7 || isempty(do_stats)
+        do_stats = true;
     end
 
     N_behaviours    = 1;
@@ -105,6 +108,21 @@ function [meanvalue, sem_values, fig_handle] = bar_chart(result, labels_or_label
         end
         
         set(fig_handle, 'Color', 'w'); hold on;
+    end
+    stats_results = {};
+    if do_stats
+        [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(value',[],'off');
+        if stats_results.p < 0.05
+            disp('some conditions are significantly different from others')
+            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(value', labels);
+            stats_results.multi_comp                                    = multcompare(stats_results.stats);
+            ns = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
+            p0_01 = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.05 & stats_results.multi_comp(:,6) >= 0.01, [1,2]);
+            p0_001 = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2]);
+            p0_strong = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.001, [1,2]);
+        else
+            disp('Conditions do not significantly differ from each other')
+        end
     end
 end
 
