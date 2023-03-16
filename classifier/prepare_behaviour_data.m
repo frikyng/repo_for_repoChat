@@ -44,7 +44,7 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
         current_beh                     = original_beh.value;
         current_beh(isnan(current_beh)) = 0;
         if ~contains(type, 'trigger') && ~contains(type, 'baseline') && any(smooth_behaviours)
-            current_beh                     = smoothdata(original_beh.value, 'movmedian', smooth_behaviours);
+           % current_beh                     = smoothdata(current_beh, 'movmedian', smooth_behaviours);
         end
         
         %% Add some small noise back to help ML training (RMS / 100)

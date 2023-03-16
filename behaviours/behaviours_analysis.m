@@ -7,6 +7,7 @@ classdef behaviours_analysis < handle
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
         bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds.
         beh_smoothing       = [-1,0]    % The smoothing window for behaviour. Values < 1 are in seconds
+        beh_sm_func         = 'gaussian'% any valid smoothdata option. If contains "robust", outlier are filtered before smoothing
         multi_beh_func      = @nanmean  % The function applied to behaviours that contains multiple arrays (along dim 1)
     end
 
@@ -262,7 +263,13 @@ classdef behaviours_analysis < handle
                         downsamp_beh{beh}{rec}.value    = NaN(1,obj.timescale.tp(rec));
                     end
                     if any(smoothing)
-                        downsamp_beh{beh}{rec}.value    = smoothdata(downsamp_beh{beh}{rec}.value, 'gaussian', smoothing);
+                        beh_sm_func = obj.beh_sm_func;
+                        if contains(beh_sm_func, 'robust')                            
+                            beh_sm_func = erase(beh_sm_func, {'_','robust'});
+                            downsamp_beh{beh}{rec}.value = filloutliers(downsamp_beh{beh}{rec}.value, 'pchip','movmedian',[100,0]);
+                            %figure();plot(downsamp_beh{beh}{rec}.value);hold on;plot(filloutliers(downsamp_beh{beh}{rec}.value, 'linear','movmedian',[100,0]))
+                        end
+                        downsamp_beh{beh}{rec}.value    = smoothdata(downsamp_beh{beh}{rec}.value, beh_sm_func, smoothing);
                     end
                     if isa(obj.detrend_behaviour, 'function_handle') && any(obj.detrend_win)
                         %baseline_estimate(downsamp_beh{beh}{rec}.value', obj.detrend_win(1)/10, obj.detrend_win(1))

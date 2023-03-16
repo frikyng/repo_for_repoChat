@@ -143,7 +143,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
 end
 
 function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
-    score = corr(y_true, y_pred);
+    score = corr(y_true, y_pred); % ,'Type','Spearman'
 end
 
 
