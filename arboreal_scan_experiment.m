@@ -153,7 +153,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             else
                 [~, tag] = fileparts(fileparts(source_folder));
                 if isfile([source_folder, tag, '.mat'])
-                    answ = questdlg('Existing extracted file detected. Do you want to reload existing file or rebuild it?','','Reload','Rebuild','Abort','Reload');
+                    %answ = questdlg('Existing extracted file detected. Do you want to reload existing file or rebuild it?','','Reload','Rebuild','Abort','Reload');
+                    answ = 'Reload'
                     if strcmp(answ, 'Abort')
                         return
                     elseif strcmp(answ, 'Reload')
@@ -583,6 +584,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             elseif all(isnumeric(filter_win)) && numel(filter_win) == 1 || numel(filter_win) == 2 
                 try
                     filter_win(filter_win < 0)  = filter_win(filter_win < 0) * nanmedian(1./obj.timescale.sr);
+                    filter_win                  = abs(round(filter_win));
+                    if numel(filter_win) == 2 && all(filter_win == obj.filter_win)
+                        %% no change, but the value was initiually in seconds so we only see it here. Then do nothing
+                        return
+                    end
                 end
                 filter_win                  = abs(round(filter_win));                
                 if numel(filter_win)    == 1                 
