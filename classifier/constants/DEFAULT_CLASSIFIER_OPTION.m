@@ -1,5 +1,8 @@
 function params = DEFAULT_CLASSIFIER_OPTION(varargin)    
     params                          = {};
+    params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+    params.use_classifier           = false ; % If true, a classifier is used instead of a regression model
+    params.method                   = 'linear'; % The type of model used for regression / classification
     params.holdout                  = 0.5   ; % This is to seperate the train and test dataset
     params.kFold                    = 5     ; % This is defining the kFold crossvalidation settings for the training dataset
     params.optimize_hyper           = false ; % if true, hyperparameters are optimized during training
@@ -13,63 +16,81 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
     params.save                     = false ; % If true, the result is saved
     params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
-    
+    params.N_iter                   = 1 ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+    params.randomize_ROIs           = 0 ; % If 1, ROis are randomized. If you passed groups, randome groups will be sized matched. If -1, only ROIs NOT listed in the predictor list will be used (if possible)
+
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
         varargin = varargin{1};
     end
     
-    %% Update parameters if required
-    if nargin > 0 && iscell(varargin) && ~isstruct(varargin{1}) && rem(numel(varargin), 2)
-        error('input option must be an even number of cells')
-    elseif nargin > 0 && isstruct(varargin{1})
+    %% Extract existing params object
+    if nargin > 0 && iscell(varargin) && isstruct(varargin{1})
         params = varargin{1};
-    elseif nargin > 0        
+        varargin(1) = [];
+    end
+    
+    %% Update parameters if required
+    if nargin > 0 && ~isempty(varargin) && iscell(varargin) && rem(numel(varargin), 2)
+        error('input option must be an even number of cells')
+    elseif nargin > 0 && ~isempty(varargin) && iscell(varargin)     
         %% Update default if any
         for i = 1:length(varargin)
-            if(strcmpi(varargin{i},'holdout'))
+            if (strcmpi(varargin{i},'holdout'))
                 params.holdout = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'kFold'))
+            if (strcmpi(varargin{i},'kFold'))
                 params.kFold = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'optimize_hyper'))
+            if (strcmpi(varargin{i},'optimize_hyper'))
                 params.optimize_hyper = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'rendering'))
+            if (strcmpi(varargin{i},'rendering'))
                 params.rendering = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'svm_kernel'))
+            if (strcmpi(varargin{i},'svm_kernel'))
                 params.svm_kernel = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'optimization_method'))
+            if (strcmpi(varargin{i},'optimization_method'))
                 params.optimization_method = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'solver'))
+            if (strcmpi(varargin{i},'solver'))
                 if ischar(varargin{i+1})
                     params.solver = lower(varargin{i+1});
                 else
                     params.solver = cellfun(@lower, varargin{i+1}, 'UniformOutput', false); % for multiple solver sequences
                 end
             end
-            if(strcmpi(varargin{i},'shuffling'))
+            if (strcmpi(varargin{i},'shuffling'))
                 params.shuffling = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'title'))
-                params.title = lower(varargin{i+1});
+            if (strcmpi(varargin{i},'title'))
+                params.title = varargin{i+1};
             end
-            if(strcmpi(varargin{i},'alpha'))
+            if (strcmpi(varargin{i},'alpha'))
                 params.alpha = lower(varargin{i+1});
             end
-            if(strcmpi(varargin{i},'save'))
-                params.save = lower(varargin{i+1});
+            if (strcmpi(varargin{i},'save'))
+                params.save = varargin{i+1};
             end
-            if(strcmpi(varargin{i},'savefig'))
-                params.savefig = lower(varargin{i+1});
+            if (strcmpi(varargin{i},'savefig'))
+                params.savefig = varargin{i+1};
             end
-            if(strcmpi(varargin{i},'block_shuffling'))
+            if (strcmpi(varargin{i},'block_shuffling'))
                 params.block_shuffling = lower(varargin{i+1});
             end
+            if (strcmpi(varargin{i},'use_classifier'))
+                params.use_classifier = lower(varargin{i+1});
+            end    
+            if (strcmpi(varargin{i},'method'))
+                params.method = varargin{i+1};
+            end 
+            if (strcmpi(varargin{i},'N_iter'))
+                params.N_iter = lower(varargin{i+1});
+            end 
+            if (strcmpi(varargin{i},'randomize_ROIs'))
+                params.randomize_ROIs = lower(varargin{i+1});
+            end              
         end
     end
     
