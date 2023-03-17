@@ -3,7 +3,7 @@
 
 %% Note : hold out fraction is controlled by the HOLDOUT() global setting
 
-function out = train_and_test(predictor_data, observation_data, timepoints, roi_subset, method, beh_types, raw_behaviour, calcium_ref, parameters)
+function out = train_and_test(predictor_data, observation_data, timepoints, roi_subset, beh_types, raw_behaviour, calcium_ref, ml_parameters)
     if nargin < 3 || isempty(timepoints)
         timepoints      = 1:size(observation_data, 2);
         raw_behaviour   = [];
@@ -12,22 +12,19 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     if nargin < 4 || isempty(roi_subset) %% Define the ROIs we want to use for the training   
         roi_subset    = 1:size(predictor_data, 1);   % cl_4; %45:5:70 in 2019-09-26_exp_1
     end
-    if nargin < 5 || isempty(method) %% defines clasfier or learner method 
-        method    = 'svm';  % i.e. fitcsvm vs fitclinear etc
-    end    
-    if nargin < 6 || isempty(beh_types) %% Define the  names of the behaviour, to display on the plots   
+    if nargin < 5 || isempty(beh_types) %% Define the  names of the behaviour, to display on the plots   
         beh_types    = strcat('beh', strsplit(num2str(1:size(observation_data, 1)),' '));  
     end
-    if nargin < 7 || isempty(raw_behaviour) %% Original behaviour trace, for context  
+    if nargin < 6 || isempty(raw_behaviour) %% Original behaviour trace, for context  
         raw_behaviour    = NaN(numel(beh_types), 1);  
     end
-    if nargin < 8 || isempty(calcium_ref) %% Original calcium trace, for context  
+    if nargin < 7 || isempty(calcium_ref) %% Original calcium trace, for context  
         calcium_ref    = [];  
     end
-    if nargin < 9 || isempty(parameters)
-        parameters = DEFAULT_CLASSIFIER_OPTION;
+    if nargin < 8 || isempty(ml_parameters)
+        ml_parameters = DEFAULT_CLASSIFIER_OPTION;
     else
-        parameters = DEFAULT_CLASSIFIER_OPTION(parameters);
+        ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
     end
     
     USABLE_BEH                      = ~all(isnan(observation_data),2);
@@ -41,22 +38,22 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     end
     
     %% Shuffle predictor if required.     
-    if strcmpi(parameters.shuffling, 'events') || strcmpi(parameters.shuffling, 'both')
+    if strcmpi(ml_parameters.shuffling, 'events') || strcmpi(ml_parameters.shuffling, 'both')
         predictor_data = predictor_data(:,randperm(size(predictor_data,2)));
     end
-    if strcmpi(parameters.shuffling, 'ROIs') || strcmpi(parameters.shuffling, 'both')
+    if strcmpi(ml_parameters.shuffling, 'ROIs') || strcmpi(ml_parameters.shuffling, 'both')
         for tp = 1:size(predictor_data,2)
             predictor_data(:,tp) = predictor_data(randperm(size(predictor_data,1)), tp);
         end
     end
     
     %% Get a random set of timepoints for training vs testing
-    if parameters.block_shuffling
-        partition       = block_shuffle(timepoints, round(parameters.block_shuffling), size(raw_behaviour, 2), parameters.holdout);
-    elseif ~parameters.holdout
+    if ml_parameters.block_shuffling
+        partition       = block_shuffle(timepoints, round(ml_parameters.block_shuffling), size(raw_behaviour, 2), ml_parameters.holdout);
+    elseif ~ml_parameters.holdout
         partition       = [];
     else
-        partition       = cvpartition(numel(timepoints), 'HoldOut', parameters.holdout);
+        partition       = cvpartition(numel(timepoints), 'HoldOut', ml_parameters.holdout);
     end
 
     score       = [];
@@ -95,12 +92,12 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end
         
         %% Predict behaviour
-        [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, method, cost, merge_params_obj(parameters, struct('behaviour',type_corrected)));
+        [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_var, partition, cost, merge_params_obj(ml_parameters, struct('behaviour',type_corrected)));
 
         %% Get accuracy score
-        if isempty(y_test) && parameters.kFold > 1
+        if isempty(y_test) && ml_parameters.kFold > 1
             %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
-            parameters.rendering = 1;
+            ml_parameters.rendering = 1;
             temp = kfoldLoss(model, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
             score(el,:) = repmat(nanmean(temp), 1, 4);
         else
@@ -112,7 +109,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             current_raw_behaviour = raw_behaviour(el,:);
         end
         
-        if parameters.rendering >= 2    
+        if ml_parameters.rendering >= 2    
             plot_prediction(calcium_ref, current_var, timepoints, partition, y_predict, current_raw_behaviour , type, score(el,:), el);
         end
 
@@ -120,9 +117,9 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.calcium         = calcium_ref;
         out.bin_beh{el}     = current_var;
         out.peak_tp{el}     = timepoints;
-        if ~isempty(y_test) && ~parameters.block_shuffling
+        if ~isempty(y_test) && ~ml_parameters.block_shuffling
             out.train_range{el} = training(partition);
-        elseif parameters.block_shuffling
+        elseif ml_parameters.block_shuffling
             out.train_range{el} = partition.x_test;
         else
             out.train_range{el} = [];
@@ -133,7 +130,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.score{el}       = score(el,:);
         out.model{el}       = model;
     end
-    if numel(beh_types) > 1 && parameters.rendering >= 1
+    if numel(beh_types) > 1 && ml_parameters.rendering >= 1
         labels = reordercats(categorical(beh_types),beh_types);
         %figure(1000);clf();bar(labels, score(:,4));
     else
