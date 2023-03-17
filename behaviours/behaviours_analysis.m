@@ -9,6 +9,7 @@ classdef behaviours_analysis < handle
         beh_smoothing       = [-1,0]    % The smoothing window for behaviour. Values < 1 are in seconds
         beh_sm_func         = 'gaussian'% any valid smoothdata option. If contains "robust", outlier are filtered before smoothing
         multi_beh_func      = @nanmean  % The function applied to behaviours that contains multiple arrays (along dim 1)
+        scrambling_block_size=0         % number of timepoints for the behaviour scrambling window (applied if a behaviour contains "scramble" in its name
     end
 
     methods
@@ -102,11 +103,26 @@ classdef behaviours_analysis < handle
                 end
                 obj.beh_smoothing              = beh_smoothing;
             else
-                error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 11, window is converted in seconds')
+                error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. Values < 0 indicate a window in points')
+            end
+        end
+        
+        function set.scrambling_block_size(obj, scrambling_block_size)
+            if all(isnumeric(scrambling_block_size)) && all(scrambling_block_size == obj.scrambling_block_size)
+                %% no change, pass                
+            elseif all(isnumeric(scrambling_block_size))
+                if scrambling_block_size < 0
+                    scrambling_block_size = round(abs(scrambling_block_size) * nanmedian(1./obj.timescale.sr));
+                else
+                    scrambling_block_size = round(scrambling_block_size);                
+                end
+                obj.scrambling_block_size              = scrambling_block_size;
+            else
+                error('filter window must be one value < 0 (block size in s) or >0 (block size in points)')
             end
         end
 
-        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, shuffle_size, smoothing)
+        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, scramble_size, smoothing)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -203,12 +219,10 @@ classdef behaviours_analysis < handle
             if nargin < 6 || isempty(average)
                 average = false;
             end
-            if nargin < 7 || isempty(shuffle_size)
-                shuffle     = false;
-                block_size  = NaN;
+            if nargin < 7 || isempty(scramble_size) && ~any(contains(type, 'scramble'))
+                scramble_size   = 0;
             else
-                shuffle     = true;
-                block_size  = shuffle_size;
+                scramble_size   = obj.scrambling_block_size;
             end
             if nargin < 8 || isempty(smoothing)
                 smoothing = obj.beh_smoothing;
@@ -226,11 +240,8 @@ classdef behaviours_analysis < handle
             temp                        = {};
 
             %% Identify if shuffling will be needed
-            shuffle                     = shuffle || any(contains(type, 'shuffle'));
-            if shuffle && isnan(block_size)
-                block_size = mode(obj.timescale.tp)
-            end
-            type                        = erase(type,  {' shuffle','shuffle ','_shuffle','shuffle_','shuffle'});
+            scramble_size               = double(scramble_size * any(contains(type, 'scramble')));
+            type                        = erase(type,  {'scrambled',' scrambled','scrambled ','_scrambled','scrambled_',' scramble','scramble ','_scramble','scramble_','scramble'});
             
             %% Check if at least one variable name is valid
             all_beh                     = obj.behaviours;
@@ -290,10 +301,10 @@ classdef behaviours_analysis < handle
             end
             
             %% Block shuffling of behaviour
-            if shuffle
-                tp = NaN(1,ceil(numel(concat_downsamp_beh.time)/block_size)*block_size);
+            if scramble_size
+                tp = NaN(1,ceil(numel(concat_downsamp_beh.time)/scramble_size)*scramble_size);
                 tp(1:numel(concat_downsamp_beh.time)) = 1:numel(concat_downsamp_beh.time);                 
-                idx = reshape(tp,block_size,[]);   
+                idx = reshape(tp,scramble_size,[]);   
                 idx = idx(:,randperm(size(idx,2)));
                 idx = idx(~isnan(idx));   
                 concat_downsamp_beh.value = concat_downsamp_beh.value(idx);
