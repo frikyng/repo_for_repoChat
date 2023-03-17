@@ -151,10 +151,16 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
     stats_results = {};    
     if do_stats
         [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(value',[],'off');
+        if rendering
+            stat_disp = 'on';
+        else
+            stat_disp = 'off';
+        end
+        
         if stats_results.p < 0.05
             disp('some conditions are significantly different from others')
-            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(value', labels);
-            stats_results.multi_comp                                    = multcompare(stats_results.stats);
+            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(value', labels, stat_disp);
+            stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
             if rendering
                 figure(fig_handle)
                 ns = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
