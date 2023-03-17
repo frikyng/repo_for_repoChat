@@ -24,11 +24,16 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
         
         %% Get detrended/smoothed behaviour
         detrend_current_type    = ~contains(type{1}, 'baseline') && (isa(detrend_behaviours, 'function_handle') || any(detrend_behaviours)); % Never detrend baseline
-        current_smoothing       = obj.beh_smoothing * ~contains(type, 'baseline');      % Never smooth baseline
-%         if contains(type, 'trigger')
-%             current_smoothing = [40, 0];
-%         end
+        current_smoothing       = obj.beh_smoothing * ~contains(type, 'baseline');      % Never smooth baseline. Trigger gets custome smoothing
+        if contains(type, 'trigger')
+            bkp_method      = obj.beh_sm_func;
+            current_smoothing = [floor(3/nanmedian(diff(obj.t))), 0];
+            obj.beh_sm_func = 'movmean';
+        end
         [~,~,original_beh]      = obj.get_behaviours(type{1},'',detrend_current_type,true,true,'',current_smoothing);
+        if contains(type, 'trigger')
+            obj.beh_sm_func = bkp_method;
+        end
         
         %% Adjust name
         if iscell(type) && iscell(type{1})
