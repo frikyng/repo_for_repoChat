@@ -1,4 +1,4 @@
-function groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional)
+function ROI_groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional, no_duplicates)
     if nargin < 2 || isempty(N_phates)
         N_phates = size(obj.dimensionality.LoadingsPM, 2);
     end
@@ -12,8 +12,12 @@ function groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional)
     if nargin < 4 || isempty(bidirectional)
         bidirectional = true;
     end
+    if nargin < 5 || isempty(no_duplicates)
+        no_duplicates = false;
+    end
+    
 
-    groups = {};
+    ROI_groups = {};
     counter = 0;
     if cutoff >= 0
         cutoff = 100/cutoff;
@@ -49,7 +53,18 @@ function groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional)
             
             %% Store ROIs numbers
             valid_ROIs_idx      = find(obj.dimensionality.valid_trace_idx); % ROIs that were actually used in the dim reduction
-            groups{counter}     = valid_ROIs_idx(rois);
+            ROI_groups{counter}     = valid_ROIs_idx(rois);
         end
     end
+    
+    if no_duplicates
+        %% Find groups that are exact duplicates because that would make 2 times the same predictor
+        for el = 1:(numel(ROI_groups)-1)
+            for el2 = (el+1):numel(ROI_groups)
+                if ~isempty(ROI_groups{el}) && all(ROI_groups{el} == ROI_groups{el2})
+                    ROI_groups{el2} = [];
+                end
+            end
+        end
+    end    
 end
