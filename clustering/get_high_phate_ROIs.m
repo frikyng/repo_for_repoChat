@@ -61,7 +61,7 @@ function ROI_groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional, 
         %% Find groups that are exact duplicates because that would make 2 times the same predictor
         for el = 1:(numel(ROI_groups)-1)
             for el2 = (el+1):numel(ROI_groups)
-                if ~isempty(ROI_groups{el}) && all(ROI_groups{el} == ROI_groups{el2})
+                if numel(ROI_groups{el}) == numel(ROI_groups{el2}) && all(ROI_groups{el} == ROI_groups{el2})
                     ROI_groups{el2} = [];
                 end
             end
