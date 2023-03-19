@@ -156,11 +156,11 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
         %% Add error bars. This needs a trick for categorical data
         nbars = size(meanvalue, 2);
         x = [];
-%         for i = 1:nbars
-%             x = [x ; hb(i).XEndPoints];
-%             scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
-%         end
-        if contains(oldnames{el}, 'shuffle')
+        for i = 1:nbars
+            x = [x ; hb(i).XEndPoints];
+            %scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+        end
+        if any(contains(oldnames, 'shuffle'))
             errorbar(x(1,:)',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
         else
             errorbar(x',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
