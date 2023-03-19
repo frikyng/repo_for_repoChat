@@ -74,7 +74,7 @@ function [Y, P, K] = phate(data, varargin)
 %   (samples by samples) symmetric affinity matrix. If kernel is
 %   supplied input data can be empty ([]). Defaults to [].
 
-npca = 100;
+npca = 9;
 k = 5;
 nsvd = 100;
 n_landmarks = 2000;
