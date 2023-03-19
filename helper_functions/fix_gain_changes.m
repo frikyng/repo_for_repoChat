@@ -17,7 +17,7 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
     max_v       = prctile(temp(:),90);%max(cellfun(@(x) nanmax(x(:)), extracted_traces));
     
     detrending_plot = expe.rendering;
-    detrending_plot = false
+    detrending_plot = false;
     if detrending_plot
         figure(667788);clf();ax1 = subplot(1,3,1);imagesc(temp'); caxis([0, max_v]);
     end

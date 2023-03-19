@@ -30,7 +30,7 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
             current_smoothing = [floor(3/nanmedian(diff(obj.t))), 0];
             obj.beh_sm_func = 'movmean';
         end
-        [~,~,original_beh]      = obj.get_behaviours(type{1},'',detrend_current_type,true,true,'',current_smoothing);
+        [~,~,original_beh]      = obj.get_behaviours(type{1},'',detrend_current_type,true,true,current_smoothing);
         if contains(type, 'trigger')
             obj.beh_sm_func = bkp_method;
         end

@@ -56,6 +56,12 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
     % figure();hist(reshape(source_signal(timepoints,:),[],1),100); % TOMMY uncomment to see distribution of predictors
     obj.rendering   = rendering;
     
+    %% If required add shufffing
+    if ml_parameters.add_shuffle
+        shuffled_beh    = strcat(behaviour_list, '_shuffled');
+        behaviour_list  = reshape([behaviour_list; shuffled_beh],[],1)';
+    end
+    
     %% Get all behaviours
     if ~build_beh
         %% If we already had the extracted behaviours, at this stage we just update the formatted name 
@@ -78,6 +84,7 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
             end
         end
     end
+   
 
     %% Get the signal for the selected timepoints and ROIs
     %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
@@ -89,6 +96,8 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
         ROI_groups{gp_idx}(ismember(ROI_groups{gp_idx}, obj.bad_ROI_list)) = [];
         data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups{gp_idx}),2)';        
     end
+    
+    %figure();imagesc(tril(corr([data',processed_behaviours'])',-1))
 
     fully_invalid_group = cellfun(@isempty, ROI_groups)' | all(isnan(data),2);
     ROI_groups(fully_invalid_group) = [];
@@ -110,8 +119,7 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
     %     Soma_ROIs   = find(ismember(1:size(data, 1), obj.ref.indices.somatic_ROIs)); % somatic ROIs, but ignoring the NaNs
 
     
-    %% FYI find(all(isnan(source_signal))) should be empty, or you have observation with only NaN
-    
+    %% FYI find(all(isnan(source_signal))) should be empty, or you have observation with only NaN    
     All_ROIs    = 1:size(data, 1);
 
     if ~ml_parameters.randomize_ROIs
@@ -159,7 +167,7 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
         end
     end
 
-    [meanvalue,~, fig_handle, stats, values] = bar_chart(results, 'beh_type','','','',ml_parameters.rendering);
+    [meanvalue,~, fig_handle, stats, values] = bar_chart(results, 'beh_type','','','',ml_parameters.rendering, true, ml_parameters);
     if ml_parameters.rendering
         title(ml_parameters.title)
     end

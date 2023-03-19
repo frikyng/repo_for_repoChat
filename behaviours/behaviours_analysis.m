@@ -9,7 +9,7 @@ classdef behaviours_analysis < handle
         beh_smoothing       = [-1,0]    % The smoothing window for behaviour. Values < 1 are in seconds
         beh_sm_func         = 'gaussian'% any valid smoothdata option. If contains "robust", outlier are filtered before smoothing
         multi_beh_func      = @nanmean  % The function applied to behaviours that contains multiple arrays (along dim 1)
-        scrambling_block_size=0         % number of timepoints for the behaviour scrambling window (applied if a behaviour contains "scramble" in its name
+        shuffling_block_size=0         % number of timepoints for the behaviour shuffling window (applied if a behaviour contains "shuffle" in its name
     end
 
     methods
@@ -89,9 +89,8 @@ classdef behaviours_analysis < handle
             %   19/10/2022
             %
             % See also : 
-            
-            
-            if all(isnumeric(beh_smoothing)) && numel(beh_smoothing) == 2 && all(beh_smoothing == obj.beh_smoothing)
+
+            if all(isnumeric(beh_smoothing)) && numel(beh_smoothing) == 2 && all(beh_smoothing == obj.beh_smoothing) && ~any(obj.beh_smoothing < 0)
                 %% no change, pass                
             elseif all(isnumeric(beh_smoothing)) && numel(beh_smoothing) == 1 || numel(beh_smoothing) == 2 
                 try
@@ -105,24 +104,28 @@ classdef behaviours_analysis < handle
             else
                 error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. Values < 0 indicate a window in points')
             end
+            
+            if  any(obj.beh_smoothing < 0)
+                1
+            end
         end
         
-        function set.scrambling_block_size(obj, scrambling_block_size)
-            if all(isnumeric(scrambling_block_size)) && all(scrambling_block_size == obj.scrambling_block_size)
+        function set.shuffling_block_size(obj, shuffling_block_size)
+            if all(isnumeric(shuffling_block_size)) && all(shuffling_block_size == obj.shuffling_block_size)
                 %% no change, pass                
-            elseif all(isnumeric(scrambling_block_size))
-                if scrambling_block_size < 0
-                    scrambling_block_size = round(abs(scrambling_block_size) * nanmedian(1./obj.timescale.sr));
+            elseif all(isnumeric(shuffling_block_size))
+                if shuffling_block_size < 0
+                    shuffling_block_size = round(abs(shuffling_block_size) * nanmedian(1./obj.timescale.sr));
                 else
-                    scrambling_block_size = round(scrambling_block_size);                
+                    shuffling_block_size = round(shuffling_block_size);                
                 end
-                obj.scrambling_block_size              = scrambling_block_size;
+                obj.shuffling_block_size              = shuffling_block_size;
             else
                 error('filter window must be one value < 0 (block size in s) or >0 (block size in points)')
             end
         end
 
-        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, scramble_size, smoothing)
+        function [raw_beh, downsamp_beh, concat_downsamp_beh] = get_behaviours(obj, type, rendering, detrend_sig, ignorecase, average, smoothing)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -219,12 +222,7 @@ classdef behaviours_analysis < handle
             if nargin < 6 || isempty(average)
                 average = false;
             end
-            if nargin < 7 || isempty(scramble_size) && ~any(contains(type, 'scramble'))
-                scramble_size   = 0;
-            else
-                scramble_size   = obj.scrambling_block_size;
-            end
-            if nargin < 8 || isempty(smoothing)
+            if nargin < 7 || isempty(smoothing)
                 smoothing = obj.beh_smoothing;
             else
                 bkp_smoothing = obj.beh_smoothing;
@@ -239,10 +237,10 @@ classdef behaviours_analysis < handle
             concat_downsamp_beh.value   = [];
             temp                        = {};
 
-            %% Identify if shuffling will be needed
-            scramble_size               = double(scramble_size * any(contains(type, 'scramble')));
-            type                        = erase(type,  {'scrambled',' scrambled','scrambled ','_scrambled','scrambled_',' scramble','scramble ','_scramble','scramble_','scramble'});
-            
+%             %% Identify if shuffling will be needed
+%             shuffle_size                = double(shuffle_size * any(contains(type, 'shuffle')));
+%             type                        = erase(type,  {'shuffled',' shuffled','shuffled ','_shuffled','shuffled_',' shuffle','shuffle ','_shuffle','shuffle_','shuffle'});
+%             
             %% Check if at least one variable name is valid
             all_beh                     = obj.behaviours;
             type                        = all_beh.types(contains(all_beh.types, type, 'IgnoreCase', ignorecase));
@@ -298,16 +296,6 @@ classdef behaviours_analysis < handle
 
                 concat_downsamp_beh.time    = [concat_downsamp_beh.time     ;temp.time];
                 concat_downsamp_beh.value   = [concat_downsamp_beh.value    ;temp.value];
-            end
-            
-            %% Block shuffling of behaviour
-            if scramble_size
-                tp = NaN(1,ceil(numel(concat_downsamp_beh.time)/scramble_size)*scramble_size);
-                tp(1:numel(concat_downsamp_beh.time)) = 1:numel(concat_downsamp_beh.time);                 
-                idx = reshape(tp,scramble_size,[]);   
-                idx = idx(:,randperm(size(idx,2)));
-                idx = idx(~isnan(idx));   
-                concat_downsamp_beh.value = concat_downsamp_beh.value(idx);
             end
             
             %% Average of all selected behaviours
