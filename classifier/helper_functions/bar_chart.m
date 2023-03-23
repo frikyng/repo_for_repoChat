@@ -3,9 +3,16 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering, do_stats, varargin)
-    if nargin < 2 || isempty(labels_or_label_fieldname)
-        labels_or_label_fieldname = 'beh_type';
+
+
+%% 
+%
+%
+%
+
+function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(result, behaviour_filters, result_fieldname, additional_handle, condition_labels, rendering, do_stats, varargin)
+    if nargin < 2 || isempty(behaviour_filters)
+        behaviour_filters = '';
     end
     if nargin < 3 || isempty(result_fieldname)
         result_fieldname = 'score';
@@ -26,7 +33,11 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
     if nargin < 7 || isempty(do_stats)
         do_stats = true;
     end
-
+    
+    
+    show_dots = 1
+    split_shuffle = 0
+    
     N_behaviours    = 1;
     N_iter          = 1;
     N_conditions    = 1;
@@ -48,142 +59,236 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
     end
     
     %% Now, extract the condition
-    value = num2cell(NaN(N_behaviours, N_iter, N_conditions));
+    values = num2cell(NaN(N_behaviours, N_iter, N_conditions));
     for cond_idx = 1:N_conditions
         for iter_idx = 1:N_iter
             for beh_idx = 1:N_behaviours                
-                value{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx};               
+                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx};               
             end            
         end        
     end
-    
-    INVALID = all(cellfun(@isempty, value),2);
-    %value(INVALID, : ) = [];
-    %result{1}{1}.(labels_or_label_fieldname)(INVALID) = [];
 
-    if ischar(labels_or_label_fieldname)
-        labels = result{1}{1}.(labels_or_label_fieldname);
-        labels = strrep(labels, '_', '\_');        
-    	labels = reordercats(categorical(labels),labels);
-    else
-        labels; % [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
-    end
-   
+    labels  = result{1}{1}.('beh_type');
+    labels  = strrep(labels, '_', '\_');        
+    labels  = reordercats(categorical(labels),labels);
+    prefilter_labels  = categories(labels);
     
+    if ischar(behaviour_filters) && isempty(behaviour_filters)
+        to_keep     = true(size(prefilter_labels));
+    elseif ischar(behaviour_filters) && ~isempty(behaviour_filters)
+        
+        to_keep     = cellfun(@(x) any(contains(strrep(x, '\_', '_'), behaviour_filters)), prefilter_labels);
+    elseif iscell(behaviour_filters)
+        to_keep     = cellfun(@(x) any(contains(x, behaviour_filters)), prefilter_labels);
+    end
+
+    INVALID     = all(cellfun(@isempty, values),2) | ~to_keep;
+    INVALID     = INVALID(:,1,1); % may have to tweak this for more complex scenario
+    values(INVALID, : , :) = [];
+    for condition = 1:numel(result)
+        for iter    = 1:numel(result{condition})
+            for f       = fieldnames(result{1}{iter})'
+                if numel(result{condition}{iter}.(f{1})) == numel(labels)
+                    result{condition}{iter}.(f{1})(:,INVALID) = [];
+                end
+            end        
+        end
+    end
+    
+    labels  = result{1}{1}.('beh_type');
+    labels  = strrep(labels, '_', '\_');        
+    labels  = reordercats(categorical(labels),labels);
+    
+    is_shuffle = 0;
+    N_behaviours_unique = numel(labels);
+    if any(contains(categories(labels), 'shuffle'))
+        is_shuffle = 1;
+        N_behaviours_unique = N_behaviours_unique / 2;
+    end
+    
+
+
     if ~isempty(additional_handle) % qq if non scalar output, need to be adjusted       
-        value = cellfun(@(y) additional_handle(y), value);
+        values = cellfun(@(y) additional_handle(y), values);
     end
     
     %value = cell2mat(cellfun(@(x) cell2mat(cellfun(@(y) y.(result_fieldname)), x)'), result, 'UniformOutput', false));
 
     %% Get mean value if multiple iterations of more than one variable
-    meanvalue   = permute(nanmean(value,2),[1,3,2]);
-    sem_values  = permute(nanstd(value,[], 2)./sqrt(size(value, 2)),[1,3,2]);
+    meanvalue   = permute(nanmean(values,2),[1,3,2]);
+    sem_values  = permute(nanstd(values,[], 2)./sqrt(size(values, 2)),[1,3,2]);
 
+
+    
 
     %% Generate figure
     fig_handle      = [];
     shuffle_values  = [];
-    shuffle_sem     = [];
-    shuffle_mean    = [];
+    shuffle_semvalues     = [];
+    shuffle_meanvalue    = [];
     if rendering
         %% Fix for labels
-        oldnames = categories(labels);
-        labels = fix_labels(labels);
-%         
-%         pairs = {   'encoder', 'Running Speed';...
-%                     'EyeCam\_L\_forelimb', 'I. Forelimb MI' ; ...
-%                     'EyeCam\_R\_forelimb', 'C. Forelimb MI' ; ...
-%                     'BodyCam\_L\_whisker', 'I. Whisker MI' ; ...
-%                     'BodyCam\_R\_whisker', 'C. Whisk.Pad MI' ; ...
-%                     'EyeCam\_Perioral', 'Peri-oral MI' ; ...
-%                     'trigger', 'AirPuff' ; ...
-%                     'baseline', 'F0'};
-%         
-%         newnames = oldnames;
-%         for el = 1:numel(oldnames)
-%             if ~contains(oldnames{el}, 'shuffle')
-%                 newnames{el} = pairs{find(~cellfun(@isempty, (strfind(pairs, oldnames{el})))), 2};
-%             end
-%         end
-%         
-%         labels          = renamecats(labels,oldnames,newnames);
+        oldnames        = categories(labels);
+        labels          = fix_labels(labels);
         fig_handle      = figure();clf();
         fig_handle.Position(4) = fig_handle.Position(4)*1.3;
-        if any(contains(oldnames, 'shuffle'))
-            idx             = reshape(reshape(1:numel(meanvalue),2,numel(meanvalue)/2)',[],2);
+        if is_shuffle
+            idx             = reshape(reshape(1:size(meanvalue,1),2,size(meanvalue,1 )/2)',[],2);
             labels          = removecats(labels,oldnames(idx(:,2)));
             labels          = labels(~isundefined(labels));
-            meanvalue       = meanvalue(idx)'; 
-%             if rendering == 1
-%                 hb              = bar(labels,meanvalue', 'EdgeColor', 'none', 'facecolor', 'flat');hold on;
-%                 hb(2).FaceColor = [0.8,0.8,0.8];            
-%                 hb(1).FaceColor = [0 ,0.4470,0.7410];
-%                 hb(1).FaceColor = 'flat';
-%             else
-                hb              = bar(labels,meanvalue(1,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0 ,0.4470,0.7410]);hold on;
-                hb(2)           = bar(labels,meanvalue(2,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0.8,0.8,0.8]);hold on;
+            if size(idx, 1) > 1 % otherwise reshaping error when only one behaviour
+                meanvalue       = meanvalue(idx)'; 
+            end
+            if split_shuffle
+                try
+                    hb              = bar(labels, meanvalue', 'EdgeColor', 'none', 'facecolor', 'flat', 'BarWidth',1.5);hold on;
+                catch
+                    hb              = bar(meanvalue', 'EdgeColor', 'none', 'facecolor', 'flat', 'BarWidth',1.5);hold on;
+                end
+                hb(2).FaceColor = [0.8,0.8,0.8];            
+                hb(1).FaceColor = [0 ,0.4470,0.7410];
                 hb(1).FaceColor = 'flat';
-%             end
-            shuffle_values  = value(idx(:,2),:,:);
-            shuffle_sem     = value(idx(:,1),:,:);
-            shuffle_mean    = meanvalue(2,:)';
-            value           = value(idx(:,1),:,:);
-            sem_values      = sem_values(idx(:,1));
-            meanvalue       = meanvalue(1,:)';
+            else
+                hb(1:N_conditions)  = bar(labels,meanvalue(1,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0 ,0.4470,0.7410]);hold on;
+                hb(N_conditions+1:N_conditions*2)           = bar(labels,meanvalue(2,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0.8,0.8,0.8]);hold on;
+                %hb(1:N_conditions).FaceColor = 'flat';
+            end
+            shuffle_values      = values(idx(:,2),:,:);
+            values              = values(idx(:,1),:,:);
+            shuffle_semvalues   = sem_values(idx(:,2),:,:);
+            sem_values          = sem_values(idx(:,1),:,:);
+            shuffle_meanvalue   = meanvalue(2,:,:)';
+            meanvalue           = meanvalue(1,:,:)';
         else
-            hb              = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
+            hb                  = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
             colororder(viridis(N_conditions))
         end
         
         max_scores = [];
         if nargin >= 8 && isstruct(varargin{1})
             ml_parameters = varargin{1};
-            if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(oldnames)
-                max_scores = ml_parameters.max_score(1:2:end);
+            if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(prefilter_labels)
+                max_scores = ml_parameters.max_score;
+                if numel(prefilter_labels) ~= numel(oldnames) % if you had a filter
+                    max_scores(INVALID) = [];
+                end
+                max_scores = max_scores(1:2:end);
             elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(meanvalue)
                 max_scores = ml_parameters.max_score(1:2:end);                
+            end
+            
+            if N_conditions > numel(labels) % multi conditions
+                max_scores = repmat(max_scores, 1, numel(meanvalue));
             end
         end
         
         if ~isempty(max_scores)
-            w = hb(1).BarWidth/2;
-            for el = 1:numel(max_scores)
-                plot([el-w,el+w] ,[max_scores(el), max_scores(el)],'r:', 'LineWidth',2)
-            end
+            if is_shuffle
+                w = hb(1).BarWidth/4;
+            else
+                w = hb(1).BarWidth/2;
+            end            
+%             for el = 1:numel(max_scores)
+%                 plot([el-w,el+w] ,[max_scores(el), max_scores(el)],'r:', 'LineWidth',2)
+%             end
         end
 
         %% Add error bars. This needs a trick for categorical data
-        nbars = size(meanvalue, 2);
-        x = [];
-        for i = 1:nbars
-            x = [x ; hb(i).XEndPoints];
-            %scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
-        end
-        if any(contains(oldnames, 'shuffle'))
-            errorbar(x(1,:)',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+        if ~is_shuffle
+            n_sub_bars = 1;
         else
-            errorbar(x',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+            n_sub_bars = 1:2;
         end
+        if split_shuffle
+            condition_list = N_conditions;
+        else
+            condition_list = 1;
+        end        
+        for condition = 1:condition_list
+            for behaviour = 1:N_behaviours_unique
+                x = [];
+                x_shuff = [];
+                if N_conditions == 1
+                    bar_idx = behaviour;
+                else
+                    bar_idx = condition;
+                end               
+                
+                for sub_bar = n_sub_bars % 1 if not shuffle, 2 otherwise
+                    if N_conditions > 1 && ~split_shuffle
+                        sub_bar_idx = (N_conditions*(sub_bar-1)+1) : N_conditions*(sub_bar);                             
+                    else
+                        sub_bar_idx = sub_bar;
+                    end 
+                    
+                    if sub_bar == 1 && split_shuffle
+                        x = [x ; hb(sub_bar).XEndPoints(bar_idx)];
+                    elseif sub_bar == 2 && is_shuffle && split_shuffle
+                        x_shuff = [x_shuff ; hb(sub_bar).XEndPoints(bar_idx)]; 
+                    elseif sub_bar == 1 && is_shuffle && ~split_shuffle
+                        x = [x ; arrayfun(@(x) x.XEndPoints(bar_idx), hb(sub_bar_idx))];
+                    elseif sub_bar == 2 && is_shuffle && ~split_shuffle
+                        x_shuff = [x_shuff ; arrayfun(@(x) x.XEndPoints(bar_idx), hb(sub_bar_idx))]; 
+                    end
 
+                    if show_dots    
+                        if sub_bar == 1 && numel(sub_bar_idx) == 1
+                            scatter(hb(sub_bar_idx).XEndPoints(bar_idx), values(behaviour,:,condition), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+                        elseif sub_bar == 1 && numel(sub_bar_idx) > 1                            
+                            scatter(arrayfun(@(x) x.XEndPoints(bar_idx), hb(sub_bar_idx)), squeeze(values(behaviour,:,:)), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+                        elseif N_conditions == 1 && sub_bar == 2 && split_shuffle
+                            scatter(hb(sub_bar).XEndPoints(bar_idx), shuffle_values(behaviour,:,condition), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+                        else N_conditions > 1 && split_shuffle && sub_bar == 2
+                            scatter(hb(sub_bar).XEndPoints(bar_idx), shuffle_values(behaviour,:,condition), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+                        end
+                    end
+                end
+
+                if is_shuffle
+                    if ~split_shuffle && N_conditions > 1
+                        err_bar_idx = 1:N_conditions;
+                    elseif N_conditions == 1
+                        err_bar_idx = behaviour;                        
+                    end
+                    errorbar(x',meanvalue(err_bar_idx),sem_values(err_bar_idx),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+%                     if split_shuffle
+%                         errorbar(x_shuff',shuffle_meanvalue(condition),shuffle_semvalues(condition),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+%                     else
+% %                         if N_conditions > 1 && ~split_shuffle
+% %                             sub_bar_idx = sub_bar_idx - N_conditions;
+% %                         end
+                        errorbar(x_shuff',shuffle_meanvalue(err_bar_idx),shuffle_semvalues(err_bar_idx),'linestyle','none','LineWidth',2,'CapSize',0,'Color',[0.6,0.6,0.6]);hold on;
+%                     end
+                else
+                    errorbar(x',meanvalue(err_bar_idx),sem_values(err_bar_idx),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+                end
+            end
+        end
 
         %% Adjust plot limits
         ylim([-10,100]);hold on;
 
-        if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
-            legend(condition_labels);
-        elseif ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
-            error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
+        if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 1)
+            %legend(condition_labels);
+        elseif ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 1)
+            error(['labels must be a string array of ', num2str(size(meanvalue, 1)), ' elements'])
         end
         
         ylabel({'Predictive Score (r)'});
         set(fig_handle, 'Color', 'w'); hold on;
         set(gca,'box','off')
     end
+    
     stats_results = {};    
     if do_stats
-        stats_results.equalvariances = vartestn(value','TestType','LeveneAbsolute','Display','off') > 0.05;
-        [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(value',[],'off');
+        if N_conditions > 1
+           values           = permute(values,[3,2,1]);
+           shuffle_values   = permute(shuffle_values,[3,2,1]);
+           labels = categorical(condition_labels);
+           xticklabels(gca, categorical(condition_labels));
+        end
+        stats_results.equalvariances = vartestn(values','TestType','LeveneAbsolute','Display','off') > 0.05;
+        [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(values',[],'off');
 %         if rendering
 %             stat_disp = 'on';
 %         else
@@ -192,8 +297,8 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
         
         ignore_list = [];
         if ~isempty(shuffle_values)
-            for beh = 1:size(value,1)
-                stats_results.shuffle_stat(beh) = ranksum(value(beh,:),shuffle_values(beh,:));
+            for beh = 1:size(values,1)
+                stats_results.shuffle_stat(beh) = ranksum(values(beh,:),shuffle_values(beh,:));
                 if stats_results.shuffle_stat(beh) >= 0.05
                     hb(1).CData(beh,:) = [0.6,0.6,0.6];
                     ignore_list(end+1) = beh;
@@ -209,8 +314,17 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
         
         if stats_results.p < 0.05
             disp('some conditions are significantly different from others')
-            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(value', labels, stat_disp);
+            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(values', labels, stat_disp);
             stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+            
+            if ~split_shuffle && N_conditions > 1
+                for el = 1:N_conditions
+                    col1 = stats_results.multi_comp(:,1);
+                    col2 = stats_results.multi_comp(:,2);
+                    stats_results.multi_comp(col1 == el, 1) = hb(el).XEndPoints;
+                    stats_results.multi_comp(col2 == el, 2) = hb(el).XEndPoints;
+                end
+            end
 
             if rendering
                 figure(fig_handle)
@@ -251,7 +365,7 @@ function [hl,ht] = overbar(x1, x2, y, txt)
     sz = get(gca,'FontSize');
     %bg = get(gca,'Color');
     d = 1; % size of hook, change depending on y axis scaling
-    hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2, 'Color',[0.3,0.3,0.3]);
+    hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2, 'Color',[0.6,0.6,0.6]);
     ht = text((x1+x2)/2, y+d, txt, ...
               'HorizontalAlignment','center', ...
               'VerticalAlignment','middle', ... 
