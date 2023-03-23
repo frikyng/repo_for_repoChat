@@ -1,5 +1,5 @@
 function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, cost, ml_parameters)
-    if nargin < 6 || isempty(ml_parameters)
+    if nargin < 5 || isempty(ml_parameters)
         ml_parameters = DEFAULT_CLASSIFIER_OPTION;
     else
         ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
@@ -30,8 +30,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
                             y_train         , ...
                             'KernelFunction', ml_parameters.svm_kernel, ...
                             'Standardize'   , true, ...
-                            'CrossVal'      , 'on',...
-                            'KFold'         , ml_parameters.kFold};
+                            'CrossVal'      , 'on'};
         
         %% Set training model                
         if islogical(y_train)
@@ -46,18 +45,35 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         %% Define kernel and box size, and update model settings
         [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, ml_parameters);   
         base_varargin = [base_varargin, 'KernelScale', kmax, 'BoxConstraint', bmax];
+        if ml_parameters.kFold > 1
+            base_varargin = [base_varargin, {'KFold', ml_parameters.kFold}]; 
+        end
 
-        %% Train model
-        model = func(base_varargin{:});
-
-        %% Test model
-        y_predict = get_consensus_prediction(model, x_test); 
-
-        %% Estimate accuracy of the cross-validated model, and of the predicted values vs ground thruth
-        score = kfoldLoss(model)*100; % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
-        %fprintf(['The model out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
-    elseif strcmpi(ml_parameters.method, 'linear')        
-        if isempty(ml_parameters.alpha) % this should be no regularization
+        %% Train models
+        model         = func(base_varargin{:});
+        
+%         %% Get predictove score
+%         if ml_parameters.kFold > 1
+            y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+%         elseif ~isempty(x_test)
+%             y_predict     = model.predict(x_test);
+%         else
+%             y_predict     = model.predict(x_train);
+%         end
+        
+        if islogical(y_train)
+            y_predict = logical(round(y_predict));
+        end
+    
+        score = [];
+    elseif strcmpi(ml_parameters.method, 'linear')      
+        if ml_parameters.use_classifier
+            base_varargin = {   x_train         , ...
+                            y_train         , ...                              
+                            'PostFitBias'   , true,...
+                            'PassLimit'     , 10,...
+                            'Learner'       , 'logistic'}; 
+        elseif isempty(ml_parameters.alpha) % this should be no regularization
             base_varargin = {   x_train         , ...
                             y_train         , ...                              
                             'PostFitBias'   , true,...
