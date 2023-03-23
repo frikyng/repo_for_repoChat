@@ -54,7 +54,6 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
         
         %% Add some small noise back to help ML training (RMS / 100)
         current_beh                         = current_beh + randn(size(current_beh)) * (rms(current_beh)/100);
-
         
         %% Threshold to binarize behaviour for the classifier
         if any(contains(type, {'RT3D_MC','BodyCam_Eye','BodyCam_Laser'}))

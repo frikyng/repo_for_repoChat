@@ -90,17 +90,16 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         else
             current_obs         = observation_data(beh_idx,:);
         end
-        current_obs         = normalize(current_obs);
-        %         assignin('base',    ['var',type_corrected], observation_data(el,:))    % why 3 rows of the same?
-        %         assignin('base',    'Predictors',           predictor_data(roi_subset,:))
+        
 
         %% Compute cost matrix
         if islogical(current_obs)
-            ratio   = sum(current_obs)/numel(current_obs);
-            cost    = [0,ratio;1-ratio,0];
+            ratio               = sum(current_obs)/numel(current_obs);
+            cost                = [0,ratio;1-ratio,0];
             % assignin('base',    ['cost_',type_corrected],   cost)
         else
-            cost = [];
+            cost                = [];
+            current_obs         = normalize(current_obs);
         end   
         
         if all(isnan(current_obs))
