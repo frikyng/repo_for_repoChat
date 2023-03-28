@@ -165,6 +165,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         end
         
         max_scores = [];
+        score_metrics = 'performance';
         if nargin >= 8 && isstruct(varargin{1})
             ml_parameters = varargin{1};
             if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(prefilter_labels)
@@ -177,6 +178,21 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 max_scores = ml_parameters.max_score(1:2:end);                
             end
             
+            if isfield(ml_parameters, 'score_metrics')
+                score_metrics = ml_parameters.score_metrics;
+                if ishandle(score_metrics)
+                    score_metrics = handle2str(score_metrics);
+                end
+                if contains(score_metrics, 'pearson')
+                    score_metrics = 'Predictive Score (r)';
+                elseif strcmpi(score_metrics, 'mse')
+                    score_metrics = '1/mse';
+                elseif strcmpi(score_metrics, 'rmse')
+                    score_metrics = '1/rmse';
+                else
+                    score_metrics = 'model performance';
+                end
+            end
             if N_conditions > numel(labels) % multi conditions
                 max_scores = repmat(max_scores, 1, numel(meanvalue));
             end
@@ -274,7 +290,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
             error(['labels must be a string array of ', num2str(size(meanvalue, 1)), ' elements'])
         end
         
-        ylabel({'Predictive Score (r)'});
+        ylabel(score_metrics);
         set(fig_handle, 'Color', 'w'); hold on;
         set(gca,'box','off')
     end

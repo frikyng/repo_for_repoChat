@@ -254,7 +254,19 @@ end
 
 function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
     %% Set default Hyperparameter optimization options
-    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS;    
+    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS; 
+
+    if strcmpi(parameters.score_metrics, 'pearson')
+        LossFun = @pearson_correlation_coefficient;
+    elseif strcmpi(parameters.score_metrics, 'rmse')
+        LossFun = @rmse_score;
+    elseif strcmpi(parameters.score_metrics, 'mse')
+        LossFun = @mse_score;
+    elseif ishandle(parameters.score_metrics)
+        LossFun = parameters.score_metrics;
+    else
+        error('score function not recognized. Use "pearson", "mse", "rmse" or a valid function handle (see pearson_correlation_coefficient.m as an example)')
+    end
 
     if ~parameters.optimize_hyper
     	Lmax = 1e-4;    
@@ -266,7 +278,6 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
         lrange              = logspace(-4,4,40);
         [score, TPR, TNR, MCC] = deal(NaN(numel(lrange),1));
         base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
-        
         if isempty(x_test)
             base_varargin = [base_varargin, {'KFold', HyperparameterOptimizationOptions.KFold}];
             Timeout = 3;
@@ -281,11 +292,11 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
             [idx,mdl]               = fetchNext(fut, Timeout);
             if ~isempty(mdl)
                 if isempty(x_test)
-                    temp            = kfoldLoss(mdl, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
+                    temp            = kfoldLoss(mdl, 'Mode','individual', 'LossFun', LossFun)*100; 
                     [score(idx), TPR(idx), TNR(idx), MCC(idx)] = deal(nanmean(temp));
                 else
                     y_predict            = mdl.predict(x_test);                
-                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict);
+                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict, '' ,LossFun);
                 end
             end
         end
@@ -303,12 +314,7 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
             drawnow();
         end
         [~, loc] = max(MCC); Lmax = lrange(loc);       
-    end 
-    
-    function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
-        score = corr(y_true, y_pred);
-    end
-    
+    end     
 end
 
 

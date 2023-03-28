@@ -33,6 +33,21 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     predictor_data(:,INVALID_TP)    = [];
     timepoints(INVALID_TP)          = [];
     
+    
+    if strcmpi(ml_parameters.score_metrics, 'pearson')
+        LossFun = @pearson_correlation_coefficient;
+    elseif strcmpi(ml_parameters.score_metrics, 'rmse')
+        LossFun = @rmse_score;
+        observation_data = normalize(observation_data,2);
+    elseif strcmpi(ml_parameters.score_metrics, 'mse')
+        LossFun = @mse_score;
+        observation_data = normalize(observation_data,2);
+    elseif ishandle(ml_parameters.score_metrics)
+        LossFun = ml_parameters.score_metrics;
+    else
+        error('score function not recognized. Use "pearson", "mse", "rmse" or a valid function handle (see pearson_correlation_coefficient.m as an example)')
+    end
+    
     if any(find(all(isnan(predictor_data'))))
         warning('Some predictors contains only NaN. This should be filtered out before caling this function');
     end
@@ -99,7 +114,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             % assignin('base',    ['cost_',type_corrected],   cost)
         else
             cost                = [];
-            current_obs         = normalize(current_obs);
+            %current_obs         = normalize(current_obs);
         end   
         
         if all(isnan(current_obs))
@@ -123,12 +138,12 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         if isempty(y_test) && ml_parameters.kFold > 1
             %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
             ml_parameters.rendering = 1;
-            temp = kfoldLoss(model, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
+            temp = kfoldLoss(model, 'Mode','individual', 'LossFun', LossFun)*100; 
             score(mdl_idx,:) = repmat(nanmean(temp), 1, 4);
         else
-            [score(mdl_idx,1), score(mdl_idx,2), score(mdl_idx,3), score(mdl_idx,4)] = get_classifier_score(y_test, y_predict);
+            [score(mdl_idx,1), score(mdl_idx,2), score(mdl_idx,3), score(mdl_idx,4)] = get_classifier_score(y_test, y_predict, '', LossFun);
         end
-
+        
         %% Plot training result %% QQ RAW BEHAVIOUR IS NEVER SHUFFLED SO IT WONT LOOK RIGHT
         if ml_parameters.rendering >= 2              
             if ~isempty(raw_behaviour)
@@ -162,8 +177,4 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
        % fprintf(['Prediction score is ',num2str(out.score{el}(end)),'\n'])
     end
     %arrangefigures; drawnow
-end
-
-function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
-    score = corr(y_true, y_pred); % ,'Type','Spearman'
 end

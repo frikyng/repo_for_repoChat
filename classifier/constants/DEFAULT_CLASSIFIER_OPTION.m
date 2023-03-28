@@ -20,6 +20,7 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.randomize_ROIs           = 0     ; % If 1, ROis are randomized. If you passed groups, random groups will be sized matched. If -1, only ROIs NOT listed in the predictor list will be used (if possible)
     params.add_shuffle              = false ; % If true, behaviour temporal shuffling is computed too 
     params.obs_shuf_block_sz        = 1     ; % when params.shuffling is 'behaviours', this defines the size of the block to shuffle. 1 will shuffle every timepoint, and values > 1 will shuffle blocks
+    params.score_metrics            = 'pearson'; % pearson, rmse or a function handle
     
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
@@ -98,7 +99,10 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
             end
             if (strcmpi(varargin{i},'obs_shuf_block_sz'))
                 params.obs_shuf_block_sz = varargin{i+1};
-            end            
+            end     
+            if (strcmpi(varargin{i},'score_metrics'))
+                params.score_metrics = varargin{i+1};
+            end    
         end
     end
     
