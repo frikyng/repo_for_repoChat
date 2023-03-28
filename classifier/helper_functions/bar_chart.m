@@ -4,12 +4,6 @@
 
 
 
-
-%% 
-%
-%
-%
-
 function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(result, behaviour_filters, result_fieldname, additional_handle, condition_labels, rendering, do_stats, varargin)
     if nargin < 2 || isempty(behaviour_filters)
         behaviour_filters = '';
@@ -55,19 +49,38 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         % Multiple training, multiple conditions
         N_conditions    = numel(result);
         N_iter          = numel(result{1});
-        N_behaviours    = numel(result{1}{1}.score);
+        N_behaviours    = max(cellfun(@(x) numel(x{1}.score), result));%numel(result{1}{1}.score);
+    end
+    
+    %% In case some condition have a different number of model iteration (eg : shuffle), add the missing ones
+    N_cond_per_file = cellfun(@(x) numel(x{1}.score), result);
+    [N_max, max_loc]        = max(N_cond_per_file);
+    if numel(unique(N_cond_per_file)) > 1
+        for cond_idx = 1:N_conditions
+            for iter_idx = 1:N_iter
+                if numel(result{cond_idx}{iter_idx}.score) == max(N_cond_per_file)
+                    % pass  
+                else
+                    result{cond_idx}{iter_idx}.(result_fieldname) = cellfun(@(x) x(1), result{cond_idx}{iter_idx}.(result_fieldname), 'UniformOutput', false);
+                    result{cond_idx}{iter_idx}.(result_fieldname)(1:2:N_max) = result{cond_idx}{iter_idx}.(result_fieldname);
+                    empty = NaN(size(result{cond_idx}{iter_idx}.(result_fieldname){1}));
+                    result{cond_idx}{iter_idx}.(result_fieldname)(2:2:N_max) = repmat({empty},1,N_max/2);
+                    result{cond_idx}{iter_idx}.beh_type = result{max_loc}{iter_idx}.beh_type;   
+                end
+            end        
+        end
     end
     
     %% Now, extract the condition
     values = num2cell(NaN(N_behaviours, N_iter, N_conditions));
     for cond_idx = 1:N_conditions
         for iter_idx = 1:N_iter
-            for beh_idx = 1:N_behaviours                
-                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx};               
-            end            
+            for beh_idx = 1:N_behaviours  
+                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx};   
+            end 
         end        
     end
-
+    
     labels  = result{1}{1}.('beh_type');
     labels  = strrep(labels, '_', '\_');        
     labels  = reordercats(categorical(labels),labels);
@@ -75,19 +88,16 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     
     if ischar(behaviour_filters) && isempty(behaviour_filters)
         to_keep     = true(size(prefilter_labels));
-    elseif ischar(behaviour_filters) && ~isempty(behaviour_filters)
-        
+    elseif (ischar(behaviour_filters) && ~isempty(behaviour_filters)) || iscell(behaviour_filters)         
         to_keep     = cellfun(@(x) any(contains(strrep(x, '\_', '_'), behaviour_filters)), prefilter_labels);
-    elseif iscell(behaviour_filters)
-        to_keep     = cellfun(@(x) any(contains(x, behaviour_filters)), prefilter_labels);
     end
 
-    INVALID     = all(cellfun(@isempty, values),2) | ~to_keep;
+    INVALID     = ~to_keep;% | all(cellfun(@isempty, values),2);
     INVALID     = INVALID(:,1,1); % may have to tweak this for more complex scenario
     values(INVALID, : , :) = [];
     for condition = 1:numel(result)
         for iter    = 1:numel(result{condition})
-            for f       = fieldnames(result{1}{iter})'
+            for f       = fieldnames(result{condition}{iter})'
                 if numel(result{condition}{iter}.(f{1})) == numel(labels)
                     result{condition}{iter}.(f{1})(:,INVALID) = [];
                 end
@@ -254,7 +264,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                             scatter(arrayfun(@(x) x.XEndPoints(bar_idx), hb(sub_bar_idx)), squeeze(values(behaviour,:,:)), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
                         elseif N_conditions == 1 && sub_bar == 2 && split_shuffle
                             scatter(hb(sub_bar).XEndPoints(bar_idx), shuffle_values(behaviour,:,condition), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
-                        else N_conditions > 1 && split_shuffle && sub_bar == 2
+                        elseif N_conditions > 1 && split_shuffle && sub_bar == 2
                             scatter(hb(sub_bar).XEndPoints(bar_idx), shuffle_values(behaviour,:,condition), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
                         end
                     end
@@ -264,22 +274,25 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                     if ~split_shuffle && N_conditions > 1
                         err_bar_idx = 1:N_conditions;
                     elseif N_conditions == 1
-                        err_bar_idx = behaviour;                        
+                        err_bar_idx = behaviour;  
+                    else
+                        err_bar_idx = condition;
                     end
                     errorbar(x',meanvalue(err_bar_idx),sem_values(err_bar_idx),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
-%                     if split_shuffle
-%                         errorbar(x_shuff',shuffle_meanvalue(condition),shuffle_semvalues(condition),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
-%                     else
-% %                         if N_conditions > 1 && ~split_shuffle
-% %                             sub_bar_idx = sub_bar_idx - N_conditions;
-% %                         end
-                        errorbar(x_shuff',shuffle_meanvalue(err_bar_idx),shuffle_semvalues(err_bar_idx),'linestyle','none','LineWidth',2,'CapSize',0,'Color',[0.6,0.6,0.6]);hold on;
-%                     end
+                    errorbar(x_shuff',shuffle_meanvalue(err_bar_idx),shuffle_semvalues(err_bar_idx),'linestyle','none','LineWidth',2,'CapSize',0,'Color',[0.6,0.6,0.6]);hold on;
                 else
-                    errorbar(x',meanvalue(err_bar_idx),sem_values(err_bar_idx),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
+                    errorbar(x',meanvalue(bar_idx),sem_values(bar_idx),'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
                 end
             end
         end
+        
+%         if is_shuffle && ~split_shuffle && N_conditions > 1 
+%             % https://fr.mathworks.com/matlabcentral/answers/462532-multi-bar-labeling-plot
+%             xCnt = cell2mat(get(hb,'XOffset')); % XOffset is undocumented!
+%             xCnt = xCnt(1:end/2);        
+%             xLab = categorical({'A','B','C','D','E'});
+%             set(gca, 'XTick', xCnt, 'XTickLabel', xLab)
+%         end
 
         %% Adjust plot limits
         ylim([-10,100]);hold on;
@@ -293,6 +306,17 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         ylabel(score_metrics);
         set(fig_handle, 'Color', 'w'); hold on;
         set(gca,'box','off')
+    elseif ~rendering && is_shuffle
+        idx             = reshape(reshape(1:size(meanvalue,1),2,size(meanvalue,1 )/2)',[],2);
+        if size(idx, 1) > 1 % otherwise reshaping error when only one behaviour
+            meanvalue       = meanvalue(idx)'; 
+        end
+        shuffle_values      = values(idx(:,2),:,:);
+        values              = values(idx(:,1),:,:);
+        shuffle_semvalues   = sem_values(idx(:,2),:,:);
+        sem_values          = sem_values(idx(:,1),:,:);
+        shuffle_meanvalue   = meanvalue(2,:,:)';
+        meanvalue           = meanvalue(1,:,:)';
     end
     
     stats_results = {};    
@@ -304,7 +328,11 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
            xticklabels(gca, categorical(condition_labels));
         end
         stats_results.equalvariances = vartestn(values','TestType','LeveneAbsolute','Display','off') > 0.05;
-        [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(values',[],'off');
+        if size(values, 1) > 2
+            [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(values',[],'off');
+        else
+            [stats_results.p,~,stats_results.stats] = ranksum(values(1,:),shuffle_values(1,:));
+        end
 %         if rendering
 %             stat_disp = 'on';
 %         else
@@ -314,10 +342,12 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         ignore_list = [];
         if ~isempty(shuffle_values)
             for beh = 1:size(values,1)
-                stats_results.shuffle_stat(beh) = ranksum(values(beh,:),shuffle_values(beh,:));
-                if stats_results.shuffle_stat(beh) >= 0.05
-                    hb(1).CData(beh,:) = [0.6,0.6,0.6];
-                    ignore_list(end+1) = beh;
+                if ~all(isnan(shuffle_values(beh,:)))
+                    stats_results.shuffle_stat(beh) = ranksum(values(beh,:),shuffle_values(beh,:));
+                    if stats_results.shuffle_stat(beh) >= 0.05
+                        hb(1).CData(beh,:) = [0.6,0.6,0.6];
+                        ignore_list(end+1) = beh;
+                    end
                 end
             end            
         end
@@ -329,9 +359,20 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         end
         
         if stats_results.p < 0.05
-            disp('some conditions are significantly different from others')
-            [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(values', labels, stat_disp);
-            stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+            if size(values, 1) > 2
+                disp('some conditions are significantly different from others')
+                try
+                [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(values', labels, stat_disp);
+                catch
+                    return
+                end
+                stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+            else
+                disp('the two conditions are significantly different');
+                name = categories(labels);
+                [~,stats_results.table,stats_results.stats]   = kruskalwallis([values', shuffle_values'], {name{1}, 'shuffle'}, stat_disp); % should be replaced by MW
+                stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+            end
             
             if ~split_shuffle && N_conditions > 1
                 for el = 1:N_conditions
@@ -340,6 +381,8 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                     stats_results.multi_comp(col1 == el, 1) = hb(el).XEndPoints;
                     stats_results.multi_comp(col2 == el, 2) = hb(el).XEndPoints;
                 end
+            elseif ~split_shuffle && N_conditions == 1
+                 stats_results.multi_comp(:,[1,2]) = ceil(stats_results.multi_comp(:,[1,2])/2);
             end
 
             if rendering
@@ -372,20 +415,8 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 end
             end
         else
-            disp('Conditions do not significantly differ from each other')
+            disp(['p = ',num2str(stats_results.p),'; Conditions do not significantly differ from each other'])
         end
     end
-end
-
-function [hl,ht] = overbar(x1, x2, y, txt)
-    sz = get(gca,'FontSize');
-    %bg = get(gca,'Color');
-    d = 1; % size of hook, change depending on y axis scaling
-    hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2, 'Color',[0.6,0.6,0.6]);
-    ht = text((x1+x2)/2, y+d, txt, ...
-              'HorizontalAlignment','center', ...
-              'VerticalAlignment','middle', ... 
-              'FontSize',sz*2, ...
-              'BackgroundColor','none');
 end
 
