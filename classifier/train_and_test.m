@@ -164,16 +164,12 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.observation{mdl_idx}            = current_obs;        
         out.timepoints{mdl_idx}             = timepoints;
         if ~isempty(y_test) && ~ml_parameters.block_shuffling
-            out.train_range{mdl_idx} = training(partition);
             out.train_range_idx{mdl_idx}    = training(partition);
             out.test_range_idx{mdl_idx}     = test(partition);
         elseif ml_parameters.block_shuffling
-            out.train_range{mdl_idx} = partition.x_test;
             out.train_range_idx{mdl_idx}    = partition.x_train;
             out.test_range_idx{mdl_idx}     = partition.x_train;
         else
-            out.train_range{mdl_idx} = [];
-        out.beh_type{mdl_idx}    = type_corrected;
             out.train_range_idx{mdl_idx}    = [];
             out.test_range_idx{mdl_idx}     = 1:numel(timepoints);
         end        
