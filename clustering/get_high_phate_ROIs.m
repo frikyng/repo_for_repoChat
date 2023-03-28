@@ -1,6 +1,13 @@
-function ROI_groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional, no_duplicates)
+function ROI_groups = get_high_phate_ROIs(source, N_phates, cutoff, bidirectional, no_duplicates, valid_trace_idx)
+    if isa(source, 'arboreal_scan_experiment')
+        data            = source.dimensionality.LoadingsPM;
+        valid_trace_idx = source.dimensionality.valid_trace_idx;
+    else % ROI x N matrix, with N at least > N_Phates
+        data            = source;
+        valid_trace_idx = 1:size(source, 1); % note : if you do not pass a set list, ROis are relative indexes, not absolute.
+    end
     if nargin < 2 || isempty(N_phates)
-        N_phates = size(obj.dimensionality.LoadingsPM, 2);
+        N_phates = size(data, 2);
     end
     if nargin < 3 || isempty(cutoff) % set cutoff to 0 to get just the min or the max
         cutoff = 20;
@@ -15,7 +22,9 @@ function ROI_groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional, 
     if nargin < 5 || isempty(no_duplicates)
         no_duplicates = false;
     end
-    
+    if nargin >= 6 && ~isempty(valid_trace_idx)
+        valid_trace_idx = valid_trace_idx;  % note : if you do not pass a set list, ROIs are relative indexes, not absolute. 
+    end 
 
     ROI_groups = {};
     counter = 0;
@@ -30,29 +39,29 @@ function ROI_groups = get_high_phate_ROIs(obj, N_phates, cutoff, bidirectional, 
     for phat_comp = 1:N_phates
         for direc = direction
             counter     = counter + 1;
-            loadings    = obj.dimensionality.LoadingsPM(:,phat_comp);
+            loadings    = data(:,phat_comp);
             if direc == 1
                 if cutoff >= 0
-                    win         = range(obj.dimensionality.LoadingsPM(:,phat_comp))/cutoff;
-                    up_thr      = max(obj.dimensionality.LoadingsPM(:,phat_comp)) - win;
-                    rois        = obj.dimensionality.LoadingsPM(:,phat_comp) >= up_thr;
+                    win         = range(data(:,phat_comp))/cutoff;
+                    up_thr      = max(data(:,phat_comp)) - win;
+                    rois        = data(:,phat_comp) >= up_thr;
                 else
-                    [~, rois]   = sort(obj.dimensionality.LoadingsPM(:,phat_comp), 'descend');
+                    [~, rois]   = sort(data(:,phat_comp), 'descend');
                     rois        = rois(1:abs(cutoff));
                 end
             elseif direc == 2
                 if cutoff >= 0
-                    win         = range(obj.dimensionality.LoadingsPM(:,phat_comp))/cutoff;
-                    low_thr     = min(obj.dimensionality.LoadingsPM(:,phat_comp)) + win;
-                    rois        = obj.dimensionality.LoadingsPM(:,phat_comp) <= low_thr;
+                    win         = range(data(:,phat_comp))/cutoff;
+                    low_thr     = min(data(:,phat_comp)) + win;
+                    rois        = data(:,phat_comp) <= low_thr;
                 else
-                    [~, rois]   = sort(obj.dimensionality.LoadingsPM(:,phat_comp));
+                    [~, rois]   = sort(data(:,phat_comp));
                     rois        = rois(1:abs(cutoff));
                 end
             end
             
             %% Store ROIs numbers
-            valid_ROIs_idx      = find(obj.dimensionality.valid_trace_idx); % ROIs that were actually used in the dim reduction
+            valid_ROIs_idx          = find(valid_trace_idx); % ROIs that were actually used in the dim reduction
             ROI_groups{counter}     = valid_ROIs_idx(rois);
         end
     end
