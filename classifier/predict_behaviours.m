@@ -167,7 +167,7 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
         end
     end
 
-    [meanvalue,~, fig_handle, stats, values] = bar_chart(results, 'beh_type','','','',ml_parameters.rendering, true, ml_parameters);
+    [meanvalue,~, fig_handle, stats, values] = bar_chart(results, '','','','',ml_parameters.rendering, true, ml_parameters);
     if ml_parameters.rendering
         title(ml_parameters.title)
     end
