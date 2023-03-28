@@ -586,7 +586,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     filter_win(filter_win < 0)  = filter_win(filter_win < 0) * nanmedian(1./obj.timescale.sr);
                     filter_win                  = abs(round(filter_win));
                     if numel(filter_win) == 2 && all(filter_win == obj.filter_win)
-                        %% no change, but the value was initiually in seconds so we only see it here. Then do nothing
+                        %% no change, but the value was initially in seconds so we only see it here. Then do nothing
                         return
                     end
                 end
@@ -2600,7 +2600,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             mean_corr_with_others   = [];
             bad_ROIs                = [];
             if nargin < 2 || isempty(correlation_res)
-                warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY.  run obj.detect_events() first');                
+                warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY.  run obj.find_events() first');                
                 return
             else
                 events = obj.event;
@@ -2720,10 +2720,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 2 || isempty(condition)
                 condition = {'distance',Inf};
             end
-            if nargin < 3 || isempty(filter_win)
-                obj.filter_win = [0,0];
-            else
-                obj.filter_win  = filter_win;
+            if nargin > 3 && ~isempty(filter_win)
+                obj.filter_win = filter_win;
             end
             if nargin >= 4 && ~isempty(rendering)
                 obj.rendering = rendering;
