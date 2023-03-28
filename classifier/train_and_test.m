@@ -152,23 +152,37 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             plot_prediction(calcium_ref, current_obs, timepoints, partition, y_predict, current_raw_behaviour , type, score(mdl_idx,:), mdl_idx);
         end
 
-        %% Store result
-        out.calcium         = calcium_ref;
-        out.bin_beh{mdl_idx}     = current_obs;
-        out.peak_tp{mdl_idx}     = timepoints;
+        if ml_parameters.save_level < 2
+            out.calcium                     = [];
+            out.full_beh{mdl_idx}           = [];
+            out.predictors                  = [];
+        else
+            out.calcium                     = calcium_ref;
+            out.full_beh{mdl_idx}           = raw_behaviour(beh_idx,:);
+            out.predictors                  = predictor_data(roi_subset,:);
+        end            
+        out.observation{mdl_idx}            = current_obs;        
+        out.timepoints{mdl_idx}             = timepoints;
         if ~isempty(y_test) && ~ml_parameters.block_shuffling
             out.train_range{mdl_idx} = training(partition);
+            out.train_range_idx{mdl_idx}    = training(partition);
+            out.test_range_idx{mdl_idx}     = test(partition);
         elseif ml_parameters.block_shuffling
             out.train_range{mdl_idx} = partition.x_test;
+            out.train_range_idx{mdl_idx}    = partition.x_train;
+            out.test_range_idx{mdl_idx}     = partition.x_train;
         else
             out.train_range{mdl_idx} = [];
-        end
-        out.prediction{mdl_idx}  = y_predict;
-        out.full_beh{mdl_idx}    = raw_behaviour(beh_idx,:);
         out.beh_type{mdl_idx}    = type_corrected;
-        out.shuffling_type{mdl_idx}= ml_parameters.shuffling;
-        out.score{mdl_idx}       = score(mdl_idx,:);
-        out.model{mdl_idx}       = model;
+            out.train_range_idx{mdl_idx}    = [];
+            out.test_range_idx{mdl_idx}     = 1:numel(timepoints);
+        end        
+        out.prediction{mdl_idx}             = y_predict;        
+        out.beh_type{mdl_idx}               = type_corrected;
+        out.shuffling_type{mdl_idx}         = ml_parameters.shuffling;
+        out.score{mdl_idx}                  = score(mdl_idx,:);
+        out.model{mdl_idx}                  = model;
+
     end
     if numel(beh_types) > 1 && ml_parameters.rendering >= 1
         labels = reordercats(categorical(beh_types),beh_types);

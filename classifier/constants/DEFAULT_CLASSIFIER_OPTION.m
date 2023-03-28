@@ -15,6 +15,7 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
     params.title                    = ''    ; % set final bar chart title
     params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
     params.save                     = false ; % If true, the result is saved
+    params.saving_level             = 1     ; % level 1 saves the model and its results, level 2 also saves the full predictor and observation traces
     params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
     params.N_iter                   = 1     ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
     params.randomize_ROIs           = 0     ; % If 1, ROis are randomized. If you passed groups, random groups will be sized matched. If -1, only ROIs NOT listed in the predictor list will be used (if possible)
@@ -96,6 +97,9 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
             end  
             if (strcmpi(varargin{i},'add_shuffle'))
                 params.add_shuffle = varargin{i+1};
+            end
+            if (strcmpi(varargin{i},'save_level'))
+                params.save_level = varargin{i+1};
             end
             if (strcmpi(varargin{i},'obs_shuf_block_sz'))
                 params.obs_shuf_block_sz = varargin{i+1};
