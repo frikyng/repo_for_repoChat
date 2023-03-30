@@ -1,4 +1,4 @@
-function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
+function [obj, source_signal, signal_indices, timepoints, lag] = prepare_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
     if nargin < 1 || isempty(path_or_obj)
         path_or_obj = ''; % i.e. current matlab folder. It must then be an extracted arboreal scan folder
     end

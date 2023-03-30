@@ -44,7 +44,7 @@ function [results, data, ROI_groups, meanvalue, stats, values] = predict_behavio
     rendering       = obj.rendering;
     obj.rendering   = false;
 
-    [obj, source_signal, ~, timepoints, lag]    = prepare_phate_analysis(obj, use_hd_data, [], type_of_trace);
+    [obj, source_signal, ~, timepoints, lag]    = prepare_analysis(obj, use_hd_data, [], type_of_trace);
     
     beh_timepoints                              = timepoints + lag; % if lag == 0 then points are the same
     timepoints(beh_timepoints < 1)              = [];
