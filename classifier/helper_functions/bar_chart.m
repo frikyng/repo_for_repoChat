@@ -3,7 +3,7 @@
 %% example bar_chart(result, [strcat('group ', strsplit(num2str(1:numel(groups)),' '))])
 
 
-function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering, do_stats)
+function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(result, labels_or_label_fieldname, result_fieldname, additional_handle, condition_labels, rendering, do_stats, varargin)
     if nargin < 2 || isempty(labels_or_label_fieldname)
         labels_or_label_fieldname = 'beh_type';
     end
@@ -82,43 +82,75 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
 
 
     %% Generate figure
-    fig_handle = [];
+    fig_handle      = [];
+    shuffle_values  = [];
+    shuffle_sem     = [];
+    shuffle_mean    = [];
     if rendering
         %% Fix for labels
         oldnames = categories(labels);
-        pairs = {   'encoder', 'Running Speed';...
-                    'EyeCam\_L\_forelimb', 'I. Forelimb MI' ; ...
-                    'EyeCam\_R\_forelimb', 'C. Forelimb MI' ; ...
-                    'BodyCam\_L\_whisker', 'I. Whisker MI' ; ...
-                    'BodyCam\_R\_whisker', 'C. Whisk.Pad MI' ; ...
-                    'EyeCam\_Perioral', 'Peri-oral MI' ; ...
-                    'trigger', 'AirPuff' ; ...
-                    'baseline', 'F0'};
+        labels = fix_labels(labels);
+%         
+%         pairs = {   'encoder', 'Running Speed';...
+%                     'EyeCam\_L\_forelimb', 'I. Forelimb MI' ; ...
+%                     'EyeCam\_R\_forelimb', 'C. Forelimb MI' ; ...
+%                     'BodyCam\_L\_whisker', 'I. Whisker MI' ; ...
+%                     'BodyCam\_R\_whisker', 'C. Whisk.Pad MI' ; ...
+%                     'EyeCam\_Perioral', 'Peri-oral MI' ; ...
+%                     'trigger', 'AirPuff' ; ...
+%                     'baseline', 'F0'};
+%         
+%         newnames = oldnames;
+%         for el = 1:numel(oldnames)
+%             if ~contains(oldnames{el}, 'shuffle')
+%                 newnames{el} = pairs{find(~cellfun(@isempty, (strfind(pairs, oldnames{el})))), 2};
+%             end
+%         end
+%         
+%         labels          = renamecats(labels,oldnames,newnames);
+        fig_handle      = figure();clf();
+        fig_handle.Position(4) = fig_handle.Position(4)*1.3;
+        if any(contains(oldnames, 'shuffle'))
+            idx             = reshape(reshape(1:numel(meanvalue),2,numel(meanvalue)/2)',[],2);
+            labels          = removecats(labels,oldnames(idx(:,2)));
+            labels          = labels(~isundefined(labels));
+            meanvalue       = meanvalue(idx)'; 
+%             if rendering == 1
+%                 hb              = bar(labels,meanvalue', 'EdgeColor', 'none', 'facecolor', 'flat');hold on;
+%                 hb(2).FaceColor = [0.8,0.8,0.8];            
+%                 hb(1).FaceColor = [0 ,0.4470,0.7410];
+%                 hb(1).FaceColor = 'flat';
+%             else
+                hb              = bar(labels,meanvalue(1,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0 ,0.4470,0.7410]);hold on;
+                hb(2)           = bar(labels,meanvalue(2,:)', 'EdgeColor', 'none', 'facecolor', 'flat', 'FaceColor', [0.8,0.8,0.8]);hold on;
+                hb(1).FaceColor = 'flat';
+%             end
+            shuffle_values  = value(idx(:,2),:,:);
+            shuffle_sem     = value(idx(:,1),:,:);
+            shuffle_mean    = meanvalue(2,:)';
+            value           = value(idx(:,1),:,:);
+            sem_values      = sem_values(idx(:,1));
+            meanvalue       = meanvalue(1,:)';
+        else
+            hb              = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
+            colororder(viridis(N_conditions))
+        end
         
-        newnames = oldnames;
-        for el = 1:numel(oldnames)
-            if ~contains(oldnames{el}, 'scramble')
-                newnames{el} = pairs{find(~cellfun(@isempty, (strfind(pairs, oldnames{el})))), 2};
+        max_scores = [];
+        if nargin >= 8 && isstruct(varargin{1})
+            ml_parameters = varargin{1};
+            if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(oldnames)
+                max_scores = ml_parameters.max_score(1:2:end);
+            elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(meanvalue)
+                max_scores = ml_parameters.max_score(1:2:end);                
             end
         end
         
-        labels = renamecats(labels,oldnames,newnames);
-        fig_handle = figure();clf();
-        fig_handle.Position(4) = fig_handle.Position(4)*1.3;
-        if contains(oldnames{el}, 'scramble')
-            idx = reshape(reshape(1:numel(meanvalue),2,numel(meanvalue)/2)',[],2);
-            labels = removecats(labels,oldnames(idx(:,2)));
-            labels = labels(~isundefined(labels));
-            meanvalue = meanvalue(idx)'; 
-            hb = bar(labels,meanvalue', 'EdgeColor', 'none');hold on;
-            hb(2).FaceColor = [0.8,0.8,0.8];
-            hb(1).FaceColor = [0 ,0.4470,0.7410];
-            value = value(idx(:,1),:,:);
-            sem_values = sem_values(idx(:,1));
-            meanvalue = meanvalue(1,:)';
-        else
-            hb = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
-            colororder(viridis(N_conditions))
+        if ~isempty(max_scores)
+            w = hb(1).BarWidth/2;
+            for el = 1:numel(max_scores)
+                plot([el-w,el+w] ,[max_scores(el), max_scores(el)],'r:', 'LineWidth',2)
+            end
         end
 
         %% Add error bars. This needs a trick for categorical data
@@ -126,9 +158,9 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
         x = [];
         for i = 1:nbars
             x = [x ; hb(i).XEndPoints];
-            scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
+            %scatter(hb(i).XEndPoints, value(:,:,i), 'MarkerEdgeColor','none', 'MarkerFaceColor', 'k', 'MarkerFaceAlpha', 0.15); hold on;
         end
-        if contains(oldnames{el}, 'scramble')
+        if any(contains(oldnames, 'shuffle'))
             errorbar(x(1,:)',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
         else
             errorbar(x',meanvalue,sem_values,'k','linestyle','none','LineWidth',2,'CapSize',0);hold on;
@@ -140,7 +172,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
 
         if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 2)
             legend(condition_labels);
-        elseif  ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
+        elseif ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 2)
             error(['labels must be a string array of ', num2str(size(meanvalue, 2)), ' elements'])
         end
         
@@ -150,17 +182,36 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
     end
     stats_results = {};    
     if do_stats
+        stats_results.equalvariances = vartestn(value','TestType','LeveneAbsolute','Display','off') > 0.05;
         [stats_results.p,stats_results.table,stats_results.stats] = kruskalwallis(value',[],'off');
-        if rendering
-            stat_disp = 'on';
-        else
+%         if rendering
+%             stat_disp = 'on';
+%         else
             stat_disp = 'off';
+%         end
+        
+        ignore_list = [];
+        if ~isempty(shuffle_values)
+            for beh = 1:size(value,1)
+                stats_results.shuffle_stat(beh) = ranksum(value(beh,:),shuffle_values(beh,:));
+                if stats_results.shuffle_stat(beh) >= 0.05
+                    hb(1).CData(beh,:) = [0.6,0.6,0.6];
+                    ignore_list(end+1) = beh;
+                end
+            end            
+        end
+        
+        if numel(ignore_list) > 1
+            ignore_list = nchoosek(ignore_list,2);
+        else
+            ignore_list = [];
         end
         
         if stats_results.p < 0.05
             disp('some conditions are significantly different from others')
             [stats_results.p,stats_results.table,stats_results.stats]   = kruskalwallis(value', labels, stat_disp);
             stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+
             if rendering
                 figure(fig_handle)
                 ns = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
@@ -168,6 +219,12 @@ function [meanvalue, sem_values, fig_handle, stats_results, value] = bar_chart(r
                 p0_001 = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2,6]);
                 p_strong = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.001, [1,2,6]);
 
+                if ~isempty(ignore_list)
+                    p0_01 = p0_01(~ismember(p0_01(:,[1,2]), ignore_list, 'rows'),:);
+                    p0_001 = p0_001(~ismember(p0_001(:,[1,2]), ignore_list, 'rows'),:);
+                    p_strong = p_strong(~ismember(p_strong(:,[1,2]), ignore_list, 'rows'),:);
+                end
+                
                 [M,loc] = max(meanvalue);
                 M = M + sem_values(loc);
                 step = (100 - M)/ (sum(stats_results.multi_comp(:,6) < 0.05)+1);
@@ -194,7 +251,7 @@ function [hl,ht] = overbar(x1, x2, y, txt)
     sz = get(gca,'FontSize');
     %bg = get(gca,'Color');
     d = 1; % size of hook, change depending on y axis scaling
-    hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2);
+    hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2, 'Color',[0.3,0.3,0.3]);
     ht = text((x1+x2)/2, y+d, txt, ...
               'HorizontalAlignment','center', ...
               'VerticalAlignment','middle', ... 
