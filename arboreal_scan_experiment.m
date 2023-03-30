@@ -34,7 +34,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         auto_save_figures = false
 
         %% Analysis/extraction settings
-        filter_win      = [0, 0];
         filter_type     = 'gaussian';
         dim_red_type    = 'pca'
         peak_thr        = 2;
@@ -43,6 +42,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         detrend         = false;
         is_detrended    = false; % is set to True once you ran the detrending once.
         is_rescaled     = false; % is set to True once you ran the rescaling step.
+        time_smoothing          = [0, 0];       % 
         default_handle
         rescaling_method= 'by_trials_on_peaks'; 
         breakpoints     = []; % if you had a disruptive event during th experiment, a first scaling is done with large blocks
@@ -353,7 +353,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.auto_save_figures   = false;
 
             %% Analysis/extraction settings
-            obj.filter_win      = [0, 0];
+            obj.time_smoothing      = [0, 0];
             obj.filter_type     = 'gaussian';
             obj.dim_red_type    = 'pca';
             obj.peak_thr        = 2;
@@ -553,14 +553,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
         
-        function set.filter_win(obj, filter_win)
+        function set.time_smoothing(obj, time_smoothing)
             %% Defines the gaussian filtering window to use across analyses
             % -------------------------------------------------------------
             % Syntax:
-            %   obj.filter_win = filter_win;
+            %   obj.time_smoothing = time_smoothing;
             % -------------------------------------------------------------
             % Inputs:
-            %   filter_win (FLOAT OR 2x1 FLOAT)
+            %   time_smoothing (FLOAT OR 2x1 FLOAT)
             %   symetrical or asymetrical gaussian filter applied to all
             %   traces. negative values indicates that the value is in
             %   second, and conversion into timepoints is done
@@ -579,22 +579,22 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % See also : 
             
             
-            if all(isnumeric(filter_win)) && numel(filter_win) == 2 && all(filter_win == obj.filter_win)
+            if all(isnumeric(time_smoothing)) && numel(time_smoothing) == 2 && all(time_smoothing == obj.time_smoothing)
                 %% no change, pass                
-            elseif all(isnumeric(filter_win)) && numel(filter_win) == 1 || numel(filter_win) == 2 
+            elseif all(isnumeric(time_smoothing)) && numel(time_smoothing) == 1 || numel(time_smoothing) == 2 
                 try
-                    filter_win(filter_win < 0)  = filter_win(filter_win < 0) * nanmedian(1./obj.timescale.sr);
-                    filter_win                  = abs(round(filter_win));
-                    if numel(filter_win) == 2 && all(filter_win == obj.filter_win)
+                    time_smoothing(time_smoothing < 0)  = time_smoothing(time_smoothing < 0) * nanmedian(1./obj.timescale.sr);
+                    time_smoothing                  = abs(round(time_smoothing));
+                    if numel(time_smoothing) == 2 && all(time_smoothing == obj.time_smoothing)
                         %% no change, but the value was initially in seconds so we only see it here. Then do nothing
                         return
                     end
                 end
-                filter_win                  = abs(round(filter_win));                
-                if numel(filter_win)    == 1                 
-                    filter_win = [filter_win, filter_win];
+                time_smoothing                  = abs(round(time_smoothing));                
+                if numel(time_smoothing)    == 1                 
+                    time_smoothing = [time_smoothing, time_smoothing];
                 end
-                obj.filter_win              = filter_win;
+                obj.time_smoothing              = time_smoothing;
                 if isfield(obj.binned_data, 'median_traces') && ~isempty(obj.binned_data.median_traces) %empty upon initialization, in which case we do not care
                     warning('Changing the filter window affects several preprocessing steps. Metaanalysises fields were reset')
                     obj.reset();
@@ -620,7 +620,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % -------------------------------------------------------------
             % Extra Notes:
             %  * If obj.detrend > 0, detrending is performed here
-            %  * If filter_win  > 0, time smoothing is done here
+            %  * If time_smoothing  > 0, time smoothing is done here
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -645,8 +645,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Time smoothing if required
-            if any(obj.filter_win)
-                extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.filter_win), extracted_traces, 'UniformOutput', false);
+            if any(obj.time_smoothing)
+                extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.time_smoothing), extracted_traces, 'UniformOutput', false);
             end
         end
 
@@ -664,7 +664,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   the population recording
             % -------------------------------------------------------------
             % Extra Notes:
-            %  * If filter_win  > 0, time smoothing is done here
+            %  * If time_smoothing  > 0, time smoothing is done here
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -701,7 +701,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             extracted_traces_conc = vertcat(obj.extracted_traces{:});
             extracted_traces_conc(isinf(extracted_traces_conc))    = NaN;
-            %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
+            %figure(666);cla();plot(normalize_sig(smoothdata(extracted_traces_conc,'gaussian',obj.time_smoothing)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
         function extracted_pop_conc = get.extracted_pop_conc(obj)
@@ -726,7 +726,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   14/04/2022
 
             extracted_pop_conc = vertcat(obj.extracted_pop{:});
-            % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',obj.filter_win)', '', 'norm_method','dF/F0','percentile',10)')
+            % figure(666);cla();plot(normalize_sig(smoothdata(extracted_pop_conc,'gaussian',obj.time_smoothing)', '', 'norm_method','dF/F0','percentile',10)')
         end
 
         function timescale = get.timescale(obj)
@@ -2715,13 +2715,13 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         end
 
 
-        function process(obj, condition, filter_win, rendering)
+        function process(obj, condition, time_smoothing, rendering)
             %% Call all processing steps
             if nargin < 2 || isempty(condition)
                 condition = {'distance',Inf};
             end
-            if nargin > 3 && ~isempty(filter_win)
-                obj.filter_win = filter_win;
+            if nargin > 3 && ~isempty(time_smoothing)
+                obj.time_smoothing = time_smoothing;
             end
             if nargin >= 4 && ~isempty(rendering)
                 obj.rendering = rendering;

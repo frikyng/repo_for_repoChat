@@ -454,9 +454,9 @@ classdef arboreal_scan_dataset < handle
         
 %         function extracted_traces = get.extracted_traces(obj)
 %             extracted_traces = obj.extracted_traces;
-%             if ~isempty(obj.current_expe) && ~isempty(extracted_traces{obj.current_expe}) && any(obj.filter_win)
+%             if ~isempty(obj.current_expe) && ~isempty(extracted_traces{obj.current_expe}) && any(obj.time_smoothing)
 %                 temp = extracted_traces{obj.current_expe};
-%                 extracted_traces{obj.current_expe} = cellfun(@(x) smoothdata(x, 1, obj.filter_type, obj.filter_win), temp, 'UniformOutput', false);
+%                 extracted_traces{obj.current_expe} = cellfun(@(x) smoothdata(x, 1, obj.filter_type, obj.time_smoothing), temp, 'UniformOutput', false);
 %             end
 %         end
     end

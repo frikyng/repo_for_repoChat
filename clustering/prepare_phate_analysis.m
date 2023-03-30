@@ -55,8 +55,8 @@ function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_a
     
     if nargin < 3 || isempty(time_filter)
         %% use default obj.time_filter
-    elseif ~all(obj.filter_win == time_filter)
-        obj.filter_win = time_filter;
+    elseif ~all(obj.time_smoothing == time_filter)
+        obj.time_smoothing = time_filter;
     else
         %% keep current obj.time_filter
     end

@@ -20,7 +20,7 @@ clearvars -except obj
 %% set various parameters number of PHATE loadings
 N_Dim = 10;     % # of PHATE loadings
 analysis_mode = 'space';
-obj.filter_win = [0, 0];    % ensure no smoothing/no introduction of temporal correlation
+obj.time_smoothing = [0, 0];    % ensure no smoothing/no introduction of temporal correlation
 conditions = {''};%,'~encoder_active'}
 source_signal = obj.rescaled_traces;
 
