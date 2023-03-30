@@ -2262,7 +2262,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                     specVarPM           = [];
                     F                   = [];
             end
-
+            
+            % color map of LoadingsPM dim 1,2,3 (e.g. phate plot to better see extrema)
+            color = [1:size(LoadingsPM,1)];
+            figure();scatter3(LoadingsPM(:,1),LoadingsPM(:,2),LoadingsPM(:,3),[],color,'filled'); colormap redbluecmap;
+                                    
             %% Store results
             obj.dimensionality.LoadingsPM           = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
             obj.dimensionality.specVarPM            = specVarPM;
@@ -2565,7 +2569,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 idx_filter = obj.ref.indices.somatic_ROIs;
             end
             if nargin < 3 || isempty(thr_for_detection)
-                thr_for_detection = 0.2;
+                thr_for_detection = 0.8; % to discuss
             end
             if nargin < 4 || isempty(method)
                 method = 'corr';
@@ -2668,9 +2672,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 
                 figure(1031);clf();subplot(1,2,1);set(gcf, 'Color','w');
                 title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);
-                plot(smoothdata(reference_trace,'gaussian',[20,0]),'k'); hold on;
                 plot(smoothdata(bad_traces,'gaussian',[20,0]),'r');hold on;
                 plot(smoothdata(recoverable,'gaussian',[20,0]),'b');
+                plot(smoothdata(reference_trace,'gaussian',[20,0]),'k'); hold on;
+                ylabel('Z Score Ca^{2+} Signal','FontSize',16);xlabel('Frames','FontSize',16)
                 
                 %% Plot normalized excluded traces
                 ax = subplot(1,2,2);
@@ -2680,6 +2685,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 color_code(excl,:) = repmat([0.8,0.8,0.8], sum(excl), 1);
                 plot_many_traces(smoothdata(obj.extracted_traces_conc,'gaussian',[20,0]), ax);
                 colororder(ax, color_code);
+                ylabel('All ROIs','FontSize',16);xlabel('Frames','FontSize',16)
                 
                 %% Plot location of excluded traces
                 f = obj.ref.plot_value_tree(obj.bad_ROI_list, 1:numel(obj.bad_ROI_list), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','redblue'); hold on;
@@ -2780,7 +2786,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_analysis = true
+            obj.auto_save_analysis = false;
             if obj.auto_save_figures
                 obj.save_figures();
             end
