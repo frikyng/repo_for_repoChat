@@ -105,7 +105,7 @@ classdef behaviours_analysis < handle
                 error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. Values < 0 indicate a window in points')
             end
             
-            if  any(obj.beh_smoothing < 0)
+            if any(obj.beh_smoothing < 0)
                 1
             end
         end

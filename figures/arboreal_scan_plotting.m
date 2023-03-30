@@ -324,6 +324,168 @@ classdef arboreal_scan_plotting < handle
             title(trace_handle, 'Signal average using Loadings as weight');xlabel('Time (s)');
             %legend();set(gcf,'Color','w');
         end
+        
+        function [tree, soma_location, tree_values, mean_bin_cc] = plot_corr_tree(obj, cc, ref_column)
+            if nargin < 2 || isempty(cc)
+                cc = obj.crosscorr;
+                if contains(obj.cc_mode,'pop')
+                    pop_sz = size(obj.extracted_pop_conc,2);
+                    cc = cc(1:(end-pop_sz),1:(end-pop_sz));
+                end
+            end
+            if nargin < 3
+                ref_column = [];
+            end
+
+            %% Erase diagonal
+            cc(1:size(cc,1)+1:end)= NaN;
+
+            %% Remove "ref" row/column when you pass a matrix with one row per ROI
+            if size(cc,1) > 2 && (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
+                cc = cc(2:end,2:end);
+            end
+
+            %% If no ref were provided, we will use the average correlation
+            if isempty(ref_column)
+                ref_column = 1:size(cc,1);
+            end
+
+            %%
+            if contains(obj.cc_mode,'groups')
+                %% Identify valid set of traces
+                valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
+
+                %% Build tree values per bin
+                mean_bin_cc     = [];
+                ROIs_list       = [];
+                if ~isempty(cc)
+                    for gp = 1:numel(obj.binned_data.groups)
+                        roi_of_gp           = obj.binned_data.groups{gp};
+                        %roi_of_gp           = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
+                        v_of_gp             = cc(ref_column,gp);
+                        ROIs_list           = [ROIs_list, roi_of_gp];
+                        mean_bin_cc         = [mean_bin_cc, repmat(nanmean(v_of_gp), 1, numel(roi_of_gp))];
+                    end
+                end
+            else
+                ROIs_list   = obj.ref.indices.valid_swc_rois;
+                mean_bin_cc = cc(:,find(obj.dimensionality.valid_trace_idx, 1, 'first'));
+            end
+
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
+            caxis([0,1]);
+            col = colorbar; col.Label.String = 'Spatial correlation between ROIs/groups with soma';
+
+%
+%             [S,Q] = genlouvain(double(cc),[],[],1);
+%             [a,b] = sort(S);
+%             figure(1008);clf();imagesc(cc(b,b))
+%             obj.ref.plot_value_tree(S,'','','','',124,'ddd','lines');
+%             R = unique(S);
+%             colorbar('Ticks',R);
+%             caxis([nanmin(R)-0.5, nanmax(R)+0.5])
+%             colormap(lines(numel(unique(S))));
+%
+%             figure(125);clf();
+%             for community = R'
+%                 plot(nanmean(obj.extracted_traces_conc(:,S == community),2)); hold on;
+%             end
+        end
+        
+        function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle, cmap, tree_type)
+            % check 58, % noise issue 64 'D:/Curated Data/2019-09-24/experiment_1/18-13-20/'
+            if nargin < 2 || isempty(comp)
+                comp        = 0;
+            end
+            if nargin < 3 || isempty(fig_handle)
+                fig_handle = 2000;% fig number or fig hande
+            end
+            if nargin < 4 || isempty(cmap)
+                cmap       = 'redbluesymmetrical';
+            end
+            if nargin < 5 || isempty(tree_type)
+                tree_type  = 'simple';
+            end
+            figure(fig_handle);clf();
+
+            %% If you asked more dimensions than tavailable diemsnions, clip the list
+            if any(comp)
+                comp(comp > size(obj.dimensionality.LoadingsPM, 2)) = [];
+            end
+            
+            %% Recover Factors / Loadings
+            LoadingsPM  = obj.dimensionality.LoadingsPM;
+            Valid_ROIs  = obj.dimensionality.all_ROIs(obj.dimensionality.valid_trace_idx);
+            values      = NaN(numel(comp), numel(Valid_ROIs));
+            [~, loc]    = nanmax(obj.dimensionality.LoadingsPM,[],2);
+            
+            %% Prepare rendering
+            N_Dim = numel(comp);
+            n_row = floor(sqrt(N_Dim));
+            n_col = ceil(numel(comp) / n_row);
+
+            %% Plot components (or strongest factor location if comp == 0)
+            tiledlayout(n_row, n_col, 'Padding', 'none', 'TileSpacing', 'none'); 
+            for comp_idx = 1:numel(comp)
+                ax = nexttile; % a bit beter than subplot, but if you have matlab < 2019b, you can use the line below
+                %ax = subplot(n_row, n_col, comp_idx);
+                dim = comp(comp_idx);
+                for roi = 1:numel(Valid_ROIs)
+                    if dim
+                        values(comp_idx, roi) = LoadingsPM(roi, dim);
+                    else                        
+                        values(comp_idx, roi) = loc(roi);
+                    end
+                end
+
+                %% Map dimension weights on the tree
+                if obj.rendering || ishandle(fig_handle)
+                    if dim
+                        titl = ['Component ',num2str(dim), ' weights'];
+                    else
+                        titl = 'Location of strongest component';
+                        cmap = jet(nanmax(values));
+                        cmap = cmap(values, :);
+                    end  
+                    
+                    if obj.use_hd_data
+                        [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(split_values_per_voxel(values(comp_idx, :), obj.ref.header.res_list(1:obj.ref.indices.n_tree_ROIs,1), signal_indices), '','',['phate #',num2str(dim),' Loadings (per voxel)'],'',ax,tree_type,cmap);
+                    else
+                    	[f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values(comp_idx, :), Valid_ROIs,'',titl,'',ax,tree_type,cmap);
+                    end
+                end
+            end
+        end
+
+        function [tree, soma_location, tree_values, values] = plot_distance_tree(obj, bin)
+            if nargin < 2 || isempty(bin)
+                bin = [];
+            end
+            [tree, soma_location, tree_values, values] = obj.ref.plot_dist_tree(bin);
+        end
+
+        %         function [tree, soma_location, tree_values, values] = plot_seg_length_tree(obj)
+        %             %% Map dimension weights on the tree
+        %             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(Pvec_tree(obj.ref.simplified_tree{1}), '', '', 'Segment length');
+        %         end
+
+
+        function animate_experiment(obj, values, timepoints, ROIs, color_range)
+            if nargin < 2 || isempty(values)
+                values = obj.rescaled_traces;
+            end
+            if nargin < 3 || isempty(timepoints)
+                timepoints = 1:size(values,1);
+            end
+            if nargin < 4 || isempty(ROIs)
+            	ROIs =  obj.ref.indices.complete_ROIs_list(:,1);
+            end
+            if nargin < 5 || isempty(color_range)
+            	color_range = [nanmin(values(:)),nanmax(values(:))];
+            end
+
+            obj.ref.animate_tree(values, timepoints, ROIs, color_range)
+        end
     end
 end
 
