@@ -1,5 +1,5 @@
 function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, cost, ml_parameters)
-    if nargin < 6 || isempty(ml_parameters)
+    if nargin < 5 || isempty(ml_parameters)
         ml_parameters = DEFAULT_CLASSIFIER_OPTION;
     else
         ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
