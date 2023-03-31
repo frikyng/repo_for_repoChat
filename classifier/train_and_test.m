@@ -152,7 +152,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             plot_prediction(calcium_ref, current_obs, timepoints, partition, y_predict, current_raw_behaviour , type, score(mdl_idx,:), mdl_idx);
         end
 
-        if ml_parameters.save_level < 2
+        if ml_parameters.saving_level < 2
             out.calcium                     = [];
             out.full_beh{mdl_idx}           = [];
             out.predictors                  = [];

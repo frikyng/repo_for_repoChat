@@ -98,8 +98,8 @@ function params = DEFAULT_CLASSIFIER_OPTION(varargin)
             if (strcmpi(varargin{i},'add_shuffle'))
                 params.add_shuffle = varargin{i+1};
             end
-            if (strcmpi(varargin{i},'save_level'))
-                params.save_level = varargin{i+1};
+            if (strcmpi(varargin{i},'saving_level'))
+                params.saving_level = varargin{i+1};
             end
             if (strcmpi(varargin{i},'obs_shuf_block_sz'))
                 params.obs_shuf_block_sz = varargin{i+1};
