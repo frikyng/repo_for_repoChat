@@ -118,13 +118,16 @@ classdef signal_manipulation < handle
             % See also : find_bad_ROIs
 
             if value < 0 || value > 1
-                error('Cutoff must be between 0 and 1')
+                obj.disp_info('Cutoff must be between 0 and 1',4)
+            elseif isequal(obj.bad_ROI_thr,value)
+                % pass
             else
                 obj.bad_ROI_thr = value;
+                obj.disp_info('Changing bad_ROI_thr may discard/included new ROIs. It is recommended to call obj.reset() and reprocess the data',3)
                 a = dbstack();
-                if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting or initializing
-                  %  obj.find_bad_ROIs();
-                end
+%                 if ~contains([a.name], 'arboreal_scan_experiment.reset') % not useful when resetting or initializing
+%                     obj.find_bad_ROIs();
+%                 end
             end
         end
         
@@ -151,10 +154,10 @@ classdef signal_manipulation < handle
             % Revision Date:
             %   19/10/2022
             %
-            % See also : 
-            
+            % See also :             
             
             if all(isnumeric(time_smoothing)) && numel(time_smoothing) == 2 && all(time_smoothing == obj.time_smoothing)
+                obj.disp_info('No change detected in time smoothing',1)
                 %% no change, pass                
             elseif all(isnumeric(time_smoothing)) && numel(time_smoothing) == 1 || numel(time_smoothing) == 2 
                 try
@@ -162,6 +165,7 @@ classdef signal_manipulation < handle
                     time_smoothing                  = abs(round(time_smoothing));
                     if numel(time_smoothing) == 2 && all(time_smoothing == obj.time_smoothing)
                         %% no change, but the value was initially in seconds so we only see it here. Then do nothing
+                        obj.disp_info('No change detected in time smoothing',1)
                         return
                     end
                 end
@@ -169,13 +173,10 @@ classdef signal_manipulation < handle
                 if numel(time_smoothing)    == 1                 
                     time_smoothing = [time_smoothing, time_smoothing];
                 end
-                obj.time_smoothing              = time_smoothing;
-                if isfield(obj.binned_data, 'median_traces') && ~isempty(obj.binned_data.median_traces) %empty upon initialization, in which case we do not care
-                    warning('Changing the filter window affects several preprocessing steps. Metaanalysises fields were reset')
-                    obj.reset();
-                end
+                obj.time_smoothing              = time_smoothing;               
+                obj.reset();
             else
-                error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 11, window is converted in seconds')
+                obj.disp_info('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. If values are < 1, window is converted in seconds',4)
             end
         end
         

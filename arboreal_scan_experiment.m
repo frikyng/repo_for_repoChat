@@ -42,7 +42,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
         auto_save_analysis      = false         % If true, the arboreal_scan_experiment object is saved automatically after calling obj.process
         auto_save_figures       = false         % If true, analysis figures from obj.process() are saved automatically
 
-        peak_thr                = 2;
         default_handle
         variability_metric      = 'vmr'         % Defines the mretic that will be used to comput signal or events variability (vmr or cv)        
 
@@ -297,9 +296,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
 
                 %% Clear all fields
                 obj.reset();
-                for field = {'arboreal_scans','binned_data','rescaling_info','event','variability','dimensionality'}
-                    obj.(field{1}) = {};
-                end
+                obj.arboreal_scans = {};
 
                 %% Rebuild from extracted arboreal_scans
                 for el = fliplr(find(obj.need_update))
@@ -325,13 +322,16 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
         end
 
-        function reset(obj)
+        function reset(obj, deep_reset)
             %% Reset all analyzed fields
             % -------------------------------------------------------------
             % Syntax:
             %   EXPE.reset()
             % -------------------------------------------------------------
             % Inputs:
+            %   deep_reset(BOOL) - Optional - default is false
+            %       if true, all the trace manipulation options are reset
+            %       too
             % -------------------------------------------------------------
             % Outputs:
             % -------------------------------------------------------------
@@ -343,7 +343,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             % Revision Date:
             %   14/04/2022
 
-            obj.disp_info('ALL FIELDS HAVE BEEN RESET', 3)
+            if nargin < 2 || isempty(deep_reset)
+                deep_reset = false;
+            end
+            
+            if deep_reset
+                obj.disp_info('ALL FIELDS AND OPTIONS HAVE BEEN RESET', 3)
+            else
+                obj.disp_info('Analysis Fields have been reset. Other settings (smoothing options, thresholds etc...) were conserved', 2)
+            end
             
             %% Saving options
             obj.demo                = 0;
@@ -351,28 +359,29 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             obj.auto_save_figures   = false;
 
             %% Analysis/extraction settings
-            obj.time_smoothing  = [0, 0];
-            obj.filter_type     = 'gaussian';
-            obj.peak_thr        = 2;
-            obj.bad_ROI_thr     = 0;
-            obj.cc_mode         = 'groups_peaks'; % or raw
-            obj.detrend         = false;
-            obj.is_rescaled     = false; % is set to True once you ran the rescaling step.
-            obj.rescaling_method= 'by_trials_on_peaks';
-            obj.breakpoints     = []; % if you had a disruptive event during the experiment, a first scaling is done with large blocks
-
+            if deep_reset
+                obj.time_smoothing      = [0, 0];
+                obj.filter_type         = 'gaussian';
+                obj.peak_thr            = 2;
+                obj.bad_ROI_thr         = 0.2;
+                obj.cc_mode             = 'groups_peaks'; % or raw
+                obj.detrend             = false;
+                obj.is_rescaled         = false; % is set to True once you ran the rescaling step.
+                obj.rescaling_method    = 'by_trials_on_peaks';
+                obj.breakpoints         = []; % if you had a disruptive event during the experiment, a first scaling is done with large blocks
+            end
             
             %% All the fields computed in
-            obj.binned_data     = [];	% Defines how ROIs are grouped
-            obj.rescaling_info  = [];   % Defines how each ROi get rescaled to match the cell median
-            obj.event           = [];   % Event detection output (event times, amplitude, correlation etc....)
-            obj.variability     = [];   % Signal variability over time
-            obj.dimensionality  = [];   % Results of diemensionality reduction
-            obj.behaviours      = [];   % List of available behaviours
-            obj.spiketrains     = [];   % If available, spike inference results
-            obj.bad_ROI_list    = [];   % list of uncorrelated ROIs (following event detection)
-            obj.updatable       = [];   % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
-            obj.crosscorr       = [];   % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+            obj.binned_data         = [];	% Defines how ROIs are grouped
+            obj.rescaling_info      = [];   % Defines how each ROi get rescaled to match the cell median
+            obj.event               = [];   % Event detection output (event times, amplitude, correlation etc....)
+            obj.variability         = [];   % Signal variability over time
+            obj.dimensionality      = [];   % Results of diemensionality reduction
+            obj.behaviours          = [];   % List of available behaviours
+            obj.spiketrains         = [];   % If available, spike inference results
+            obj.bad_ROI_list        = [];   % list of uncorrelated ROIs (following event detection)
+            obj.updatable           = [];   % If arboreal_scan are still available, you could update the arboreal_scan_experiment compression
+            obj.crosscorr           = [];   % Correlation of peaks/signal across ROIs/groups during/between bAps/activity_bouts
         end
 
         %% ########### GET METHODS ###################
