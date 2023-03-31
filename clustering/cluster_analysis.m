@@ -1,6 +1,7 @@
 classdef cluster_analysis < handle
     %% Subclass of arboreal_scan_experiment
     properties
+        dbscan_min_gp_size = 4
     end
 
     methods
@@ -34,18 +35,18 @@ classdef cluster_analysis < handle
                 if strcmp(obj.dimensionality.clust_meth, 'kmeans')
                     eva = evalclusters(obj.dimensionality.LoadingsPM,'kmeans','silhouette','KList',R);
                     obj.dimensionality.N_clust = eva.OptimalK;
-                    fprintf(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
+                    obj.disp_info(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust)],1)
                 elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical')
                     eva = evalclusters(obj.dimensionality.LoadingsPM,'linkage','silhouette','KList',R);
                     obj.dimensionality.N_clust = eva.OptimalK;
-                    fprintf(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust), '\n'])
+                    obj.disp_info(['Optimal number of clusters is ',num2str(obj.dimensionality.N_clust)],1)
                 elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
                     obj.dimensionality.epsilon = test_epsilon(obj, obj.dimensionality.LoadingsPM);
-                    fprintf(['Optimal espilon s ',num2str(obj.dimensionality.epsilon), '\n'])
+                    obj.disp_info(['Optimal espilon s ',num2str(obj.dimensionality.epsilon)])
                 elseif strcmp(obj.dimensionality.clust_meth, 'strongest')
                     obj.dimensionality.N_clust = NaN;
                 else
-                    error(['No auto auto-determination of the number of cluster for this method\n'])
+                    obj.disp_info('No auto auto-determination of the number of cluster for this method',4)
                 end
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
                 if obj.dimensionality.N_clust > 0
@@ -57,15 +58,17 @@ classdef cluster_analysis < handle
             end
             
             if strcmp(obj.dimensionality.clust_meth, 'kmeans')
+                obj.disp_info('Clustering done using KMEANS',1)
                 cluster_idx = kmeans(obj.dimensionality.LoadingsPM , obj.dimensionality.N_clust);
                 figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
             elseif strcmp(obj.dimensionality.clust_meth, 'hierarchical') % see https://fr.mathworks.com/help/stats/hierarchical-clustering.html
+                obj.disp_info('Clustering done using hierarchical clustering',1)
                 cluster_idx = clusterdata(obj.dimensionality.LoadingsPM,'Linkage', 'ward', 'MAXCLUST', obj.dimensionality.N_clust);%, 'Criterion','distance' 'MAXCLUST', 40)
                 figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
                 %Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');Z = linkage(Y,'ward');figure();dendrogram(Z);                                
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
-                MIN_GP = 4
-                cluster_idx                 = dbscan(obj.dimensionality.LoadingsPM, obj.dimensionality.epsilon, MIN_GP, 'Distance', 'euclidean');
+                obj.disp_info('Clustering done using dbscan',1)
+                cluster_idx                 = dbscan(obj.dimensionality.LoadingsPM, obj.dimensionality.epsilon, obj.dbscan_min_gp_size, 'Distance', 'euclidean');
                 obj.dimensionality.N_clust  = numel(unique(cluster_idx(cluster_idx > 0)));
                 if any(cluster_idx <= 0)
                     col = UNASSIGNED_ROI_COLOR;
@@ -86,6 +89,7 @@ classdef cluster_analysis < handle
                     scatter3(obj.dimensionality.LoadingsPM (:,1+offset),obj.dimensionality.LoadingsPM (:,2+offset),obj.dimensionality.LoadingsPM (:,3+offset),20,obj.dimensionality.labels, 'filled');
                 end               
             elseif strcmp(obj.dimensionality.clust_meth, 'strongest')
+                obj.disp_info('No clustering, but assigning each ROI the value of its strongest component',1)
                 %% To assign to strongest component
                 for row = 1:size(LoadingsPM,1)
                     [~, maxloc]                     = max(LoadingsPM(row, :));
@@ -99,6 +103,7 @@ classdef cluster_analysis < handle
             
             %% Sort clusters by number of elements
             if obj.dimensionality.N_clust > 0
+                obj.disp_info('Cluster number is sorted by number of ROI',1)
                 [~, gp] = sort(hist(cluster_idx,unique(cluster_idx)), 'descend');
             else
                 gp = 1;
@@ -126,9 +131,7 @@ classdef cluster_analysis < handle
                 obj.plot_cluster_tree();
             end
             obj.disp_info({['Clustering of dimensionality-rediuced data done using ',obj.dimensionality.clust_meth],...
-                           [obj.dimensionality.N_clust, ' have been identified']},1)
-            
-            
+                           [num2str(obj.dimensionality.N_clust), ' clusters have been identified']},1)
         end
     end
 end

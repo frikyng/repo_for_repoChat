@@ -1164,7 +1164,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             obj.binned_data.norm_cumsum = norm_cumsum;
             figure(1007);cla();plot(norm_cumsum); hold on;set(gcf,'Color','w');xlabel('Event #');ylabel('normalized cumulative amplitude')
             title('cumulative sum of peaks'); ylim([0, 1]);legend(obj.binned_data.bin_legend,'Location','southeast');
-            obj.disp_info('Detected events statistics computed. See ',1);
+            obj.disp_info('Detected events statistics computed. See obj.binned_data for the group-specific values',1);
         end
 
         function norm_vmr = compute_variability(obj, metric)   
@@ -1729,7 +1729,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             obj.get_events_statistics();
 
             %% Compute signal variability
-            obj.compute_variability()
+            obj.compute_variability();
 
             %% Check how correlated are the peaks between different parts of the tree
             obj.get_correlations();
@@ -1752,7 +1752,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_analysis = true
+            obj.auto_save_analysis = false;
             if obj.auto_save_figures
                 obj.save_figures();
             end
