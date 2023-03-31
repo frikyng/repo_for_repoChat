@@ -29,6 +29,11 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
             test_tp     = find(test(partition));
         end
     end
+    
+%     train_tp = sort(train_tp)
+%     test_tp = sort(test_tp);
+%     
+    
     y_train     = YData(train_tp);              % Variable to predict used for training  
     y_test      = YData(test_tp);               % Variable to predict used for testing (ground truth) 
         
@@ -77,4 +82,17 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
 
     linkaxes([ax1, ax2, ax3],'x')
     drawnow
+    
+    if contains(behaviour_name, 'shuffle')
+        temp_test = evalin('base','temp_test');
+        temp_predict = evalin('base','temp_predict');
+
+        temp_predict = [temp_predict; y_predict];
+        temp_test = [temp_test; y_test'];
+
+
+        assignin('base','temp_test',temp_test);
+        assignin('base','temp_predict',temp_predict)
+        %figure(6);clf();scatter(y_predict, y_test);
+    end
 end

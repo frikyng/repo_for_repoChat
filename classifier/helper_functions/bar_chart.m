@@ -30,7 +30,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     
     
     show_dots = 1
-    split_shuffle = 0
+    split_shuffle = 1
     
     N_behaviours    = 1;
     N_iter          = 1;
@@ -370,7 +370,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
             else
                 disp('the two conditions are significantly different');
                 name = categories(labels);
-                [~,stats_results.table,stats_results.stats]   = kruskalwallis([values', shuffle_values'], {name{1}, 'shuffle'}, stat_disp); % should be replaced by MW
+                [~,stats_results.table,stats_results.stats]                 = kruskalwallis([values', shuffle_values'], {name{1}, 'shuffle'}, stat_disp); % should be replaced by MW
                 stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
             end
             
@@ -387,10 +387,14 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
 
             if rendering
                 figure(fig_handle)
-                ns = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
-                p0_01 = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.05 & stats_results.multi_comp(:,6) >= 0.01, [1,2,6]);
-                p0_001 = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2,6]);
-                p_strong = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.001, [1,2,6]);
+                
+                
+                %non_parametric_chart(values, input_labels, errors)
+                
+                ns          = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
+                p0_01       = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.05 & stats_results.multi_comp(:,6) >= 0.01, [1,2,6]);
+                p0_001      = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2,6]);
+                p_strong    = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.001, [1,2,6]);
 
                 if ~isempty(ignore_list)
                     p0_01 = p0_01(~ismember(p0_01(:,[1,2]), ignore_list, 'rows'),:);
@@ -398,19 +402,19 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                     p_strong = p_strong(~ismember(p_strong(:,[1,2]), ignore_list, 'rows'),:);
                 end
                 
-                [M,loc] = max(meanvalue);
-                M = M + sem_values(loc);
-                step = (100 - M)/ (sum(stats_results.multi_comp(:,6) < 0.05)+1);
+                [M,loc]     = max(meanvalue);
+                M           = M + sem_values(loc);
+                step        = (100 - M)/ (sum(stats_results.multi_comp(:,6) < 0.05)+1);
                 for el = 1:size(p0_01, 1)
-                    M = M+step;
+                    M           = M+step;
                     overbar(p0_01(el,1) ,p0_01(el,2), M,'*'); %  ['p=',num2str(round(p0_01(el,3),3))]
                 end
                 for el = 1:size(p0_001, 1)
-                    M = M+step;
+                    M           = M+step;
                     overbar(p0_001(el,1) ,p0_001(el,2), M, '**'); %['p=',num2str(round(p0_001(el,3),3))]
                 end
                 for el = 1:size(p_strong, 1)
-                    M = M+step;
+                    M           = M+step;
                     overbar(p_strong(el,1) ,p_strong(el,2), M, '***'); %  ['p=',num2str(round(p_strong(el,3),3))]
                 end
             end
