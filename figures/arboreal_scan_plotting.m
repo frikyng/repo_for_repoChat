@@ -163,14 +163,14 @@ classdef arboreal_scan_plotting < handle
         function plot_rescaled_traces(obj)            
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
             rescaled_traces = obj.rescaled_traces(:,valid_ROIS);            
-            figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('Z-Score all ROIs');set(gcf,'Color','w');
             figure(1033);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
         function plot_original_traces(obj)            
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
             rescaled_traces = obj.extracted_traces_conc(:,valid_ROIS);            
-            figure(1055);cla();plot(obj.t, rescaled_traces);title('original traces');xlabel('time (s)');ylabel('ROIs');set(gcf,'Color','w');
+            figure(1055);cla();plot(obj.t, rescaled_traces);title('original traces');xlabel('time (s)');ylabel('Z-Score all ROIs');set(gcf,'Color','w');
             figure(1056);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('original traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         

@@ -1579,7 +1579,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                     specVarPM           = [];
                     F                   = [];
             end
-
+            
+            % color map of LoadingsPM dim 1,2,3 (e.g. phate plot to better see extrema)
+            color = [1:size(LoadingsPM,1)];
+            figure();scatter3(LoadingsPM(:,1),LoadingsPM(:,2),LoadingsPM(:,3),[],color,'filled'); colormap redbluecmap;
+                                    
             %% Store results
             obj.dimensionality.LoadingsPM           = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
             obj.dimensionality.specVarPM            = specVarPM;
@@ -1692,7 +1696,163 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
         end
         
-        function process(obj, condition, time_smoothing, rendering)
+        function find_events(obj, idx_filter, method)
+            if nargin < 2 || isempty(idx_filter)
+                idx_filter = 1:obj.n_ROIs;
+            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
+                idx_filter = obj.ref.indices.somatic_ROIs;
+            end
+            if nargin < 3 || isempty(method)
+                method = 'corr';
+            end
+
+            fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])
+
+            %% Get original traces (unscaled)
+            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
+
+            %% Get original traces
+            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering);
+            
+%             sz = vertcat(obj.event.peak_value{:});
+%             thr1 = max(sz) * 0.8;
+%             thr2 = max(sz) * 0.2;
+%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
+%             for fn = fieldnames(obj.event)'                
+%                  if numel(obj.event.(fn{1})) == numel(mask)
+%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
+%                  end
+%             end
+
+            %% Identify and log poorly correlated ROIs
+            obj.find_bad_ROIs(correlation_res, idx_filter);
+        end
+
+        function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, correlation_res, ROIs)
+            if nargin < 3 || isempty(ROIs)
+                ROIs = 1:obj.n_ROIs;
+            end      
+            mean_corr_with_others   = [];
+            bad_ROIs                = [];
+            if nargin < 2 || isempty(correlation_res)
+                warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY.  run obj.detect_events() first');                
+                return
+            else
+                events = obj.event;
+            end
+            THR_FOR_CONNECTION      = 0.2 % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
+            fprintf(['* Now detecting ROIs that are either,\n'...
+                     '      - so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).\n',...
+                     '      - are member of batch_params.excluded_branches \n',...
+                     '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])
+
+            %% Show mean correlation with each ROI
+            max_corr_for_cell       = max(events.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
+            for key = 1:numel(ROIs)
+                corr_results_sub    = correlation_res.corr_results(events.t_corr(events.is_global), correlation_res.comb(:,2) == key | correlation_res.comb(:,1) == key);
+                corr_results_sub    = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
+                mean_corr           = nanmean(corr_results_sub,1);
+                mean_corr_with_others(key) = sum(mean_corr > THR_FOR_CONNECTION);
+            end
+
+            %% Normalize to 100% (i.e. all ROIs)
+            mean_corr_with_others = mean_corr_with_others / numel(mean_corr_with_others); % renormalize to max possible corr for this cell
+
+            %% Renormalize to max possible corr for this cell
+            mean_corr_with_others_norm = mean_corr_with_others / max(mean_corr_with_others); 
+            
+            if obj.rendering
+                figure(88888);cla();hist(100*mean_corr_with_others,0:2:100); hold on; 
+                title('% of correlation with all other ROIs');set(gcf, 'Color','w')
+                xlabel('% of correlation'); ylabel('counts')
+                
+                figure(88889);cla();hist(100*mean_corr_with_others_norm,0:2:100); hold on;
+                title('% of correlation with all other ROIs (Normalized to max)');set(gcf, 'Color','w')
+                xlabel('% of correlation'); ylabel('counts')
+            end
+            
+            %% Update the obj.bad_ROI_thr field
+            if obj.bad_ROI_thr ~= THR_FOR_CONNECTION
+                obj.bad_ROI_thr = THR_FOR_CONNECTION;
+            end            
+            bad_ROIs            = mean_corr_with_others_norm < obj.bad_ROI_thr;            
+            obj.bad_ROI_list    = bad_ROIs; % below threshold % of max correlation
+            bad_ROIs            = find(bad_ROIs);
+            
+            %% ROIs that were manually excluded
+            was_excluded        = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);            
+            RECOVERY_THR        = 1 - THR_FOR_CONNECTION
+            excl_but_not_bad    = was_excluded & ~obj.bad_ROI_list';
+            excl_but_good       = was_excluded & (mean_corr_with_others_norm > RECOVERY_THR)';
+            if any(excl_but_good)
+                 fprintf(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'])
+            end
+                            
+            if obj.rendering     
+                %% Get the bad traces
+                bad_traces          = obj.extracted_traces_conc(:, find(obj.bad_ROI_list));
+                bad_traces          = bad_traces - prctile(bad_traces, 1);
+                
+                %% Get the reference trace 
+                reference_trace     = obj.global_median_raw;
+                reference_trace     = reference_trace - prctile(reference_trace, 1);
+                
+                %% Get traces that we may want to recover
+                recoverable         = obj.extracted_traces_conc(:, find(excl_but_not_bad));
+                recoverable         = recoverable - prctile(recoverable, 1);
+                
+                figure(1031);clf();subplot(1,2,1);set(gcf, 'Color','w');
+                title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);
+                plot(smoothdata(bad_traces,'gaussian',[20,0]),'r');hold on;
+                plot(smoothdata(recoverable,'gaussian',[20,0]),'b');
+                plot(smoothdata(reference_trace,'gaussian',[20,0]),'k'); hold on;
+                ylabel('Z Score Ca^{2+} Signal','FontSize',16);xlabel('Frames','FontSize',16)
+                
+                %% Plot normalized excluded traces
+                ax = subplot(1,2,2);
+                color_code = repmat([0.5,0.5,0.5], obj.n_ROIs, 1);
+                color_code(obj.bad_ROI_list,:) = repmat([1,0,0], sum(obj.bad_ROI_list), 1);
+                excl = ~ismember(obj.ref.indices.swc_list(:,1), obj.ref.indices.valid_swc_list(:,1));
+                color_code(excl,:) = repmat([0.8,0.8,0.8], sum(excl), 1);
+                plot_many_traces(smoothdata(obj.extracted_traces_conc,'gaussian',[20,0]), ax);
+                colororder(ax, color_code);
+                ylabel('All ROIs','FontSize',16);xlabel('Frames','FontSize',16)
+                
+                %% Plot location of excluded traces
+                f = obj.ref.plot_value_tree(obj.bad_ROI_list, 1:numel(obj.bad_ROI_list), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','redblue'); hold on;
+                if any(excl_but_not_bad)
+                    obj.ref.plot_value_tree(repmat(0.7,1,sum(excl_but_not_bad)), find(excl_but_not_bad), obj.default_handle, 'Uncorrelated ROIs', '',  f(1).Parent); hold on;
+                end
+                %                 recovered = ((excl | obj.bad_ROI_list') & ~excl_but_good);
+                %                 if any(recovered)
+                %                     obj.ref.plot_value_tree(repmat(0.2,1,sum(recovered)), find(recovered), obj.default_handle, 'Uncorrelated ROIs', '',  f.Parent,'','RedBlue'); hold on;
+                %                 end
+                caxis([0,1]); % otherwise if all values are the same you get a white tree on a white bkg
+                
+                %% Plot (if possible) the excluded traces, and group them by activity pattern if possible
+                regroup_traces(bad_traces', 80, 'pca')  
+            end
+            obj.bad_ROI_list = find((was_excluded | obj.bad_ROI_list'));
+        end
+
+        function [corr_results, comb] = get_pairwise_correlations(obj, idx_filter, corr_window)
+            if nargin < 2 || isempty(idx_filter)
+                idx_filter = 1:obj.n_ROIs;
+            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
+                idx_filter = obj.ref.indices.somatic_ROIs;
+            end
+            if nargin < 3 || isempty(corr_window)
+                med = nanmedian(obj.binned_data.median_traces,2);
+                med = med(~isnan(med));
+                bsl_guess = rms(med)*2;
+                [~,~,w] = findpeaks(nanmedian(obj.binned_data.median_traces,2),'SortStr','descend','MinPeakProminence',bsl_guess);
+                corr_window = ceil(nanmean(w)); % value set as an asymetrical filter in generate_pairwise_correlations ([corr_window, 0])
+            end
+            [corr_results, comb]    = generate_pairwise_correlations(obj.extracted_traces_conc(:, idx_filter), obj.event.corr_window); % same as in detect_events
+        end
+
+
+        function process(obj, condition, filter_win, rendering)
             %% Call all processing steps
             if nargin < 2 || isempty(condition)
                 condition = {'distance',Inf};
@@ -1752,7 +1912,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_analysis = true
+            obj.auto_save_analysis = false;
             if obj.auto_save_figures
                 obj.save_figures();
             end
