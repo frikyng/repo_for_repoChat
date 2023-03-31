@@ -147,7 +147,7 @@ classdef correlation_analysis < handle
                 end
             end
 
-            fprintf([msg ,  '\n'])
+            obj.disp_info(msg,1);
             obj.cc_mode = original_cc_mode;
         end
 
@@ -180,7 +180,7 @@ classdef correlation_analysis < handle
             if nargin > 1
                 obj.cc_mode = cc_mode; % change cc mode
             else
-                fprintf('Using current obj.cc_mode\n')
+                obj.disp_info(['Correlation based on ',obj.cc_mode],1)
             end
 
             %% Get CC (and build the correlation matrix if the settings changed)
@@ -223,7 +223,7 @@ classdef correlation_analysis < handle
                 obj.cc_mode = cc_mode; % change cc mode
             else
                 cc_mode = obj.cc_mode;
-                fprintf(['Using current obj.cc_mode : ',cc_mode,'\n'])
+                obj.disp_info(['Correlation based on ',obj.cc_mode],1)
             end
 
             %% Get signal to use
@@ -235,13 +235,13 @@ classdef correlation_analysis < handle
                         signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);
                     else
                         if contains(obj.cc_mode, 'ROIs')
-                            error('to use ROIs, set obj.use_hd_data to false');
+                            obj.disp_info('To use ROIs in correlation analysis,set obj.use_hd_data to false',4)
                         end
                         signal = obj.rescaled_traces;
-                        warning('full hd not filtering excluded ROIS / voxels for now')
+                        obj.disp_info('Full HD not filtering excluded ROIS / voxels for now',3)
                     end
                 catch
-                    error('unable to get rescaled data. try to run obj.rescale_traces()')
+                    obj.disp_info('unable to get rescaled data. try to run obj.rescale_traces()',4)
                 end
             end           
             cc_mode = erase(cc_mode, {'ROIs','groups'});
@@ -263,7 +263,7 @@ classdef correlation_analysis < handle
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
                 if isempty(obj.extracted_pop_conc)
-                    warning('No population data for this recording')
+                    obj.disp_info('You asked for population correlation, but there is population data for this recording (or it has not been extracted)',2)
                     pop = [];
                 else
                     pop = obj.extracted_pop_conc;
@@ -317,11 +317,11 @@ classdef correlation_analysis < handle
             %   13/05/2022
 
             if isempty(obj.binned_data) && contains(obj.cc_mode, 'groups')
-                fprintf('\tcrossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first\n')
+                obj.disp_info('crossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first',3)
                 crosscorr = [];
                 return
             elseif isempty(obj.event) && contains(obj.cc_mode, 'peaks')
-                fprintf('\tcrossscorr cannot be calculated using the "peaks" flag if you have not run event detection. Use obj.detect_events first\n')
+                obj.disp_info('crossscorr cannot be calculated using the "peaks" flag if you have not run event detection. Use obj.detect_events first',3)
                 crosscorr = [];
                 return
             elseif isempty(obj.crosscorr) || size(obj.crosscorr, 1) ~= numel(obj.binned_data)

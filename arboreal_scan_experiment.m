@@ -6,6 +6,7 @@
 % - enable loading if we just have a folder with arboreal_scans objects
 % - add warning if source folder is the actual raw experiment
 % - add doc to load_Several_Experiment
+% - add use_fitting_corrected variable flag, to replace all isfield(obj.event, 'fitting')
 
 %% TO CHECK:
 % - loading from raw data
@@ -16,12 +17,12 @@
 %% Suclasses
 % signal_manipulation contains tools to rescale and detrend signals, and find uncorrelated ROIs
 % arboreal_scan_plotting contains all the rendering tools
-% event_fitting contains tools to detect and fit events
+% event_detection contains tools to detect and fit events
 % behaviours_analysis contains tools to detect and extract behaviour activity bouts
 % correlation_analysis contains tools to generate correlation matrices using specific sets of variables
 % cluster_analysis can be used to cluster dimensionality reduction results OR correlation matrices
 
-classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitting & behaviours_analysis & correlation_analysis & cluster_analysis & signal_manipulation
+classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_detection & behaviours_analysis & correlation_analysis & cluster_analysis & signal_manipulation
     properties
         %% Extraction/Re-extraction Settings
         extraction_method       = 'median';     % the 1D -> 0D compression method. If None, XxT data is kept, but this make the files heavier
@@ -43,6 +44,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
         peak_thr                = 2;
         default_handle
+        variability_metric      = 'vmr'         % Defines the mretic that will be used to comput signal or events variability (vmr or cv)        
 
         %% All the fields computed in
         binned_data                             % Defines how ROIs are grouped
@@ -206,7 +208,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 all_recordings          = dir([obj.update_folder,'/**/*-*-*_exp_*_*-*-*']);
             end
             if isempty(all_recordings)
-                warning(['Original arboreal_scans not found in : ',[obj.source_folder,'/**/*-*-*_exp_*_*-*-*'],' . extraction/re-extraction not available. If you moved the files to a new top folder, change obj.update_folder accordingly']);
+                obj.disp_info(['Original arboreal_scans not found in : ',[obj.source_folder,'/**/*-*-*_exp_*_*-*-*'],' . extraction/re-extraction not available. If you moved the files to a new top folder, change obj.update_folder accordingly'],2);
                 extracted_data_paths= obj.extracted_data_paths;
                 return
             end
@@ -272,7 +274,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                             obj.source_folder       = fold;
                             obj.update(true,keep_2D);
                         else
-                            error('Error detected during extraction. Check that the settings.txt file is present in the top_folder or manually indicated, and that it contains the correct paths')
+                            obj.disp_info('Error detected during extraction. Check that the settings.txt file is present in the top_folder or manually indicated, and that it contains the correct paths',4);
                         end
                     else
                         return
@@ -341,6 +343,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             % Revision Date:
             %   14/04/2022
 
+            obj.disp_info('ALL FIELDS HAVE BEEN RESET', 3)
+            
             %% Saving options
             obj.demo                = 0;
             obj.auto_save_analysis  = false;
@@ -471,7 +475,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if (~isempty(obj.breakpoints) || ~isempty(obj.detrend))% && ~obj.is_detrended
             	extracted_traces = obj.fix_changes_in_gain(extracted_traces);
                 if isfield(obj.binned_data, 'median_traces') && ~obj.is_detrended
-                    warning('Changing the detrending method affects several preprocessing steps. Meta analysises fields were reset')
+                    obj.disp_info('Changing the detrending method affects several preprocessing steps. Analyisis fields need to be reset', 2);
                     obj.reset();
                 end                
             end
@@ -719,7 +723,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             batch_params = obj.ref.batch_params;
             if ~isfield(batch_params, 'breakpoints')
                 batch_params.breakpoints = [];
-                warning('breakpoint field added post hoc. plase re-extract')
+                obj.disp_info('breakpoint field added post hoc. plase re-extract',3)
             end
         end
 
@@ -897,7 +901,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             global_median_rescaled = nanmedian(obj.rescaled_traces, 2);
             if isempty(global_median_rescaled)
-                obj.disp_info('Global_median_rescaled not available until you called obj.rescale_traces');
+                obj.disp_info('Global_median_rescaled not available until you called obj.rescale_traces',2);
             end
         end
         
@@ -950,15 +954,26 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %   obj.disp_info(message, level)
             % -------------------------------------------------------------
             % Inputs:
-            %   message (char)
+            %   message (char or cell array)
             %       The message to print. a tab heading is automatically
-            %       added
+            %       added. If you want to print multiple lines, pass a cell
+            %       array. Tabulation and new lines are automatically
+            %       added.
             %   level (INT)
-            %       1 
+            %       the level controls the appearence of the message. 0 is
+            %       regular printing, 1 is black bold, 2 is orange bold, 3
+            %       is red bold and 4 is red bold and interrupts the code
+            %       by returning an error message
             % -------------------------------------------------------------
             % Outputs:
             % -------------------------------------------------------------
             % Extra Notes:
+            % * for a simple message use
+            %       obj.disp_info('blabla',level).
+            % * for several lines use a cell array
+            %             obj.disp_info({'line 1,'...
+            %                            '\t- line 2 with indent',...
+            %                            ['line ',num2str(3),' with var']},1);
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -968,10 +983,18 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             
             if nargin < 3 || isempty(level)
                 level = 0;
-            elseif level < 0 || level > 3
-                error('message level must be between 0 and 3. See obj.disp_info doc')
+            elseif level < 0 || level > 4                
+                error('message level must be between 0 and 4. See obj.disp_info doc')
             else
                 level = round(level);
+            end
+            
+            if iscell(message)
+               message  = strcat('\t',message,'\n');
+               if numel(message) > 1
+                   message(2:end)  = strcat(repmat('\t',1,level+1),message(2:end));
+               end
+               message  = [message{:}];
             end
             
             if level == 0
@@ -981,7 +1004,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             elseif level == 2
                 fprintf(1, ['\t[\b<strong>WARNING : ',message,'</strong>\n]\b']);
             elseif level == 3                
-                fprintf(2, ['\t<strong>WARNING : ',message,' \n</strong>\n']);
+                fprintf(2, ['\t<strong>MAJOR WARNING : ',message,' \n</strong>\n']);
+            elseif level == 4                
+                fprintf(2, ['\t<strong>!!PROCESSING ERROR!! : ',message,' \n</strong>\n']);
+                error(message)
             end
         end
         
@@ -1063,7 +1089,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Clear fields depending on a different scaling
             obj.rescaling_info              = {};
             obj.need_update(:)              = true;
-            if  nargin < 2 || (ischar(condition) && any(strcmp(condition, {'','single_group','none','all'})))
+            if nargin < 2 || (ischar(condition) && any(strcmp(condition, {'','single_group','none','all'})))
                 obj.binned_data.condition   = 'single group';
                 obj.binned_data.groups      = {1:obj.n_ROIs};
                 obj.binned_data.metrics     = 1;
@@ -1080,10 +1106,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 legends = strcat('group ', num2str(1:numel(condition))');
                 obj.binned_data.bin_legend  = cellstr(legends(1:3:end,:))';
             else
-                error('binning condition not identified')
+                obj.disp_info('Binning condition not identified. Condition must be a manual cell array of ROIs, or a valid method as defined in arboreal_scans.get_ROI_groups()',4)
             end
             obj.binned_data.readmap         = sort(unique([obj.binned_data.groups{:}])); % ROIs_per_subgroup_per_cond values corresponds to real ROIs, but not column numbers, so we need a readout map
             obj.set_median_traces(false);
+            obj.disp_info('Bins were created. obj.binned_data is now available including group medians',1);
         end
 
 
@@ -1097,6 +1124,117 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             end
         end
 
+        function norm_cumsum = get_events_statistics(obj)
+            if isfield(obj.event, 'fitting')
+                peaks = obj.event.fitting.post_correction_peaks;
+            else
+                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
+            end
+
+            %% Detect and display peak histogram distribution (mean and individual groups)
+            max_peaks = max(peaks(:));
+            mean_pks  = mean(peaks,2);
+
+            bin_size = max_peaks/30;
+            figure(1003);cla();title('peak mean distribution'); xlabel('Amplitude'); ylabel('counts');set(gcf,'Color','w');
+            if ~isempty(mean_pks)
+                histogram(mean_pks,0:bin_size:max_peaks, 'FaceColor', 'k');
+            end
+            f = figure(1004);clf();hold on; title('peak distribution per group');hold on;set(gcf,'Color','w');hold on;
+            f.Tag = 'peak distribution per group'; %for figure saving
+            cmap = lines(size(obj.binned_data.median_traces, 2));
+            [m,n] = numSubplots(size(obj.binned_data.median_traces, 2));
+            for gp = 1:size(obj.binned_data.median_traces, 2)
+                subplot(m(1), m(2), gp)
+                %figure();plot(global_timescale,obj.binned_data.median_traces(:,gp));hold on;scatter(obj.event.fitting.peak_times,obj.event.fitting.post_correction_peaks(:,gp), 'kv')
+                if ~isempty(peaks)
+                    h = histogram(peaks(:,gp),0:bin_size:max_peaks, 'FaceAlpha', 0.8,'EdgeColor','none', 'FaceColor', cmap(gp, :));hold on;
+                end
+                obj.binned_data.event_ditribution{gp} = [h.BinEdges', [h.BinCounts,NaN]'];
+                title(obj.binned_data.bin_legend(gp));
+            end
+
+            %% Plot all individual peaks to see if they covary
+            figure(1006);cla();plot(peaks);legend(obj.binned_data.bin_legend);title('peaks values per subgroups'); xlabel('event #'); ylabel('Amplitude');set(gcf,'Color','w');
+
+            %% Plot the mean amplitude per subgroup of peaks, per distance
+            %bin_step = 10;
+            %norm_cumsum = cumsum(obj.binned_data.median_traces) ./ nanmax(cumsum(obj.binned_data.median_traces));
+            norm_cumsum = cumsum(peaks) ./ nanmax(cumsum(peaks));
+            obj.binned_data.norm_cumsum = norm_cumsum;
+            figure(1007);cla();plot(norm_cumsum); hold on;set(gcf,'Color','w');xlabel('Event #');ylabel('normalized cumulative amplitude')
+            title('cumulative sum of peaks'); ylim([0, 1]);legend(obj.binned_data.bin_legend,'Location','southeast');
+            obj.disp_info('Detected events statistics computed. See ',1);
+        end
+
+        function norm_vmr = compute_variability(obj, metric)   
+            if nargin < 2 || isempty(metric)
+            	metric = obj.variability_metric;
+            else
+                obj.variability_metric = metric;
+            end
+            
+            %% Get summary covariance plots of the raw traces
+            obj.compute_similarity();
+            
+            %% Get peaks time or, if available decay-corrected peak times
+            if isfield(obj.event, 'fitting')
+                peaks = obj.event.fitting.post_correction_peaks;
+                times = obj.event.fitting.peak_times;
+            else
+                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
+                times = obj.t(vertcat(obj.event.peak_time{:}));
+            end
+            
+            %% Comput variability on peaks
+            if strcmpi(metric, 'vmr')            
+                vmr = nanvar(peaks,[],2)./nanmean(peaks, 2);
+            elseif strcmpi(metric, 'CV')   
+                cv  = nanstd(peaks,[],2)./nanmean(peaks, 2); 
+            else
+                obj.disp_info('error, valid variability metrics are vmr and cv',4)
+            end
+
+            [~, idx] = sort(vmr,'descend');
+
+            %figure(123); cla();ylim([0, nanmax(obj.event.fitting.post_correction_peaks(:))]); hold on;
+            %     for event = idx'
+            %         show_event(obj.binned_data.median_traces, round(obj.event.fitting.peak_times/sr), event);
+            %         drawnow;%pause(0.1)
+            %     end
+
+            figure(1009);cla();plot(peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
+
+            R = max(range(obj.binned_data.median_traces));
+            norm_vmr = vmr/mean(vmr);
+            obj.variability.index_of_disp = norm_vmr;
+            figure(1010);clf();
+            ax1 = subplot(2,1,1);plot(obj.t, obj.binned_data.median_traces); ylabel('Amplitude'); hold on;set(gcf,'Color','w');ylim([-R/20,R + R/20]);title('bin traces'); hold on;
+            ax2 = subplot(2,1,2);plot(times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
+            plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
+            plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
+            hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
+            linkaxes([ax1, ax2], 'x');
+
+            %figure();histogram(norm_vmr, round(10*range(norm_vmr)/std(norm_vmr)))
+            %             figure()
+            %             [~, ~, beh] = obj.get_behaviours('encoder');
+            %             behaviour = smoothdata(beh.value, 'gaussian', [50, 0]);
+            %             hold on;plot(obj.t, behaviour,'b');
+            %
+            %             plot(obj.event.fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
+            %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
+            %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
+            %             hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
+            %
+            %
+            %             temp = behaviour(round(obj.event.fitting.peak_pos));
+            %             hold on;plot(obj.t(obj.event.fitting.peak_pos), temp,'-vr');
+
+            figure(1011);cla();scatter(nanmedian(peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w');
+            obj.disp_info('General variability statistics have been computed. See obj.variability',1)
+        end
+        
         function precision = compute_similarity(obj, use_bins)
             if nargin < 2 || isempty(use_bins)
                 use_bins = true;
@@ -1130,101 +1268,15 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if obj.rendering
                 obj.plot_similarity();arrangefigures([1,2]);
             end
+            obj.disp_info(['Event variability statistics have been computed using ',obj.variability.source,'. See obj.variability'],1)
         end
-
-        function norm_cumsum = get_events_statistics(obj)
-            if isfield(obj.event, 'fitting')
-                peaks = obj.event.fitting.post_correction_peaks;
-            else
-                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
+        
+        function set.variability_metric(obj, variability_metric)
+            % add a check for valid methods 
+            if ~strcmpi(variability_metric, obj.variability_metric)
+                obj.variability = {};
             end
-
-            %% Detect and display peak histogram distribution (mean and individual groups)
-            max_peaks = max(peaks(:));
-            mean_pks  = mean(peaks,2);
-
-            bin_size = max_peaks/30;
-            figure(1003);cla();title('peak mean distribution'); xlabel('Amplitude'); ylabel('counts');set(gcf,'Color','w');
-            if ~isempty(mean_pks)
-                histogram(mean_pks,0:bin_size:max_peaks, 'FaceColor', 'k');
-            end
-            f = figure(1004);clf();hold on; title('peak distribution per group');hold on;set(gcf,'Color','w');hold on;
-            f.Tag = 'peak distribution per group'; %for figure saving
-            cmap = lines(size(obj.binned_data.median_traces, 2));
-            [m,n] = numSubplots(size(obj.binned_data.median_traces, 2));
-            for gp = 1:size(obj.binned_data.median_traces, 2)
-                subplot(m(1), m(2), gp)
-                %figure();plot(global_timescale,obj.binned_data.median_traces(:,gp));hold on;scatter(obj.event.fitting.peak_times,obj.event.fitting.post_correction_peaks(:,gp), 'kv')
-                if ~isempty(peaks)
-                    histogram(peaks(:,gp),0:bin_size:max_peaks, 'FaceAlpha', 0.8,'EdgeColor','none', 'FaceColor', cmap(gp, :));hold on;
-                end
-                title(obj.binned_data.bin_legend(gp));
-            end
-
-            %% Plot all individual peaks to see if they covary
-            figure(1006);cla();plot(peaks);legend(obj.binned_data.bin_legend);title('peaks values per subgroups'); xlabel('event #'); ylabel('Amplitude');set(gcf,'Color','w');
-
-            %% Plot the mean amplitude per subgroup of peaks, per distance
-            %bin_step = 10;
-            %norm_cumsum = cumsum(obj.binned_data.median_traces) ./ nanmax(cumsum(obj.binned_data.median_traces));
-            norm_cumsum = cumsum(peaks) ./ nanmax(cumsum(peaks));
-            figure(1007);cla();plot(norm_cumsum); hold on;set(gcf,'Color','w');xlabel('Event #');ylabel('normalized cumulative amplitude')
-            title('cumulative sum of peaks'); ylim([0, 1]);legend(obj.binned_data.bin_legend,'Location','southeast');
-        end
-
-        function norm_vmr = assess_variability(obj)
-            if isfield(obj.event, 'fitting')
-                peaks = obj.event.fitting.post_correction_peaks;
-                times = obj.event.fitting.peak_times;
-            else
-                peaks = obj.binned_data.median_traces(vertcat(obj.event.peak_time{:}), :);
-                times = obj.t(vertcat(obj.event.peak_time{:}));
-            end
-            
-            %sr = nanmedian(diff(obj.timescale{expe}.global_timescale));
-            vmr = nanvar(peaks,[],2)./nanmean(peaks, 2);
-            %cv  = nanstd(obj.event.fitting.post_correction_peaks,[],2)./nanmean(obj.event.fitting.post_correction_peaks, 2); % (maybe chack snr at one point?  mu / sigma)
-            %fano = []; % windowed VMR. usually for spike trains
-            [~, idx] = sort(vmr,'descend');
-
-            %figure(123); cla();ylim([0, nanmax(obj.event.fitting.post_correction_peaks(:))]); hold on;
-            %     for event = idx'
-            %         show_event(obj.binned_data.median_traces, round(obj.event.fitting.peak_times/sr), event);
-            %         drawnow;%pause(0.1)
-            %     end
-
-            figure(1009);cla();plot(peaks(idx, :)); title('Events sorted by Index of dispersion'); ylabel('Amplitude'); xlabel('event #');set(gcf,'Color','w')
-
-            R = max(range(obj.binned_data.median_traces));
-            %norm_vmr = vmr/range(vmr);
-            norm_vmr = vmr/mean(vmr);
-            obj.variability.index_of_disp = norm_vmr;
-            figure(1010);clf();
-            ax1 = subplot(2,1,1);plot(obj.t, obj.binned_data.median_traces); ylabel('Amplitude'); hold on;set(gcf,'Color','w');ylim([-R/20,R + R/20]);title('bin traces'); hold on;
-            ax2 = subplot(2,1,2);plot(times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
-            plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
-            plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
-            hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
-            linkaxes([ax1, ax2], 'x');
-
-            %figure();histogram(norm_vmr, round(10*range(norm_vmr)/std(norm_vmr)))
-
-
-            %             figure()
-            %             [~, ~, beh] = obj.get_behaviours('encoder');
-            %             behaviour = smoothdata(beh.value, 'gaussian', [50, 0]);
-            %             hold on;plot(obj.t, behaviour,'b');
-            %
-            %             plot(obj.event.fitting.peak_times, norm_vmr, 'ko-'); title('Index of dispersion per event'); hold on;
-            %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr), mean(norm_vmr)],'r');hold on;
-            %             plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)+std(norm_vmr), mean(norm_vmr)+std(norm_vmr)],'r--');
-            %             hold on;plot([obj.t(1), obj.t(end)] ,[mean(norm_vmr)-std(norm_vmr), mean(norm_vmr)-std(norm_vmr)],'r--');
-            %
-            %
-            %             temp = behaviour(round(obj.event.fitting.peak_pos));
-            %             hold on;plot(obj.t(obj.event.fitting.peak_pos), temp,'-vr');
-
-            figure(1011);cla();scatter(nanmedian(peaks, 2), vmr, 'filled'); title('Index of dispersion vs Amplitude'); xlabel('Amplitude'); ylabel('VMR'); hold on;set(gcf,'Color','w')
+            obj.variability_metric = variability_metric;
         end
   
         function [tp, beh, analysis_mode] = get_tp_for_condition(obj, analysis_mode)
@@ -1303,7 +1355,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
         function get_spike_trains(obj)
             %% Use ML spike to get a spike train estimate
             if ~exist('spk_autocalibration.m','file') || ~exist('fn_getfile.m','file')
-                error('You need to download the "bricks" and "ml_spikes" toolboxes, and add then to the path')
+                obj.disp_info('You need to download the "bricks" and "ml_spikes" toolboxes, and add then to the path',4)
             end
 
             %% Formatting calcium. It seems that signal need to be normalized
@@ -1457,12 +1509,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Adjust timepoints
             median_subtracted = false;            
             if ischar(timepoints)
-                variable = timepoints;
+                original_variable = timepoints;
+                variable    = timepoints;
                 if contains(variable, 'subtracted')
                     median_subtracted = true;
                     variable = erase(variable, 'subtracted');
                 end
-                timepoints = obj.get_tp_for_condition(variable);
+                timepoints  = obj.get_tp_for_condition(variable);
+                variable  	= original_variable;
             else
                 variable = 'manual_input';
             end                
@@ -1474,6 +1528,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 5 || isempty(n_components)
                 [~,~,~,~,explained]     = pca(obj.rescaled_traces(:, ~all(isnan(obj.rescaled_traces), 1)));
                 n_components            = find(cumsum(explained)  > 90, 1, 'first');
+                obj.disp_info(['n_components was not specified. Number of factors was estimated as the number of PCA components required to explain 90 %% of the variance (',num2str(n_components),') components)'],2)
             end
             obj.dimensionality                  = {};
             obj.dimensionality.n_factors        = n_components;
@@ -1489,7 +1544,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
 
             %% Subtract signal median if required
             if median_subtracted
+                type_of_trace = 'median subtracted';
                 data = data - nanmedian(data,2);
+            else
+                type_of_trace = 'original signal';
             end
             
             %% Need to set it now
@@ -1547,10 +1605,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Plot weight-tree for each component
             if obj.rendering
                 if obj.dimensionality.n_factors > 9
-                    warning('only the first 9 dimensions were displayed. To see more type obj.plot_dim_tree(1:obj.dimensionality.n_factors)')
+                    obj.disp_info('Only the first 9 dimensions were displayed. To see more type obj.plot_dim_tree(1:obj.dimensionality.n_factors)',1)
                 end
                 obj.plot_dim_tree(1:min(obj.dimensionality.n_factors, 9));
             end
+            obj.disp_info({['Dimensionality reduction done using ',obj.dimensionality.dim_red_type],...
+                            ['analysis done on ',num2str(obj.dimensionality.n_factors),' factors'],...
+                            ['Data obtained from : ',type_of_trace,' traces'],...
+                            ['using the condition filter : ',obj.dimensionality.variable]},1)
         end
 
 
@@ -1609,7 +1671,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             if nargin < 2 || isempty(new_method)
                 new_method = obj.extraction_method;
             elseif ~any(strcmp(new_method, {'max', 'mean', 'median','min'}))
-                error('Only max, min, mean and median method are supported')
+                obj.disp_info('Only max, min, mean and median method are supported',4)
             else
                 obj.extraction_method = new_method;
             end
@@ -1628,41 +1690,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
                 obj.need_update(rec)                = true;
             end
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
-        end
-
-        function [bad_ROIs, mean_corr_with_others] = find_events(obj, idx_filter, thr_for_detection, method)
-            if nargin < 2 || isempty(idx_filter)
-                idx_filter = 1:obj.n_ROIs;
-            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
-                idx_filter = obj.ref.indices.somatic_ROIs;
-            end
-            if nargin < 3 || isempty(thr_for_detection)
-                thr_for_detection = 0.2;
-            end
-            if nargin < 4 || isempty(method)
-                method = 'corr';
-            end
-
-            fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])
-
-            %% Get original traces (unscaled)
-            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
-
-            %% Get original traces
-            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering);
-            
-%             sz = vertcat(obj.event.peak_value{:});
-%             thr1 = max(sz) * 0.8;
-%             thr2 = max(sz) * 0.2;
-%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
-%             for fn = fieldnames(obj.event)'                
-%                  if numel(obj.event.(fn{1})) == numel(mask)
-%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
-%                  end
-%             end
-
-            %% Identify and log poorly correlated ROIs
-            [bad_ROIs, mean_corr_with_others] = obj.find_bad_ROIs(correlation_res, idx_filter);
         end
         
         function process(obj, condition, time_smoothing, rendering)
@@ -1693,10 +1720,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             obj.rescale_traces(); % note that signal rescaling is computed on peaks, not on the entire trace
 
             %% Create median trace per bins
-            obj.set_median_traces()
-
-            %% Get summary covariance plots of the raw traces
-            obj.compute_similarity();
+            obj.set_median_traces();
 
             %% Correct for decay to avoid overestimating peak amplitude
             %obj.fit_events();
@@ -1704,8 +1728,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_fitt
             %% Detect and display peak histogram distribution (mean and individual groups)
             obj.get_events_statistics();
 
-            %% Study bAP heterogeneity
-            obj.assess_variability()
+            %% Compute signal variability
+            obj.compute_variability()
 
             %% Check how correlated are the peaks between different parts of the tree
             obj.get_correlations();

@@ -45,7 +45,8 @@ classdef arboreal_scan_plotting < handle
                 if ismember(figHandles(f).Number, close_list)
                 	close(figHandles(f));
                 end
-            end      
+            end  
+            obj.disp_info('All plots were deleted',1);
         end
         
         function figure_list = get_fig_list(obj, n_groups, n_dims)   

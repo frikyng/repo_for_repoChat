@@ -4,7 +4,7 @@ classdef signal_manipulation < handle
         %% Analysis/extraction settings
         time_smoothing          = [0, 0];       % Smoothing kernet to apply to the extracted Ca2+ signals. 2x1 Int indicate asymatrical kernel. Use negative value for smoothing windo in seconds
         filter_type             = 'gaussian';   % Type of time filter kernel (one of the valid method is smoothdata())
-        bad_ROI_thr             = 0;            % Threshold to delimit bad vs good ROIs. Average cross correlation across ROIs < bad_ROI_thr are excluded from the analysis
+        bad_ROI_thr             = 0.2;          % Threshold to delimit bad vs good ROIs. Average cross correlation across ROIs < bad_ROI_thr are excluded from the analysis
         detrend                 = false;
         is_detrended            = false;        % is set to True once you ran the detrending once.
         is_rescaled             = false;        % is set to True once you ran the rescaling step.
@@ -238,7 +238,7 @@ classdef signal_manipulation < handle
                 obj.use_hd_data = true;
             elseif use_hd_data && isempty(obj.ref.full_data)
                 obj.use_hd_data = false;
-                warning('unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object. Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).')
+                obj.disp_info({'unuable to use HD data as it is not embedded in the current arboreal_scan_experiment object.','Rebuild the object with HD data using expe = arboreal_scan_experiment([arboreal_scans folder PATH],true).','obj.use_hd_data was set to false.'},3);
             else
                 obj.use_hd_data = false;
             end
@@ -251,7 +251,7 @@ classdef signal_manipulation < handle
             smoothing = 0;
             
             if isempty(obj.event)
-                warning('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events() first');
+                obj.disp_info('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events() first',3);
                 answ = questdlg({'RESCALING REQUIRES DETECTED EVENTS','To rescale traces, you must run obj.find_events() first; Run peak detection now?'},'','Yes','No','Yes');
                 if strcmp(answ, 'Yes')
                     obj.find_events();
@@ -286,7 +286,7 @@ classdef signal_manipulation < handle
                     traces{idx}(:,invalid) = NaN;
                 end
             else
-                error('rescaling method not valid, It must specify "global" or "trials"')
+                obj.disp_info('rescaling method not valid, It must contain "global" or "trials"',4);
             end
             
             %% Set some flag
@@ -370,16 +370,18 @@ classdef signal_manipulation < handle
             mean_corr_with_others   = [];
             bad_ROIs                = [];
             if nargin < 2 || isempty(correlation_res)
-                warning('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY.  run obj.find_events() first');                
+                obj.disp_info('BAD ROI IDENTIFICATION RELIES ON EVENT DETECTION. EVENT DETECTION FIELD SEEMS EMPTY.  run obj.find_events() first',3);
                 return
             else
                 events = obj.event;
             end
-            THR_FOR_CONNECTION      = 0.2 % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
-            fprintf(['* Now detecting ROIs that are either,\n'...
-                     '      - so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).\n',...
-                     '      - are member of batch_params.excluded_branches \n',...
-                     '* Threshold for exclusion is  ',num2str(THR_FOR_CONNECTION),' %% \n'])
+            
+            
+            THR_FOR_CONNECTION      = obj.bad_ROI_thr; % Defines what level of minimal pairwise correlation means "these two ROIs are connected"
+            obj.disp_info({'Now detecting ROIs that are either,'...
+                            '- so poorly correlated to the rest of the tree that they probably belong to another cell (or have no signal).',...
+                            '- are member of batch_params.excluded_branches ',...
+                            ['Threshold for exclusion is ',num2str(THR_FOR_CONNECTION),' %%']},1)
 
             %% Show mean correlation with each ROI
             max_corr_for_cell       = max(events.globality_index(2:end)); % QQ 1st point sometimes show some artifacts
@@ -387,9 +389,8 @@ classdef signal_manipulation < handle
                 corr_results_sub    = correlation_res.corr_results(events.t_corr(events.is_global), correlation_res.comb(:,2) == key | correlation_res.comb(:,1) == key);
                 corr_results_sub    = [corr_results_sub(:,1:(key-1)), NaN(size(corr_results_sub,1),1), corr_results_sub(:,key:end)];
                 mean_corr           = nanmean(corr_results_sub,1);
-                mean_corr_with_others(key) = nanmean(mean_corr);%sum(mean_corr > THR_FOR_CONNECTION);
+                mean_corr_with_others(key) = sum(mean_corr > THR_FOR_CONNECTION); %nanmean(mean_corr);%
             end
-            return
 
             %% Normalize to 100% (i.e. all ROIs)
             mean_corr_with_others = mean_corr_with_others / numel(mean_corr_with_others); % renormalize to max possible corr for this cell
@@ -417,11 +418,11 @@ classdef signal_manipulation < handle
             
             %% ROIs that were manually excluded
             was_excluded        = ismember(obj.ref.indices.swc_list(:,4), obj.batch_params.excluded_branches);            
-            RECOVERY_THR        = 1 - THR_FOR_CONNECTION
+            RECOVERY_THR        = 1 - THR_FOR_CONNECTION;
             excl_but_not_bad    = was_excluded & ~obj.bad_ROI_list';
             excl_but_good       = was_excluded & (mean_corr_with_others_norm > RECOVERY_THR)';
             if any(excl_but_good)
-                 fprintf(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'])
+                 disp_info(['!!! ROIs ',num2str(find(excl_but_good')),' was/were excluded but seem highly correlated\n'],2)
             end
                             
             if obj.rendering     
@@ -512,6 +513,11 @@ classdef signal_manipulation < handle
 
             if obj.rendering
                 obj.plot_median_traces(obj.is_rescaled);arrangefigures([1,2]);
+            end
+            if obj.is_rescaled
+                obj.disp_info('obj.binned_data.median traces were computed using rescaled signals',1)
+            else
+                obj.disp_info('obj.binned_data.median traces were computed using raw signals',1)
             end
         end
     end

@@ -18,11 +18,11 @@ function [traces, fig, offsets] = plot_many_traces(traces, fig, varargin)
         traces      = squeeze(traces);
     end
     
-    spacing_factor  = 1    
+    spacing_factor  = 0.1   ;
     spacing         = nanmedian(rms(traces))/spacing_factor;    
     m               = nanmin(traces(:));
-    traces(:,1)     = m;
-    traces(:,end)   = m;
+%     traces(:,1)     = m;
+%     traces(:,end)   = m;
     
     n_traces        = size(traces, 2);
     offsets         = linspace(0,n_traces*spacing,n_traces);    
