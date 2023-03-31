@@ -1579,11 +1579,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                     specVarPM           = [];
                     F                   = [];
             end
-            
-            % color map of LoadingsPM dim 1,2,3 (e.g. phate plot to better see extrema)
-            color = [1:size(LoadingsPM,1)];
-            figure();scatter3(LoadingsPM(:,1),LoadingsPM(:,2),LoadingsPM(:,3),[],color,'filled'); colormap redbluecmap;
-                                    
+
             %% Store results
             obj.dimensionality.LoadingsPM           = LoadingsPM;       % loadings / PC / modes / Factors / PHATE modes
             obj.dimensionality.specVarPM            = specVarPM;
@@ -1695,39 +1691,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
             error_box('COMPRESSION MODES WERE UPDATED BUT YOU NEED TO SAVE THE ARBOREAL SCANS TO KEEP THIS CHANGE FOR NEXT RELOADING')
         end
-        
-        function find_events(obj, idx_filter, method)
-            if nargin < 2 || isempty(idx_filter)
-                idx_filter = 1:obj.n_ROIs;
-            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
-                idx_filter = obj.ref.indices.somatic_ROIs;
-            end
-            if nargin < 3 || isempty(method)
-                method = 'corr';
-            end
-
-            fprintf(['Now detecting events with global pairwise correlation at least > ',num2str(thr_for_detection),' %% \n'])
-
-            %% Get original traces (unscaled)
-            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
-
-            %% Get original traces
-            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering);
-            
-%             sz = vertcat(obj.event.peak_value{:});
-%             thr1 = max(sz) * 0.8;
-%             thr2 = max(sz) * 0.2;
-%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
-%             for fn = fieldnames(obj.event)'                
-%                  if numel(obj.event.(fn{1})) == numel(mask)
-%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
-%                  end
-%             end
-
-            %% Identify and log poorly correlated ROIs
-            obj.find_bad_ROIs(correlation_res, idx_filter);
-        end
-
+ 
         function [bad_ROIs, mean_corr_with_others] = find_bad_ROIs(obj, correlation_res, ROIs)
             if nargin < 3 || isempty(ROIs)
                 ROIs = 1:obj.n_ROIs;
@@ -1803,10 +1767,9 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                 
                 figure(1031);clf();subplot(1,2,1);set(gcf, 'Color','w');
                 title(['Bad ROIs (NEVER above ',num2str(obj.bad_ROI_thr*100),' % correlation with the rest of the tree)']);
+                plot(smoothdata(reference_trace,'gaussian',[20,0]),'k'); hold on;
                 plot(smoothdata(bad_traces,'gaussian',[20,0]),'r');hold on;
                 plot(smoothdata(recoverable,'gaussian',[20,0]),'b');
-                plot(smoothdata(reference_trace,'gaussian',[20,0]),'k'); hold on;
-                ylabel('Z Score Ca^{2+} Signal','FontSize',16);xlabel('Frames','FontSize',16)
                 
                 %% Plot normalized excluded traces
                 ax = subplot(1,2,2);
@@ -1816,7 +1779,6 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                 color_code(excl,:) = repmat([0.8,0.8,0.8], sum(excl), 1);
                 plot_many_traces(smoothdata(obj.extracted_traces_conc,'gaussian',[20,0]), ax);
                 colororder(ax, color_code);
-                ylabel('All ROIs','FontSize',16);xlabel('Frames','FontSize',16)
                 
                 %% Plot location of excluded traces
                 f = obj.ref.plot_value_tree(obj.bad_ROI_list, 1:numel(obj.bad_ROI_list), obj.default_handle, 'Uncorrelated ROIs', '',  1032,'','redblue'); hold on;
@@ -1912,7 +1874,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
 
             %% Save figure and/or analysis
-            obj.auto_save_analysis = false;
+            obj.auto_save_analysis = true
             if obj.auto_save_figures
                 obj.save_figures();
             end
