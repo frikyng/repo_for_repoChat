@@ -16,7 +16,7 @@
     n_noise_pt  = [];
 
     current_ep  = 1;
-    MIN_CLUSTER_SIZE = obj.dbscan_min_gp_size %2*size(Y_PHATE_3D,2); % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
+    MIN_CLUSTER_SIZE = obj.dbscan_min_gp_size; %2*size(Y_PHATE_3D,2); % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
     gp          = [];
     tolerance   = 3;
     verbose = false;

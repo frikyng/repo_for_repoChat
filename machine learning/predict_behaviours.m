@@ -24,6 +24,8 @@
 % name/argument pairs as described in machine_learning_params.m These
 % options control the machine learning process
 
+%% See also, prepare_analysis, bar_chart, train_and_test
+
 function [results, data, predictor_ROI_groups, meanvalue, stats, values] = predict_behaviours(obj, predictors_type, observations, predictor_ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = ''; 

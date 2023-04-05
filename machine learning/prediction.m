@@ -296,7 +296,7 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
                     [score(idx), TPR(idx), TNR(idx), MCC(idx)] = deal(nanmean(temp));
                 else
                     y_predict            = mdl.predict(x_test);                
-                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict, '' ,LossFun);
+                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_ml_score(y_test, y_predict, '' ,LossFun);
                 end
             end
         end
@@ -339,7 +339,7 @@ function [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_tes
                 [idx,mdl]            = fetchNext(fut, 0.5);
                 if ~isempty(mdl)
                     y_predict            = mdl.predict(x_test);                
-                    [score(k,idx), TPR(k,idx), TNR(k,idx), MCC(k,idx)] = get_classifier_score(y_test, y_predict);
+                    [score(k,idx), TPR(k,idx), TNR(k,idx), MCC(k,idx)] = get_ml_score(y_test, y_predict);
                 end
             end
         end  

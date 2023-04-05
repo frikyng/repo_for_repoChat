@@ -1,4 +1,4 @@
-function [score, TPR, TNR, MCC] = get_classifier_score(y_test, y_predict, Weights, func)
+function [score, TPR, TNR, MCC] = get_ml_score(y_test, y_predict, Weights, func)
     if nargin < 3 || isempty(Weights)
         Weights = ones(size(y_test));
     end

@@ -27,12 +27,14 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         ml_parameters = machine_learning_params(ml_parameters);
     end
     
+    %% Filter out invalid prediction points, or invalid predictors, or invalid observations
     USABLE_BEH                      = ~all(isnan(observation_data),2);
     INVALID_TP                      = any(isnan(observation_data(USABLE_BEH,:)),1);
     observation_data(:,INVALID_TP)  = [];
     predictor_data(:,INVALID_TP)    = [];
     timepoints(INVALID_TP)          = [];
-    
+
+    %% Determine the loss function that will be used to get the predictive score
     
     if strcmpi(ml_parameters.score_metrics, 'pearson')
         LossFun = @pearson_correlation_coefficient;
@@ -57,13 +59,13 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     end
     
     %% Time Shuffle Observations if required. 
-    shuffle_observation_data = [];
+    shuffled_observation_data = [];
     if any(contains(ml_parameters.shuffling, 'behaviours','IgnoreCase',true))
         if ml_parameters.obs_shuf_block_sz == 1
-            shuffle_observation_data = observation_data(:,randperm(size(observation_data,2)));
+            shuffled_observation_data = observation_data(:,randperm(size(observation_data,2)));
         else
             beh_part       = block_shuffle(timepoints, round(ml_parameters.obs_shuf_block_sz), size(raw_behaviour, 2), 1);
-            shuffle_observation_data = observation_data(:,beh_part.x_test);
+            shuffled_observation_data = observation_data(:,beh_part.x_test);
         end
     end
       
@@ -101,7 +103,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             beh_idx = ceil(mdl_idx/2);
         end
         if contains(type, 'shuffle')
-            current_obs         = shuffle_observation_data(beh_idx,:);
+            current_obs         = shuffled_observation_data(beh_idx,:);
         else
             current_obs         = observation_data(beh_idx,:);
         end
@@ -141,7 +143,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             temp = kfoldLoss(model, 'Mode','individual', 'LossFun', LossFun)*100; 
             score(mdl_idx,:) = repmat(nanmean(temp), 1, 4);
         else
-            [score(mdl_idx,1), score(mdl_idx,2), score(mdl_idx,3), score(mdl_idx,4)] = get_classifier_score(y_test, y_predict, '', LossFun);
+            [score(mdl_idx,1), score(mdl_idx,2), score(mdl_idx,3), score(mdl_idx,4)] = get_ml_score(y_test, y_predict, '', LossFun);
         end
         
         %% Plot training result %% QQ RAW BEHAVIOUR IS NEVER SHUFFLED SO IT WONT LOOK RIGHT

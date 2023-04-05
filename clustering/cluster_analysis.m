@@ -130,7 +130,7 @@ classdef cluster_analysis < handle
             if obj.rendering                
                 obj.plot_cluster_tree();
             end
-            obj.disp_info({['Clustering of dimensionality-rediuced data done using ',obj.dimensionality.clust_meth],...
+            obj.disp_info({['Clustering of dimensionality-reduced data done using ',obj.dimensionality.clust_meth],...
                            [num2str(obj.dimensionality.N_clust), ' clusters have been identified']},1)
         end
     end
