@@ -1,12 +1,9 @@
-function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
+function [obj, source_signal, signal_indices, timepoints, lag] = prepare_analysis(path_or_obj, use_hd_data, time_filter, type_of_trace)
     if nargin < 1 || isempty(path_or_obj)
         path_or_obj = ''; % i.e. current matlab folder. It must then be an extracted arboreal scan folder
     end
     if nargin < 2 || isempty(use_hd_data)
         use_hd_data = false; % HD is slower
-    end
-    if nargin < 3 || isempty(time_filter)
-        time_filter = 0; % 
     end
     if nargin < 4 || isempty(type_of_trace)
         type_of_trace = 'raw'; % 
@@ -55,6 +52,14 @@ function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_a
     else
         obj = path_or_obj;
     end
+    
+    if nargin < 3 || isempty(time_filter)
+        %% use default obj.time_filter
+    elseif ~all(obj.time_smoothing == time_filter)
+        obj.time_smoothing = time_filter;
+    else
+        %% keep current obj.time_filter
+    end
 
     %% Rebuild object with HD data in it 
     %obj = arboreal_scan_experiment('C:\Users\THE BEASTWO\Documents\MATLAB\arboreal_scans_2\extracted_arboreal_scans\2019-10-31_exp_1',use_hd_data)
@@ -71,8 +76,6 @@ function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_a
     
     %% Time filtering of traces if required. 
     %% ## ! ## This introduces temporal correlation
-    obj.filter_win = [time_filter, 0];
-
     if ~iscell(obj.binned_data.condition) || ~(strcmp(obj.binned_data.condition{1}, 'distance') && obj.binned_data.condition{2} == 50)
         obj.reset();
         obj.prepare_binning({'distance',50});
@@ -121,10 +124,6 @@ function [obj, source_signal, signal_indices, timepoints, lag] = prepare_phate_a
         source_signal = source_signal - nanmedian(obj.rescaled_traces,2);
     end
 
-    if ~isnumeric(type_of_trace) && contains(type_of_trace, 'shuffle')
-        %% randomize/permute/shuffle all data points in time series for each ROI separately (i.e. destroy all correlation)
-        % see rand_shuffle_PHATE_loadings.m
-    end
     
     %% Don't keep any Inf values, if any (only happens in HD case, occasionally)
     source_signal(isinf(source_signal)) = NaN;

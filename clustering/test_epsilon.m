@@ -3,10 +3,9 @@
         n_clust = [];
     end
 
-
     %% to test a range of epsilon value and identify best number
-    method      = 'dbscan'
-    rendering   = false
+    method      = 'dbscan';
+    rendering   = false;
     if strcmp(method, 'dbscan')
         test_range       = logspace(-1,2,150);
     else
@@ -17,19 +16,24 @@
     n_noise_pt  = [];
 
     current_ep  = 1;
-    MIN_CLUSTER_SIZE = 4 %2*size(Y_PHATE_3D,2); % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
-    gp = [];
-    tolerance = 3;
+    MIN_CLUSTER_SIZE = obj.dbscan_min_gp_size %2*size(Y_PHATE_3D,2); % default (Ester et al., 1996), although we may want 2x NDim for High dimesnional data  (Sander et al., 1998)
+    gp          = [];
+    tolerance   = 3;
+    verbose = false;
     while current_ep < numel(test_range)
         try
             test_value  = test_range(current_ep);
 
             %% Get cluster
             if strcmp(method, 'dbscan')
-                fprintf(['testing epsilon = ',num2str(test_value), '\n'])
+                if verbose
+                    fprintf(['testing epsilon = ',num2str(test_value), '\n']);
+                end
                 cluster_idx = dbscan(Low_Dim_Data , test_value, MIN_CLUSTER_SIZE); % Minpts from (Sander et al., 1998)
             elseif strcmp(method, 'hdbscan')
-                fprintf(['testing Min cluster size = ',num2str(test_value), '\n'])
+                if verbose
+                    fprintf(['testing Min cluster size = ',num2str(test_value), '\n'])
+                end
                 clusterer = HDBSCAN(Low_Dim_Data);
                 %% clusterer.run_hdbscan(minpts, minclustsize, minClustNum, dEps, outlierThresh, plotResults)
                 clusterer.run_hdbscan(2,1,1,test_value,0,false);%whitebg('w'); hold on;set(gcf,'Color','w')
@@ -37,7 +41,6 @@
             else
                 error('method not implemented')
             end
-
 
             %colors = 1:sum(cluster_idx > 0);
             prev_gp = gp;

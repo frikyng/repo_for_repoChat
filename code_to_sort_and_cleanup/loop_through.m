@@ -22,7 +22,7 @@ for idx = numel(fold):-1:1 %71 --> double cell, 16 failing
         expe.auto_save_analysis = 0;
         expe.auto_save_figures = 0;
         expe.bad_ROI_list = 'unset'
-        %expe.filter_win = [20,0]
+        %expe.time_smoothing = [20,0]
         expe.process({'distance',100},[ceil(1/nanmedian(expe.timescale.sr)), 0]); %% Add grouping settings here
         errors{idx} = [];
     catch err

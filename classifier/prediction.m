@@ -1,14 +1,17 @@
-function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, method,cost, parameters)
-    if nargin < 6 || isempty(parameters)
-        parameters = DEFAULT_CLASSIFIER_OPTION;
+function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, cost, ml_parameters)
+    if nargin < 5 || isempty(ml_parameters)
+        ml_parameters = DEFAULT_CLASSIFIER_OPTION;
     else
-        parameters = DEFAULT_CLASSIFIER_OPTION(parameters);
+        ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
     end
 
     %% Define timepoints for train and test
     if isempty(partition) % if we just do many kfolds
         train_tp    = 1:numel(YData);
         test_tp     = [];
+    elseif isstruct(partition)
+    	train_tp    = partition.x_train;
+        test_tp     = partition.x_test;
     else % if we hold out data for final testing
         train_tp    = find(training(partition));
         test_tp     = find(test(partition));
@@ -21,14 +24,13 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
     y_test      = YData(:, test_tp);                % Variable to predict used for testing (ground truth)     
 
     %% Run the correct classifier or regression
-    if strcmpi(method, 'svm') 
+    if strcmpi(ml_parameters.method, 'svm') 
         %% https://fr.mathworks.com/help/stats/support-vector-machine-classification.html
         base_varargin = {   x_train         , ...
                             y_train         , ...
-                            'KernelFunction', parameters.svm_kernel, ...
+                            'KernelFunction', ml_parameters.svm_kernel, ...
                             'Standardize'   , true, ...
-                            'CrossVal'      , 'on',...
-                            'KFold'         , parameters.kFold};
+                            'CrossVal'      , 'on'};
         
         %% Set training model                
         if islogical(y_train)
@@ -41,33 +43,50 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         end
 
         %% Define kernel and box size, and update model settings
-        [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
+        [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, ml_parameters);   
         base_varargin = [base_varargin, 'KernelScale', kmax, 'BoxConstraint', bmax];
+        if ml_parameters.kFold > 1
+            base_varargin = [base_varargin, {'KFold', ml_parameters.kFold}]; 
+        end
 
-        %% Train model
-        model = func(base_varargin{:});
-
-        %% Test model
-        y_predict = get_consensus_prediction(model, x_test); 
-
-        %% Estimate accuracy of the cross-validated model, and of the predicted values vs ground thruth
-        score = kfoldLoss(model)*100; % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
-        %fprintf(['The model out-of-sample misclassification rate is ',num2str(score,3),'%%\n']);  
-    elseif strcmpi(method, 'linear')        
-        if isempty(parameters.alpha) % this should be no regularization
+        %% Train models
+        model         = func(base_varargin{:});
+        
+%         %% Get predictove score
+%         if ml_parameters.kFold > 1
+            y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+%         elseif ~isempty(x_test)
+%             y_predict     = model.predict(x_test);
+%         else
+%             y_predict     = model.predict(x_train);
+%         end
+        
+        if islogical(y_train)
+            y_predict = logical(round(y_predict));
+        end
+    
+        score = [];
+    elseif strcmpi(ml_parameters.method, 'linear')      
+        if ml_parameters.use_classifier
+            base_varargin = {   x_train         , ...
+                            y_train         , ...                              
+                            'PostFitBias'   , true,...
+                            'PassLimit'     , 10,...
+                            'Learner'       , 'logistic'}; 
+        elseif isempty(ml_parameters.alpha) % this should be no regularization
             base_varargin = {   x_train         , ...
                             y_train         , ...                              
                             'PostFitBias'   , true,...
                             'PassLimit'     , 10,...
                             'Learner'       , 'leastsquares'}; % default is no regularization, no standardization (e.g. data is not mean centered)
-        elseif parameters.alpha == 0 % ridge regularization
+        elseif ml_parameters.alpha == 0 % ridge regularization
             base_varargin = {   x_train         , ...
                             y_train         , ...                              
                             'PostFitBias'   , true,...
                             'PassLimit'     , 10,...
                             'Learner'       , 'leastsquares',...
                             'Regularization', 'ridge'}; 
-        elseif parameters.alpha == 1 % lasso regularization
+        elseif ml_parameters.alpha == 1 % lasso regularization
             base_varargin = {   x_train         , ...
                             y_train         , ...                              
                             'PostFitBias'   , true,...
@@ -79,8 +98,8 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         end
                               
         %% If you manualy set the solver, adjust it here
-        if ~isempty(parameters.solver)                
-            base_varargin = [base_varargin, 'Solver', parameters.solver];   
+        if ~isempty(ml_parameters.solver)                
+            base_varargin = [base_varargin, 'Solver', ml_parameters.solver];   
         end
         
         %% IF eleastic Net, adjust alpha
@@ -96,14 +115,24 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
             func = @fitrlinear;
         end
 
-        Lambda        = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters);   
+        Lambda        = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, ml_parameters);   
         base_varargin = [base_varargin, {'Lambda', Lambda}];
-        base_varargin = [base_varargin, {'KFold', 5}]; 
+        if ml_parameters.kFold > 1
+            base_varargin = [base_varargin, {'KFold', ml_parameters.kFold}]; 
+        end
            
         %% Train models
         model         = func(base_varargin{:});
-
-        y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+        
+        %% Get predictove score
+        if ml_parameters.kFold > 1
+            y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+        elseif ~isempty(x_test)
+            y_predict     = model.predict(x_test);
+        else
+            y_predict     = model.predict(x_train);
+        end
+        
         if islogical(y_train)
             y_predict = logical(round(y_predict));
         end
@@ -111,7 +140,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         score = [];
         
     %% still linear regression but we need to use lasso function and fitrlinear doesn't have alpha as parameter
-    elseif strcmpi(method, 'elastic')
+    elseif strcmpi(ml_parameters.method, 'elastic')
        error('to review')
        %convert roi_subset into array of strings so lasso is happy
        %for alpha = [0.1,0.9]
@@ -171,10 +200,10 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 %         hold off
         
      %%    
-    elseif strcmpi(method, 'forest')
-        classificationTree = TreeBagger(500, x_train, y_train, 'OOBPrediction', 'on','Method', 'classification','Cost', cost); 
+    elseif strcmpi(ml_parameters.method, 'forest')
+        classificationTree = TreeBagger(500, x_train, y_train, 'OOBPrediction', 'on','parameters.method', 'classification','Cost', cost); 
         y_predict = str2double(classificationTree.predict(x_test));  
-    elseif strcmpi(method, 'glm')  
+    elseif strcmpi(ml_parameters.method, 'glm')  
             model =  fitglm(x_train,y_train,'linear','Distribution','inverse gaussian'); %  'binomial' | 'poisson' | 'gamma' | 'inverse gaussian'
             [y_predict,~] = predict(model,x_test);
             score = NaN;
@@ -200,7 +229,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 %             
 
     else
-        error('classification method not implemented')
+        error('classification parameters.method not implemented')
     end
 end
 
@@ -225,7 +254,19 @@ end
 
 function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
     %% Set default Hyperparameter optimization options
-    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS;    
+    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS; 
+
+    if strcmpi(parameters.score_metrics, 'pearson')
+        LossFun = @pearson_correlation_coefficient;
+    elseif strcmpi(parameters.score_metrics, 'rmse')
+        LossFun = @rmse_score;
+    elseif strcmpi(parameters.score_metrics, 'mse')
+        LossFun = @mse_score;
+    elseif ishandle(parameters.score_metrics)
+        LossFun = parameters.score_metrics;
+    else
+        error('score function not recognized. Use "pearson", "mse", "rmse" or a valid function handle (see pearson_correlation_coefficient.m as an example)')
+    end
 
     if ~parameters.optimize_hyper
     	Lmax = 1e-4;    
@@ -237,7 +278,6 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
         lrange              = logspace(-4,4,40);
         [score, TPR, TNR, MCC] = deal(NaN(numel(lrange),1));
         base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
-        
         if isempty(x_test)
             base_varargin = [base_varargin, {'KFold', HyperparameterOptimizationOptions.KFold}];
             Timeout = 3;
@@ -252,11 +292,11 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
             [idx,mdl]               = fetchNext(fut, Timeout);
             if ~isempty(mdl)
                 if isempty(x_test)
-                    temp            = kfoldLoss(mdl, 'Mode','individual', 'LossFun', @pearson_correlation_coefficient)*100; 
+                    temp            = kfoldLoss(mdl, 'Mode','individual', 'LossFun', LossFun)*100; 
                     [score(idx), TPR(idx), TNR(idx), MCC(idx)] = deal(nanmean(temp));
                 else
                     y_predict            = mdl.predict(x_test);                
-                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict);
+                    [score(idx), TPR(idx), TNR(idx), MCC(idx)] = get_classifier_score(y_test, y_predict, '' ,LossFun);
                 end
             end
         end
@@ -274,12 +314,7 @@ function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, 
             drawnow();
         end
         [~, loc] = max(MCC); Lmax = lrange(loc);       
-    end 
-    
-    function [score] = pearson_correlation_coefficient(y_true, y_pred, w)
-        score = corr(y_true, y_pred);
-    end
-    
+    end     
 end
 
 

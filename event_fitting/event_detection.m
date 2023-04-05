@@ -1,9 +1,55 @@
-classdef event_fitting < handle
+classdef event_detection < handle
     %% subclass of arboreal_scan_experiment 
     properties
+        thr_for_detection   = 0.2;
+        thr_for_global      = 0.5;
+        thr_for_bad_ROIs    = 0.2;
     end
 
     methods
+        function [bad_ROIs, mean_corr_with_others] = find_events(obj, idx_filter, thr_for_detection, method, thr_for_global)
+            if nargin < 2 || isempty(idx_filter)
+                idx_filter = 1:obj.n_ROIs;
+            elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
+                idx_filter = obj.ref.indices.somatic_ROIs;
+            end
+            if nargin < 3 || isempty(thr_for_detection)
+                thr_for_detection = obj.thr_for_detection;
+            else
+                obj.thr_for_detection = thr_for_detection;
+            end
+            if nargin < 4 || isempty(method)
+                method = 'corr';
+            end
+            if nargin < 5 || isempty(thr_for_global)
+                thr_for_global = obj.thr_for_global;
+            else
+                obj.thr_for_global = thr_for_global;
+            end            
+
+            obj.disp_info(['Now detecting events with tree-wide pairwise correlation at least > ',num2str(thr_for_detection),' %%'],1)
+
+            %% Get original traces (unscaled)
+            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
+
+            %% Get original traces
+            [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering,'', thr_for_global);
+            
+%             sz = vertcat(obj.event.peak_value{:});
+%             thr1 = max(sz) * 0.8;
+%             thr2 = max(sz) * 0.2;
+%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
+%             for fn = fieldnames(obj.event)'                
+%                  if numel(obj.event.(fn{1})) == numel(mask)
+%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
+%                  end
+%             end
+
+            %% Identify and log poorly correlated ROIs
+            [bad_ROIs, mean_corr_with_others] = obj.find_bad_ROIs(correlation_res, idx_filter);
+            obj.disp_info('Events were detected and obj.event field has been populated.',1)
+        end
+        
         function fit_data = fit_events(obj, tau_decay, event_win_size, tolerance)
             if nargin < 2 || isempty(tau_decay)
                 tau_decay               = 0.2; % To make sure that we have enough data point to fit events (otherwise, we resample data)

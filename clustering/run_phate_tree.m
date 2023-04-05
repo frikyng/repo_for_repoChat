@@ -5,9 +5,9 @@ type_of_trace   = 'subtracted_peaks'; %raw, rescaled, subtracted
 
 % Load object
 if ~exist('obj', 'var')
-    [obj, source_signal, signal_indices] = prepare_phate_analysis(path, use_hd_data, time_filter, type_of_trace);
+    [obj, source_signal, signal_indices] = prepare_analysis(path, use_hd_data, time_filter, type_of_trace);
 elseif isempty(obj.event) || ~exist('signal_indices', 'var')
-    [obj, source_signal, signal_indices] = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
+    [obj, source_signal, signal_indices] = prepare_analysis(obj, use_hd_data, time_filter, type_of_trace);
 end
 
 %% ##############

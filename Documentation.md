@@ -738,9 +738,8 @@ obj.process(...);
     extracted_traces_conc: [1485×107 single]
                    n_ROIs: 107
                      demo: 0
-               filter_win: [5 0]
+           time_smoothing: [5 0]
               filter_type: 'gaussian'
-                 peak_thr: 2
                   cc_mode: 'peaks'
           rescaled_traces: [1485×107 single]
                   detrend: 1

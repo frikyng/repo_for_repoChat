@@ -1,7 +1,11 @@
-function [score, TPR, TNR, MCC] = get_classifier_score(y_test, y_predict, Weights)
+function [score, TPR, TNR, MCC] = get_classifier_score(y_test, y_predict, Weights, func)
     if nargin < 3 || isempty(Weights)
         Weights = ones(size(y_test));
     end
+    if nargin < 4 || isempty(func)
+        func = @pearson_correlation_coefficient;
+    end
+    
     y_test = y_test';
     
     if islogical(y_test)
@@ -35,6 +39,6 @@ function [score, TPR, TNR, MCC] = get_classifier_score(y_test, y_predict, Weight
             warning(['Prediction returned ',num2str(unique(y_predict)),' for all prediction. It was replaced by a random set of values to get correlation score '])
             y_predict = rand(size(y_predict)) * range(y_test);
         end
-        [score, TPR, TNR, MCC] = deal(corr(y_test,y_predict)*100);      
+        [score, TPR, TNR, MCC] = deal(func(y_test,y_predict)*100);      
     end
 end

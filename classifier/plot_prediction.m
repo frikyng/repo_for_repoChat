@@ -17,9 +17,23 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
         train_tp    = find(partition);
         test_tp     = find(~partition);
     else
-        train_tp    = find(training(partition));
-        test_tp     = find(test(partition));
+        %% Define timepoints for train and test
+        if isempty(partition) % if we just do many kfolds
+            train_tp    = 1:numel(YData);
+            test_tp     = [];
+        elseif isstruct(partition)
+            train_tp    = partition.x_train;
+            test_tp     = partition.x_test;
+        else % if we hold out data for final testing
+            train_tp    = find(training(partition));
+            test_tp     = find(test(partition));
+        end
     end
+    
+%     train_tp = sort(train_tp)
+%     test_tp = sort(test_tp);
+%     
+    
     y_train     = YData(train_tp);              % Variable to predict used for training  
     y_test      = YData(test_tp);               % Variable to predict used for testing (ground truth) 
         
@@ -43,8 +57,8 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
         plot(timepoints(test_tp(wrong)), y_predict(wrong),'ro', 'MarkerFaceColor', 'r'); hold on
         ylim([-0.05, 1.05]);
     else
-        plot(timepoints(train_tp), normalize(y_train, 'medianiqr')); hold on;
-        plot(timepoints(test_tp), normalize(y_predict, 'medianiqr'),'g'); hold on
+        plot(timepoints(sort(train_tp)), normalize(YData(sort(train_tp)), 'medianiqr')); hold on;
+        plot(timepoints(sort(test_tp)), normalize(YData(sort(test_tp)), 'medianiqr'),'g'); hold on
         %plot(timepoints(test_tp), normalize(smoothdata(y_predict, 'gaussian' , 10), 'medianiqr'),'b--')
     end
 
@@ -68,4 +82,17 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
 
     linkaxes([ax1, ax2, ax3],'x')
     drawnow
+    
+    if contains(behaviour_name, 'shuffle')
+        temp_test = evalin('base','temp_test');
+        temp_predict = evalin('base','temp_predict');
+
+        temp_predict = [temp_predict; y_predict];
+        temp_test = [temp_test; y_test'];
+
+
+        assignin('base','temp_test',temp_test);
+        assignin('base','temp_predict',temp_predict)
+        %figure(6);clf();scatter(y_predict, y_test);
+    end
 end

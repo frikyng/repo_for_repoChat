@@ -1,6 +1,3 @@
-
-
-
 function [corr_results_sub, n_high_corr, subpeaks_t] = get_average_pairwise_correlation(current_expe, corr_results, data_sm, rendering, condition, corr_results_rand, references)
     if nargin < 4 || isempty(rendering)
         rendering = true;        

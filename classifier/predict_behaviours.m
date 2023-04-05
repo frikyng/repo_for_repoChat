@@ -3,21 +3,15 @@
 
 %% Cell 2019-09-17_exp_1 anticorelated to running
 
-function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classifier, method, type_of_trace, behaviour_list, ROI_groups, n_iter, rand_ROI_groups, varargin)
+function [results, data, ROI_groups, meanvalue, stats, values] = predict_behaviours(obj, type_of_trace, behaviour_list, ROI_groups, varargin)
     if nargin < 1 || isempty(obj)
         obj = ''; 
     end
-    if nargin < 2 || isempty(use_classifier)
-        use_classifier = true; % if false, use regression learner
-    end
-    if nargin < 3 || isempty(method)
-        method = 'svm'; % i.e. fitcsvm vs fitclinear etc
-    end
-    if nargin < 4 || isempty(type_of_trace)
+    if nargin < 2 || isempty(type_of_trace)
         type_of_trace   = 'subtracted_peaks'; % ['subtracted' OR 'rescaled' OR 'raw'] AND ['peaks' or '']. eg 'subtracted_peaks' , or 'raw'
     end
     build_beh           = true;
-    if nargin < 5 || isempty(behaviour_list)
+    if nargin < 3 || isempty(behaviour_list)
         % pass      
     elseif isstruct(behaviour_list)
         raw_behaviours = behaviour_list.raw_behaviours;
@@ -27,7 +21,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         build_beh      = false;
     end
     single_matrix_input = false;
-    if nargin < 6 || isempty(ROI_groups)
+    if nargin < 4 || isempty(ROI_groups)
         ROI_groups   = num2cell(obj.ref.indices.valid_swc_rois);
         single_matrix_input = true;
     elseif ~iscell(ROI_groups)
@@ -37,26 +31,20 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     if iscolumn(ROI_groups)
         ROI_groups = ROI_groups';
     end
-    if nargin < 7 || isempty(n_iter)
-        n_iter   = 1; 
-    end
-    if nargin < 8 || isempty(rand_ROI_groups)
-        rand_ROI_groups   = false; % false is no randomization, true is randperm (this is to compare info content in a group of (e.g. PHATE discovered) ROIs with randomly selected ROIs (from anywhere from the tree), esuring the same # of ROIs in each)
-    end
-    if nargin < 9 || isempty(varargin)
+    if nargin < 5 || isempty(varargin)
         ml_parameters = DEFAULT_CLASSIFIER_OPTION;
     else
         ml_parameters = DEFAULT_CLASSIFIER_OPTION(varargin);
     end
+
     
     use_hd_data             = false;
-    time_filter             = 0;
-
+    
     %% Make sure preprocessing was done correctly
     rendering       = obj.rendering;
     obj.rendering   = false;
 
-    [obj, source_signal, ~, timepoints, lag]    = prepare_phate_analysis(obj, use_hd_data, time_filter, type_of_trace);
+    [obj, source_signal, ~, timepoints, lag]    = prepare_analysis(obj, use_hd_data, [], type_of_trace);
     
     beh_timepoints                              = timepoints + lag; % if lag == 0 then points are the same
     timepoints(beh_timepoints < 1)              = [];
@@ -68,6 +56,12 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     % figure();hist(reshape(source_signal(timepoints,:),[],1),100); % TOMMY uncomment to see distribution of predictors
     obj.rendering   = rendering;
     
+    %% If required add shufffing
+    if ml_parameters.add_shuffle
+        shuffled_beh    = strcat(behaviour_list, '_shuffled');
+        behaviour_list  = reshape([behaviour_list; shuffled_beh],[],1)';
+    end
+    
     %% Get all behaviours
     if ~build_beh
         %% If we already had the extracted behaviours, at this stage we just update the formatted name 
@@ -78,9 +72,19 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     
     %% Filter timepoints
     processed_behaviours = raw_behaviours(:, beh_timepoints);
-    if use_classifier
+    if ml_parameters.use_classifier
         processed_behaviours = logical(processed_behaviours > beh_thr');
     end
+    
+    %% Find groups that are exact duplicates because that would make 2 times the same predictor
+    for el = 1:(numel(ROI_groups)-1)
+        for el2 = (el+1):numel(ROI_groups)
+            if numel(ROI_groups{el}) == numel(ROI_groups{el2}) && all(ROI_groups{el} == ROI_groups{el2})
+                ROI_groups{el2} = [];
+            end
+        end
+    end
+   
 
     %% Get the signal for the selected timepoints and ROIs
     %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
@@ -92,6 +96,8 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
         ROI_groups{gp_idx}(ismember(ROI_groups{gp_idx}, obj.bad_ROI_list)) = [];
         data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups{gp_idx}),2)';        
     end
+    
+    %figure();imagesc(tril(corr([data',processed_behaviours'])',-1))
 
     fully_invalid_group = cellfun(@isempty, ROI_groups)' | all(isnan(data),2);
     ROI_groups(fully_invalid_group) = [];
@@ -113,30 +119,31 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
     %     Soma_ROIs   = find(ismember(1:size(data, 1), obj.ref.indices.somatic_ROIs)); % somatic ROIs, but ignoring the NaNs
 
     
-    %% FYI find(all(isnan(source_signal))) should be empty, or you have observation with only NaN
-    
+    %% FYI find(all(isnan(source_signal))) should be empty, or you have observation with only NaN    
     All_ROIs    = 1:size(data, 1);
 
-    if ~rand_ROI_groups
-        for iter = 1:n_iter
-            out{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
-            out{iter}.used_ROIs     = ROI_groups;
+    if ~ml_parameters.randomize_ROIs
+        for iter = 1:ml_parameters.N_iter               
+            results{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            results{iter}.used_ROIs     = ROI_groups;
         end
     else  
         %% we build alternative randomized groups. 
         % 0/false does no randomization
         % 1 randomize groups using all valid ROIs
         % -1 randomize groups using all valid ROIs, excluding the ROIs listed in the groups. Groups are sized matched
-        if rand_ROI_groups == 1
+        if ml_parameters.randomize_ROIs == 1
             rand_ROI_pool      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
-        elseif rand_ROI_groups == -1
+        elseif ml_parameters.randomize_ROIs == -1
             rand_ROI_pool      = obj.ref.indices.valid_swc_rois((~ismember(obj.ref.indices.valid_swc_rois, horzcat(ROI_groups{:}))) & (~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list))); %list of valid ROIs excluding ROI groups
         end
         % when you pass all ROIs (so all cells in ROI_groups size == 1), randomization for leftover ROIs makes no sense so we just randomize ROIs
         if isempty(rand_ROI_pool)
-            error('No ROI left for randomization')
+            disp('WARNING : No ROI left for randomization')
+            ml_parameters.randomize_ROIs        = 1;
+            rand_ROI_pool                       = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
         end
-        for iter = 1:n_iter
+        for iter = 1:ml_parameters.N_iter   
             try
                 if single_matrix_input % when input was matrix
                     ROI_groups_rdm     = num2cell(rand_ROI_pool(randperm(numel(rand_ROI_pool),numel(ROI_groups))));
@@ -144,7 +151,7 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
                     ROI_groups_rdm     = cellfun(@(x) rand_ROI_pool(randperm(numel(rand_ROI_pool),x)), cellfun(@numel, ROI_groups, 'UniformOutput', false), 'UniformOutput', false); % size matched groups from ROI_pool
                 end
             catch
-                disp('Not enough non-used ROIs available. Using all ROIs instead for randomization')
+                disp('WARNING : Not enough non-used ROIs available. Using all ROIs instead for randomization')
                 ok = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list));
                 if single_matrix_input % when input was matrix
                     ROI_groups_rdm     = num2cell(ok(randperm(numel(ok),numel(ROI_groups))));
@@ -154,15 +161,18 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
             end
             for gp_idx = 1:numel(ROI_groups_rdm)
                 data(gp_idx, :) =  nanmean(source_signal(timepoints, ROI_groups_rdm{gp_idx}),2)';        
-            end                
-            out{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), method, behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
-            out{iter}.used_ROIs     = ROI_groups_rdm;
+            end   
+            results{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), behaviour_list, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            results{iter}.used_ROIs     = ROI_groups_rdm;
         end
     end
 
-    [meanvalue,~, fig_handle] = bar_chart(out, 'beh_type','','','',ml_parameters.rendering);
+    [meanvalue,~, fig_handle, stats, values] = bar_chart(results, '','','','',ml_parameters.rendering, true, ml_parameters);
     if ml_parameters.rendering
         title(ml_parameters.title)
+    end
+    if iscell(ml_parameters.title)
+        ml_parameters.title = [ml_parameters.title{:}];
     end
     if ml_parameters.savefig
         if islogical(ml_parameters.savefig)
@@ -173,5 +183,12 @@ function [out, data, ROI_groups, meanvalue] = predict_behaviours(obj, use_classi
             end
             save_myfig(fig_handle,[ml_parameters.savefig, ml_parameters.title],{'png','pdf'})
         end
-    end    
+    end 
+    if ml_parameters.save
+        if contains(ml_parameters.save, '.mat')
+            ml_parameters.save = parse_paths(fileparts(ml_parameters.save));
+        end
+        indexes = ROI_groups;
+        save([ml_parameters.save, ml_parameters.title], 'results', 'indexes', 'stats', 'values', '-v7.3')
+    end
 end
