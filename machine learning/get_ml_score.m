@@ -5,8 +5,9 @@ function [score, TPR, TNR, MCC] = get_ml_score(y_test, y_predict, Weights, func)
     if nargin < 4 || isempty(func)
         func = @pearson_correlation_coefficient;
     end
-    
-    y_test = y_test';
+    if ~iscolumn(y_test)
+        y_test = y_test';
+    end      
     
     if islogical(y_test)
         %% See https://en.wikipedia.org/wiki/Sensitivity_and_specificity

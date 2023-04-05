@@ -96,7 +96,7 @@ function [results, data, predictor_ROI_groups, meanvalue, stats, values] = predi
     %% Filter timepoints
     processed_behaviours = raw_behaviours(:, beh_timepoints);
     if ml_parameters.use_classifier
-        processed_behaviours = logical(processed_behaviours > beh_thr');
+        processed_behaviours = logical(abs(processed_behaviours) > beh_thr');
     end
     
     %% Find groups that are exact duplicates because that would make 2 times the same predictor
@@ -146,7 +146,8 @@ function [results, data, predictor_ROI_groups, meanvalue, stats, values] = predi
     All_ROIs    = 1:size(data, 1);
 
     if ~ml_parameters.randomize_ROIs
-        for iter = 1:ml_parameters.N_iter               
+        for iter = 1:ml_parameters.N_iter
+            fprintf(['Iteration : ',num2str(iter),'\n'])
             results{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, observations, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
             results{iter}.used_ROIs     = predictor_ROI_groups;
         end
@@ -167,6 +168,7 @@ function [results, data, predictor_ROI_groups, meanvalue, stats, values] = predi
             rand_ROI_pool                       = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); %list of all valid ROIs 
         end
         for iter = 1:ml_parameters.N_iter   
+            fprintf(['Iteration : ',num2str(iter),'\n'])
             try
                 if single_matrix_input % when input was matrix
                     ROI_groups_rdm     = num2cell(rand_ROI_pool(randperm(numel(rand_ROI_pool),numel(predictor_ROI_groups))));

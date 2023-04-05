@@ -132,10 +132,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             out.model{mdl_idx}       = {};
             continue
         end
-        
-        %% Predict behaviour
-        [y_predict, y_test, cross_val_score, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_obs, partition, cost, merge_params_obj(ml_parameters, struct('behaviour',type_corrected)));
 
+        %% Predict behaviour
+        [y_predict, y_test, ~, x_test, x_train, y_train, model] = prediction(predictor_data(roi_subset,:), current_obs, partition, cost, merge_params_obj(ml_parameters, struct('behaviour',type_corrected)));
+ 
+        
         %% Get accuracy score
         if isempty(y_test) && ml_parameters.kFold > 1
             %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)

@@ -59,7 +59,7 @@ function [stuct_out, raw_behaviours, beh_thr, formatted_behaviour_list] = prepar
         if any(contains(type, {'RT3D_MC','BodyCam_Eye','BodyCam_Laser'}))
             beh_thr(type_idx) = nanmedian(current_beh);
         else
-            beh_thr(type_idx) = nanmax(current_beh) - (range(current_beh) * 0.9);
+            beh_thr(type_idx) = nanmax(abs(current_beh)) * 0.1;
         end
 
         %% Plot behaviour and threshold

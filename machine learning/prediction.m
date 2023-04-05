@@ -51,16 +51,8 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 
         %% Train models
         model         = func(base_varargin{:});
-        
-%         %% Get predictove score
-%         if ml_parameters.kFold > 1
-            y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
-%         elseif ~isempty(x_test)
-%             y_predict     = model.predict(x_test);
-%         else
-%             y_predict     = model.predict(x_train);
-%         end
-        
+        y_predict     = get_consensus_prediction(model, x_test, x_train); %x_train only when not using held out data 
+
         if islogical(y_train)
             y_predict = logical(round(y_predict));
         end
@@ -229,8 +221,18 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
 %             
 
     else
-        error('classification parameters.method not implemented')
+        error('classification or regression method not implemented')
     end
+    
+    
+    
+    if ~iscolumn(y_test)
+        y_test = y_test';
+    end      
+    
+    
+    
+    
 end
 
 function y_predict = get_consensus_prediction(Model, x_test, x_train)
@@ -246,10 +248,16 @@ function y_predict = get_consensus_prediction(Model, x_test, x_train)
         end
     end
     %figure(11111);clf();plot(y_predict'); hold on;plot(nanmean(y_predict), 'k', 'Linewidth', 2)
-    y_predict = nanmean(y_predict)';
+    
     if islogical(Model.Y)
-        y_predict = logical(round(y_predict));
+        y_predict = nanmedian(y_predict,1);
+    else
+        y_predict = nanmean(y_predict)';
     end
+    
+    if ~iscolumn(y_predict)
+        y_predict = y_predict';
+    end    
 end
 
 function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
@@ -323,13 +331,13 @@ function [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_tes
     if ~parameters.optimize_hyper
     	bmax = 1000; kmax = 20;                 
     elseif strcmpi(parameters.optimization_method, 'manual')
-        krange = logspace(-1,4,40);
-        brange = logspace(0,6,40);
+        krange = logspace(-1,4,10);
+        brange = logspace(0,6,10);
         [score, TPR, TNR, MCC] = deal(NaN(numel(krange),numel(brange)));
         base_varargin{find(strcmp(base_varargin, 'CrossVal'))+1} = 'off';
         base_varargin([find(strcmp(base_varargin, 'KFold')), find(strcmp(base_varargin, 'KFold'))+1]) = [];
         for k = 1:numel(krange)
-            fprintf(['optimization at : ',num2str(100*k/numel(krange)),' %%\n'])
+            %fprintf(['optimization at : ',num2str(100*k/numel(krange)),' %%\n'])
             clear fut
             for b = 1:numel(brange)
                 temp_varargin           = [base_varargin, 'KernelScale', krange(k), 'BoxConstraint', brange(b)];
@@ -355,8 +363,10 @@ function [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_tes
             subplot(2,2,4);im = imagesc(TNR, 'XData', brange, 'YData', krange);im.Parent.XScale = 'log';im.Parent.YScale = 'log';im.Parent.YLim = [krange(1),krange(end)];colorbar;title('TNR');xlabel('box');ylabel('kernel')
             drawnow();
         end
-        [~, loc] = max(max(MCC));  bmax = brange(loc);
-        [~, loc] = max(max(MCC')); kmax = krange(loc);        
+        [~, loc]    = max(MCC(:));
+        [kmax,bmax] = ind2sub(size(MCC),loc);
+        bmax        = brange(bmax);
+        kmax        = krange(kmax);        
     else
         try
             Mdl = fitcsvm(  x_train ,...
