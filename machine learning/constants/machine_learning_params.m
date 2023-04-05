@@ -22,6 +22,8 @@ function params = machine_learning_params(varargin)
     params.add_shuffle              = false ; % If true, behaviour temporal shuffling is computed too 
     params.obs_shuf_block_sz        = 1     ; % when params.shuffling is 'behaviours', this defines the size of the block to shuffle. 1 will shuffle every timepoint, and values > 1 will shuffle blocks
     params.score_metrics            = 'pearson'; % pearson, rmse or a function handle
+    params.split_shuffle            = true  ; % true or false. Set to false to make the charts a bit lighter
+    params.show_iterations          = true  ; % true or false. Set to false to hide the dots
     
     %% Unwrap varargin
     while nargin > 0 && iscell(varargin) && iscell(varargin{1})
@@ -106,7 +108,13 @@ function params = machine_learning_params(varargin)
             end     
             if (strcmpi(varargin{i},'score_metrics'))
                 params.score_metrics = varargin{i+1};
-            end    
+            end  
+            if (strcmpi(varargin{i},'split_shuffle'))
+                params.split_shuffle = varargin{i+1};
+            end  
+            if (strcmpi(varargin{i},'show_iterations'))
+                params.show_iterations = varargin{i+1};
+            end              
         end
     end
     

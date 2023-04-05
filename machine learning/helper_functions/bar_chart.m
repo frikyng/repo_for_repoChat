@@ -28,10 +28,6 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         do_stats = true;
     end
     
-    
-    show_dots = 1
-    split_shuffle = 1
-    
     N_behaviours    = 1;
     N_iter          = 1;
     N_conditions    = 1;
@@ -127,9 +123,52 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     %% Get mean value if multiple iterations of more than one variable
     meanvalue   = permute(nanmean(values,2),[1,3,2]);
     sem_values  = permute(nanstd(values,[], 2)./sqrt(size(values, 2)),[1,3,2]);
-
-
+    initial_names = categories(labels);
     
+    %% Set default option in case no varargin is passed
+    max_scores      = [];
+    score_metrics   = 'performance';
+    show_dots       = true;
+    split_shuffle   = true;   
+    if nargin >= 8 && isstruct(varargin{1})
+        ml_parameters = varargin{1};
+        if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(prefilter_labels)
+            max_scores = ml_parameters.max_score;
+            if numel(prefilter_labels) ~= numel(initial_names) % if you had a filter
+                max_scores(INVALID) = [];
+            end
+            max_scores = max_scores(1:2:end);
+        elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(meanvalue)
+            max_scores = ml_parameters.max_score(1:2:end);                
+        end
+
+        if isfield(ml_parameters, 'score_metrics')
+            score_metrics = ml_parameters.score_metrics;
+            if ishandle(score_metrics)
+                score_metrics = handle2str(score_metrics);
+            end
+            if contains(score_metrics, 'pearson')
+                score_metrics = 'Predictive Score (r)';
+            elseif strcmpi(score_metrics, 'mse')
+                score_metrics = '1/mse';
+            elseif strcmpi(score_metrics, 'rmse')
+                score_metrics = '1/rmse';
+            else
+                score_metrics = 'model performance';
+            end
+        end
+
+        if isfield(ml_parameters, 'show_dots')
+            show_dots = ml_parameters.show_dots;
+        end
+        if isfield(ml_parameters, 'split_shuffle')
+            split_shuffle = ml_parameters.split_shuffle;
+        end
+
+        if N_conditions > numel(labels) % multi conditions
+            max_scores = repmat(max_scores, 1, numel(meanvalue));
+        end
+    end
 
     %% Generate figure
     fig_handle      = [];
@@ -138,13 +177,12 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     shuffle_meanvalue    = [];
     if rendering
         %% Fix for labels
-        oldnames        = categories(labels);
         labels          = fix_labels(labels);
         fig_handle      = figure();clf();
         fig_handle.Position(4) = fig_handle.Position(4)*1.3;
         if is_shuffle
             idx             = reshape(reshape(1:size(meanvalue,1),2,size(meanvalue,1 )/2)',[],2);
-            labels          = removecats(labels,oldnames(idx(:,2)));
+            labels          = removecats(labels,initial_names(idx(:,2)));
             labels          = labels(~isundefined(labels));
             if size(idx, 1) > 1 % otherwise reshaping error when only one behaviour
                 meanvalue       = meanvalue(idx)'; 
@@ -172,51 +210,18 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         else
             hb                  = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
             colororder(viridis(N_conditions))
-        end
-        
-        max_scores = [];
-        score_metrics = 'performance';
-        if nargin >= 8 && isstruct(varargin{1})
-            ml_parameters = varargin{1};
-            if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(prefilter_labels)
-                max_scores = ml_parameters.max_score;
-                if numel(prefilter_labels) ~= numel(oldnames) % if you had a filter
-                    max_scores(INVALID) = [];
-                end
-                max_scores = max_scores(1:2:end);
-            elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(meanvalue)
-                max_scores = ml_parameters.max_score(1:2:end);                
-            end
-            
-            if isfield(ml_parameters, 'score_metrics')
-                score_metrics = ml_parameters.score_metrics;
-                if ishandle(score_metrics)
-                    score_metrics = handle2str(score_metrics);
-                end
-                if contains(score_metrics, 'pearson')
-                    score_metrics = 'Predictive Score (r)';
-                elseif strcmpi(score_metrics, 'mse')
-                    score_metrics = '1/mse';
-                elseif strcmpi(score_metrics, 'rmse')
-                    score_metrics = '1/rmse';
-                else
-                    score_metrics = 'model performance';
-                end
-            end
-            if N_conditions > numel(labels) % multi conditions
-                max_scores = repmat(max_scores, 1, numel(meanvalue));
-            end
-        end
-        
+        end        
+
+        %% Adjust max bar width depending on shuffle condition
         if ~isempty(max_scores)
             if is_shuffle
                 w = hb(1).BarWidth/4;
             else
                 w = hb(1).BarWidth/2;
             end            
-%             for el = 1:numel(max_scores)
-%                 plot([el-w,el+w] ,[max_scores(el), max_scores(el)],'r:', 'LineWidth',2)
-%             end
+            %             for el = 1:numel(max_scores)
+            %                 plot([el-w,el+w] ,[max_scores(el), max_scores(el)],'r:', 'LineWidth',2)
+            %             end
         end
 
         %% Add error bars. This needs a trick for categorical data
