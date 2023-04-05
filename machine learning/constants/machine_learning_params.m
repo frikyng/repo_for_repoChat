@@ -1,4 +1,4 @@
-function params = DEFAULT_CLASSIFIER_OPTION(varargin)    
+function params = machine_learning_params(varargin)    
     params                          = {};
     params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
     params.use_classifier           = false ; % If true, a classifier is used instead of a regression model

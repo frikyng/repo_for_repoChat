@@ -22,9 +22,9 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         calcium_ref    = [];  
     end
     if nargin < 8 || isempty(ml_parameters)
-        ml_parameters = DEFAULT_CLASSIFIER_OPTION;
+        ml_parameters = machine_learning_params;
     else
-        ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
+        ml_parameters = machine_learning_params(ml_parameters);
     end
     
     USABLE_BEH                      = ~all(isnan(observation_data),2);

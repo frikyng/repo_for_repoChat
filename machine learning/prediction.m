@@ -1,8 +1,8 @@
 function [y_predict, y_test, score, x_test, x_train, y_train, model] = prediction(XData, YData, partition, cost, ml_parameters)
     if nargin < 5 || isempty(ml_parameters)
-        ml_parameters = DEFAULT_CLASSIFIER_OPTION;
+        ml_parameters = machine_learning_params;
     else
-        ml_parameters = DEFAULT_CLASSIFIER_OPTION(ml_parameters);
+        ml_parameters = machine_learning_params(ml_parameters);
     end
 
     %% Define timepoints for train and test
@@ -254,7 +254,7 @@ end
 
 function [Lmax] = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
     %% Set default Hyperparameter optimization options
-    HyperparameterOptimizationOptions = DEFAULT_HYPERPARAMS; 
+    HyperparameterOptimizationOptions = machine_learning_hyper_params; 
 
     if strcmpi(parameters.score_metrics, 'pearson')
         LossFun = @pearson_correlation_coefficient;
