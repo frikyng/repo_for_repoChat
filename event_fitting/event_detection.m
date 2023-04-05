@@ -177,7 +177,7 @@ classdef event_detection < handle
                 end
 
                 %show_events(all_data, events)
-                fit_rendering = false;
+               fit_rendering = false;
                 [all_peak_values, fit_data] = fit_all_events(events, traces, fit_data.peak_pos, pre_peak_delay, fit_data, fit_rendering, guesses, peak_av_width, 'exp1',true);
                 refitted_events                 = 1/permute(cat(3, fit_data.events{:}),[1,3,2]); % gp, event, parameter
                 figure(1014);clf();plot(refitted_events(:,:,3)) ; hold on; plot(nanmedian(refitted_events(:,:,3),2), 'k', 'LineWidth',2); title('median tau 1 per group'); xlabel('Groups');xticklabels(fit_data.group_labels);xtickangle(45);set(gcf,'Color','w');

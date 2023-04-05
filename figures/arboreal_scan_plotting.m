@@ -49,7 +49,7 @@ classdef arboreal_scan_plotting < handle
             obj.disp_info('All plots were deleted',1);
         end
         
-        function figure_list = get_fig_list(obj, n_groups, n_dims)   
+        function figure_list = get_fig_list(obj, n_groups, n_dims)
             if nargin < 2 || isempty(n_groups)
                 n_groups = numel(obj.binned_data.groups);
             end
@@ -59,7 +59,7 @@ classdef arboreal_scan_plotting < handle
             figure_list = [1001:1035, 10051:(10050 + n_groups), 10021:(10020+n_dims), 10200:(10200+n_dims),10830];            
         end
             
-        function plot_median_traces(obj, rescaled) 
+        function plot_median_traces(obj, rescaled)
             if nargin < 2 || isempty(rescaled)
                 rescaled = obj.is_rescaled;
             end
@@ -113,7 +113,7 @@ classdef arboreal_scan_plotting < handle
             ax.YAxis(2).Color = 'k';
         end
         
-        function plot_correlation_results(obj, cross_corr)            
+        function plot_correlation_results(obj, cross_corr)
             if nargin < 2 || isempty(cross_corr)
                 cross_corr = obj.crosscorr;
             end
@@ -160,14 +160,14 @@ classdef arboreal_scan_plotting < handle
             subplot(2,1,2); plot(obj.t, obj.event.mean_pairwise_corr); hold on;scatter(obj.t(obj.event.t_corr), obj.event.mean_pairwise_corr(obj.event.t_corr), [], obj.event.globality_index, 'filled');xlabel('time (s)');ylabel('Mean pairwise correlation');set(gcf,'Color','w');
         end
         
-        function plot_rescaled_traces(obj)            
+        function plot_rescaled_traces(obj)
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
             rescaled_traces = obj.rescaled_traces(:,valid_ROIS);            
             figure(1034);cla();plot(obj.t, rescaled_traces);title('rescaled traces');xlabel('time (s)');ylabel('Z-Score all ROIs');set(gcf,'Color','w');
             figure(1033);cla();imagesc(rescaled_traces');caxis([prctile(reshape(rescaled_traces, [], 1),1), prctile(reshape(rescaled_traces, [], 1),99)]);title('rescaled traces 2D');xlabel('frames');ylabel('ROIs');set(gcf,'Color','w');
         end
         
-        function plot_original_traces(obj)            
+        function plot_original_traces(obj)
             valid_ROIS = ~ismember(1:obj.n_ROIs, obj.bad_ROI_list);
             rescaled_traces = obj.extracted_traces_conc(:,valid_ROIS);            
             figure(1055);cla();plot(obj.t, rescaled_traces);title('original traces');xlabel('time (s)');ylabel('Z-Score all ROIs');set(gcf,'Color','w');
