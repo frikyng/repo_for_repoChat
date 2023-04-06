@@ -1358,6 +1358,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                 else
                     tp = active_tp{1};
                 end
+            elseif invert
+                tp = ~tp;
             end
         end
 
