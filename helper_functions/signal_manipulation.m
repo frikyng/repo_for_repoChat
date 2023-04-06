@@ -339,7 +339,7 @@ classdef signal_manipulation < handle
             % NaN the ROIs in bad_ROI_list 
             % Nan the points between two recordings to prevent some stitching artefact or help you find these locations
             if isempty(obj.rescaling_info) || ~obj.is_rescaled
-                warning('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first.\n');
+                obj.disp_info('TRACES HAVE NOT BEEN RESCALED YET - CALL obj.rescale_traces() first',3);
                 obj.is_rescaled = false;
                 rescaled_traces = [];
                 return
