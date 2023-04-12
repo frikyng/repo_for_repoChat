@@ -71,10 +71,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
         ref                                     % A pointer to the first extracted arboreal scan, for conveniency
         batch_params                            % Pointer to obj.ref.batch_params ; the info to rebuild and locate the tree
         logs                                    % Display the logs for all experiments
+        usable_swc_ROIs                         % Rois that are neither bad nor excluded
     end
 
     properties (Dependent = true, Transient = true, Hidden = true)
         external_variables                      % Pointer to behavioural variables of each arboreal scan --> set in obj.behaviours
+        
     end
 
     methods
@@ -1286,6 +1288,10 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
                 obj.variability = {};
             end
             obj.variability_metric = variability_metric;
+        end
+        
+        function usable_swc_ROIs = get.usable_swc_ROIs(obj)
+            usable_swc_ROIs = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list));
         end
   
         function [tp, beh, analysis_mode] = get_tp_for_condition(obj, analysis_mode)
