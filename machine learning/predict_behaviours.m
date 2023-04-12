@@ -107,10 +107,8 @@ function [results, data, predictor_ROI_groups, meanvalue, stats, values] = predi
             end
         end
     end
-   
 
     %% Get the signal for the selected timepoints and ROIs
-    %Valid_ROIs      = obj.ref.indices.valid_swc_rois(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list)); % remove excluded branches AND bad_ROIs based on correlation)
     invalid_ROIs_logical    = ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list);
     invalid_ROIs            = obj.ref.indices.valid_swc_rois(invalid_ROIs_logical); % remove excluded branches AND bad_ROIs based on correlation)
     source_signal(:, invalid_ROIs) = NaN;
