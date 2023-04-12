@@ -121,7 +121,13 @@ classdef arboreal_scan_plotting < handle
             imAlpha(isnan(cross_corr))  = 0;
             figure(1008);clf();imagesc(cross_corr, 'AlphaData',imAlpha); hold on;set(gcf,'Color','w');
             set(gca,'color',0.8*[1 1 1]);
-            caxis([0,1]); hold on;xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
+            caxis([0,1]); hold on;
+            if size(cross_corr, 1) <= 10            
+                xticks(1:size(cross_corr, 1));yticks(1:size(cross_corr, 1))
+            else
+                R = unique(round(linspace(1,size(cross_corr, 1),10)));
+                xticks(R);yticks(R)
+            end
             colorbar; hold on;
             if contains(obj.cc_mode, 'pop')
                 pop_label = num2cell(1:size(obj.extracted_pop_conc,2));
@@ -129,13 +135,13 @@ classdef arboreal_scan_plotting < handle
                 pop_label = [];
             end
             if contains(obj.cc_mode, 'groups')
-                plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);xtickangle(45);
-                plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Soma/Proximal seg',obj.binned_data.bin_legend]);
+                plot([1.5,1.5],[0.5,size(cross_corr, 1)+0.5],'k-');xticklabels(['Ref',obj.binned_data.bin_legend]);xtickangle(45);
+                plot([0.5,size(cross_corr, 1)+0.5],[1.5,1.5],'k-');yticklabels(['Ref',obj.binned_data.bin_legend]);
                 part_1 = ' groups';
                 N_reg = numel(obj.binned_data.bin_legend)+1;
             else
-                xticklabels(['Soma/Proximal seg', num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);xtickangle(45);
-                yticklabels(['Soma/Proximal seg',num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);
+                xticklabels(['Ref', num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);xtickangle(45);
+                yticklabels(['Ref',num2cell(obj.ref.indices.valid_swc_rois'),pop_label]);
                 N_reg = numel(obj.ref.indices.valid_swc_rois)+1;
                 part_1 = ' ROIs';
             end
@@ -151,7 +157,11 @@ classdef arboreal_scan_plotting < handle
             arrangefigures(0);
 
             %% Project correlation value onto the tree
-            obj.plot_corr_tree();
+            if ~isempty(cross_corr)
+                obj.plot_corr_tree(cross_corr);
+            else
+                1
+            end
         end
         
         function plot_detected_events(obj)
@@ -218,11 +228,11 @@ classdef arboreal_scan_plotting < handle
                 colors = 'jet';
             end
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'curved', colors, 'discrete');
-            cmap = jet(range(obj.dimensionality.cluster_idx)+1);
-            if any(obj.dimensionality.cluster_idx <= 0)
-                cmap(1,:) = UNASSIGNED_ROI_COLOR;
-            end
-            colormap(cmap);
+%             cmap = jet(range(obj.dimensionality.cluster_idx)+1);
+%             if any(obj.dimensionality.cluster_idx <= 0)
+%                 cmap(1,:) = UNASSIGNED_ROI_COLOR;
+%             end
+%             colormap(cmap);
 
             p = plot([NaN, NaN; NaN, NaN]);
             [~, objH] = legend(p, 'Excluded ROIs','Unassigned Cluster', 'Box', false, 'Location', 'northwest');             % Reorder handles
@@ -234,12 +244,12 @@ classdef arboreal_scan_plotting < handle
             
 
             %% Display rearranged Loadings and Cluster limits 
-            if ~isvalid(map_handle)
+            if ~isvalid(map_handle) || isa(map_handle, 'matlab.graphics.axis.Axes')
                 map_handle = figure(999);map_handle = gca();cla();
             else
                 cla(map_handle);
             end
-            imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.sorted_idx,:));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
+            imagesc(map_handle, obj.dimensionality.LoadingsPM(obj.dimensionality.sorted_idx,:));xlabel('Factors');hold(map_handle, 'on')
             axis(map_handle,'tight')
             for el = 1:numel(unique(obj.dimensionality.cluster_idx))
                 start = find(obj.dimensionality.cluster_idx(obj.dimensionality.sorted_idx,:) == el, 1, 'last');
@@ -330,31 +340,44 @@ classdef arboreal_scan_plotting < handle
             if nargin < 2 || isempty(cc)
                 cc = obj.crosscorr;
                 if contains(obj.cc_mode,'pop')
-                    pop_sz = size(obj.extracted_pop_conc,2);
-                    cc = cc(1:(end-pop_sz),1:(end-pop_sz));
+                    pop_sz  = size(obj.extracted_pop_conc,2);
+                    cc      = cc(1:(end-pop_sz),1:(end-pop_sz));
                 end
             end
-            if nargin < 3
-                ref_column = [];
+            if nargin < 3 || isempty(ref_column)
+                ref_column  = 1;
+            elseif numel(ref_column) ~= 1 || ref_column <=0 || ref_column > obj.n_ROIs
+                obj.disp_info('When passed manually, Reference column must be a specific ROI number',4)
             end
 
             %% Erase diagonal
             cc(1:size(cc,1)+1:end)= NaN;
 
-            %% Remove "ref" row/column when you pass a matrix with one row per ROI
-            if size(cc,1) > 2 && (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
-                cc = cc(2:end,2:end);
-            end
+%             %% Remove "ref" row/column when you pass a matrix with one row per ROI
+%             if size(cc,1) > 2 && (size(cc,1) == (obj.ref.indices.n_tree_ROIs+1) || (~isempty(obj.binned_data) && size(cc,1) == (numel(obj.binned_data.groups)+1)) && (isempty(ref_column) || ~all(ref_column == 1)))
+%                 cc          = cc(2:end,2:end);
+%             end
 
             %% If no ref were provided, we will use the average correlation
-            if isempty(ref_column)
-                ref_column = 1:size(cc,1);
+            if ref_column == 1
+                if isequal(obj.crosscorr_ref, 1:obj.n_ROIs)
+                    ref_name    = 'Cross-correlation with Cell-wide averaged signal';
+                elseif isequal(obj.crosscorr_ref, obj.ref.indices.somatic_ROIs) || isequal(obj.crosscorr_ref, 'soma')
+                    ref_name    = 'Cross-correlation with perisomatic averaged signal';
+                elseif isnumeric(ref_column) && numel(ref_column(ref_column ~= 0)) == 1
+                    ref_name    = ['cross-correlation with reference ROI # ',num2str(obj.crosscorr_ref)];
+                else
+                    obj.disp_info('Reference not identified',4)
+                end
+            else
+                ref_name    = ['cross-correlation with reference ROI # ',num2str(ref_column)];
+                cc          = cc(2:end,2:end);
             end
 
             %%
             if contains(obj.cc_mode,'groups')
                 %% Identify valid set of traces
-                valid_gp            = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
+                valid_gp        = find(~all(isnan(obj.binned_data.median_traces))); % You get NaN'ed bins if the soma location is not scanned (eg a big pyramidal cell)
 
                 %% Build tree values per bin
                 mean_bin_cc     = [];
@@ -363,19 +386,23 @@ classdef arboreal_scan_plotting < handle
                     for gp = 1:numel(obj.binned_data.groups)
                         roi_of_gp           = obj.binned_data.groups{gp};
                         %roi_of_gp           = roi_of_gp(~ismember(roi_of_gp, obj.bad_ROI_list)); %% COMMENT OUT TO INCLUDE BAD ROIS
-                        v_of_gp             = cc(ref_column,gp);
+                        v_of_gp             = cc(ref_column,gp+1);
                         ROIs_list           = [ROIs_list, roi_of_gp];
                         mean_bin_cc         = [mean_bin_cc, repmat(nanmean(v_of_gp), 1, numel(roi_of_gp))];
                     end
                 end
+                label_name = 'groups';
             else
-                ROIs_list   = obj.ref.indices.valid_swc_rois;
-                mean_bin_cc = cc(:,find(obj.dimensionality.valid_trace_idx, 1, 'first'));
+                ROIs_list   = 1:obj.n_ROIs;
+                mean_bin_cc = cc(:,ref_column);
+                label_name  = 'ROIs';
+                mean_bin_cc(1) = [];
             end
-
-            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, 'Correlation with most proximal segment','',1018);
-            caxis([0,1]);
-            col = colorbar; col.Label.String = 'Spatial correlation between ROIs/groups with soma';
+            
+            T = split(obj.cc_mode_label, '\n\t');T = T(2:end);
+            [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(mean_bin_cc, ROIs_list, obj.default_handle, T,'',1018);
+           % update_tree_cmap(f, f(1).Parent.Colormap, [0.8, 1]); 
+            f(1).Parent.Colorbar.Label.String = ['Correlation between ',label_name,' with Reference'];
 
 %
 %             [S,Q] = genlouvain(double(cc),[],[],1);

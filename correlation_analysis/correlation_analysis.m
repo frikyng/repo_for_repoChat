@@ -1,8 +1,11 @@
 classdef correlation_analysis < handle
     %% Subclass of arboreal_scan_experiment
+    % See Demo_CrossCorrelation.mlx for examples    
     properties
     	cc_mode                 = 'groups_peaks';% Type of data used to compute cross correlation. 
-        crosscorr                               % Correlation matrix of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+        crosscorr                                % Correlation matrix of peaks/signal across ROIs/groups during/between bAps/activity_bouts
+        crosscorr_ref           = 'soma'         % Defines what is used to compute the reference column of the crosscorr
+        cc_mode_label     
     end
 
     methods
@@ -15,7 +18,7 @@ classdef correlation_analysis < handle
             % Inputs:
             %   cc_mode (STR) - See Description for details - Optional -
             %           Default is your current obj.cc_mode value
-            %       update EXPE.cc_mode with existing value
+            %       update EXPE.cc_mode with existing value. 
             % -------------------------------------------------------------
             % Outputs:
             % -------------------------------------------------------------
@@ -65,6 +68,8 @@ classdef correlation_analysis < handle
             %       - If cc_mode contains 'groups', using the median traces
             %       after categorical binning  (as defined by
             %        binned_data.median_traces).
+            %   * An ampty or invalid option will use the entire signal for
+            %       all ROIs
             %   * To include population data, include 'pop' in cc_mode
             % -------------------------------------------------------------
             % Example - How To
@@ -107,51 +112,116 @@ classdef correlation_analysis < handle
             % Revision Date:
             %   13/05/2022
 
-        	if ~strcmp(obj.cc_mode, cc_mode)
-                obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
-            end
-
-            original_cc_mode = cc_mode;
-            msg = '\n\t';
-            if contains(cc_mode, 'groups')
+%         	if ~strcmp(obj.cc_mode, cc_mode)
+%                 obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
+%             end
+            obj.disp_info(obj.cc_mode_label, 1);
+            obj.cc_mode = cc_mode;
+        end
+        
+        function msg = get.cc_mode_label(obj)
+            temp_cc_mode = obj.cc_mode;
+            msg = '';
+            if contains(temp_cc_mode, 'groups')
                 msg = [msg, 'Correlation done by group median, using your current binning, '];
             else
-                msg = [msg, 'Correlation done between all ROIs, '];
+                msg = [msg, 'Correlation done between all valid ROIs, '];
             end
-            cc_mode = erase(cc_mode, {'groups', 'ROIs'});
+            temp_cc_mode = erase(temp_cc_mode, {'groups', 'ROIs'});
             if contains(obj.cc_mode, 'pop')
                 msg = [msg, 'including population data.'];
             end
-            cc_mode = erase(cc_mode, 'pop');
-            if contains(cc_mode, 'behref')
+            temp_cc_mode = erase(temp_cc_mode, 'pop');
+            if contains(temp_cc_mode, 'behref')
                 msg = [msg, '\n\tReference trace is indicated behaviour, at the indicated timpoints. '];
             else
-                msg = [msg, '\n\tReference trace is the somatic signal average, at the indicated timpoints. '];
+                if isequal(obj.crosscorr_ref, 1:obj.n_ROIs)
+                    ref_name    = 'the Cell-wide averaged signal';
+                elseif isequal(obj.crosscorr_ref, obj.ref.indices.somatic_ROIs) || isequal(obj.crosscorr_ref, 'soma')
+                    ref_name    = 'the perisomatic averaged signal';
+                elseif isnumeric(obj.crosscorr_ref) && numel(obj.crosscorr_ref(obj.crosscorr_ref ~= 0)) == 1
+                    ref_name    = ['ROI # ',num2str(obj.crosscorr_ref)];
+                end                
+                msg = [msg, '\n\tReference trace is ',ref_name,', at the indicated timpoints. '];
             end
-            cc_mode = erase(cc_mode, 'behref');
-            if contains(cc_mode, 'peaks')
+            temp_cc_mode = erase(temp_cc_mode, 'behref');
+            if contains(temp_cc_mode, 'peaks')
                 msg = [msg, '\n\tCorrelation computed using data at peak time only, '];
-            elseif contains(cc_mode, 'active')
+            elseif contains(temp_cc_mode, 'active')
                 msg = [msg, '\n\tCorrelation computed using timepoints when the cell is active (i.e. during bAPs), '];
-            elseif contains(cc_mode, 'quiet')
+            elseif contains(temp_cc_mode, 'quiet')
                 msg = [msg, '\n\tCorrelation computed using timepoints when the cell is quiet (i.e. between bAPs), '];
             else
                 msg = [msg, '\n\tCorrelation done using all timepoints, '];
             end
-            cc_mode = erase(cc_mode, {'peaks', 'active', 'quiet', '_',' '});
-            if ~isempty(cc_mode)
-                if contains(cc_mode, '~')
-                    msg = [msg, ' WHEN "',erase(cc_mode, '~'),'" behaviour IS NOT ongoing.'];
+            temp_cc_mode = erase(temp_cc_mode, {'peaks', 'active', 'quiet', '_',' '});
+            if contains(temp_cc_mode, 'subtracted')
+                msg = [msg, 'on median-subtracted traces'];
+            end
+            temp_cc_mode = erase(temp_cc_mode, {'subtracted', '_',' '});
+            if ~isempty(temp_cc_mode)
+                if contains(temp_cc_mode, '~')
+                    msg = [msg, ' WHEN "',erase(temp_cc_mode, '~'),'" behaviour IS NOT ongoing.'];
                 else
-                    msg = [msg, ' WHEN "',cc_mode,'" behaviour IS ongoing.'];
+                    msg = [msg, ' WHEN "',temp_cc_mode,'" behaviour IS ongoing.'];
                 end
             end
-
-            obj.disp_info(msg,1);
-            obj.cc_mode = original_cc_mode;
+        end
+        
+        function set.crosscorr_ref(obj, crosscorr_ref)
+            %% Defines the ROIs to use for the reference comun of the
+            % correlation matrix
+            % -------------------------------------------------------------
+            % Syntax:
+            %   EXPE.crosscorr_ref = crosscorr_ref
+            % -------------------------------------------------------------
+            % Inputs:
+            %   crosscorr_ref ([] or INT or INT ARRAY or CHAR)
+            %       If a a list of integer is provided, the ref will be
+            %       calculated with the average signal from these ROIs.
+            %       If a single value is passed, the reference comlumn wil
+            %       lcorrespond to this ROi (in which case there will be 2
+            %       identical columns in the crosscorr matrix)
+            %       If the value is 0 or [], all ROIs will be used to
+            %       computed the average
+            %       If the value is 'soma', the average periosomatic signal
+            %       will be used as a reference. 
+            %       If the value is 'average', this is equivalent to 0 or
+            %       [].
+            % -------------------------------------------------------------
+            % Outputs:
+            % -------------------------------------------------------------
+            % Extra Notes:
+            % -------------------------------------------------------------
+            % Author(s):
+            %   Antoine Valera.
+            %--------------------------------------------------------------
+            % Revision Date:
+            %   06/04/2023
+            
+            if isnumeric(crosscorr_ref)
+                crosscorr_ref = round(crosscorr_ref);
+                if ~any(crosscorr_ref  <= 0) && ~any(crosscorr_ref > obj.n_ROIs)
+                    obj.crosscorr_ref = crosscorr_ref;
+                elseif ~any(crosscorr_ref) || isempty(crosscorr_ref)
+                    obj.crosscorr_ref = 1:obj.n_ROIs;
+                else
+                    obj.disp_info('Error : when passing manual values for crosscorr_ref, values must be >= 0 and <= obj.n_ROIs',4);
+                end
+            elseif ischar(crosscorr_ref) && strcmpi(crosscorr_ref, 'soma')
+                if ~obj.use_hd_data
+                    obj.crosscorr_ref = obj.ref.indices.somatic_ROIs;
+                else
+                    obj.crosscorr_ref = obj.ref.indices.HD_somatic_ROIs;
+                end
+            elseif ischar(crosscorr_ref) && strcmpi(crosscorr_ref, 'average') || isempty(crosscorr_ref)
+                obj.crosscorr_ref = 1:obj.n_ROIs;
+            else
+                obj.disp_info('Reference for the crosscorr must be a ROI or a list of ROI to average, "average", 0 or [] for a cell wide average ROIs, or "soma" to use the average of perisomatic ROIs' ,4)
+            end
         end
 
-        function cross_corr = get_correlations(obj, cc_mode)
+        function cross_corr = get_correlations(obj, cc_mode, crosscorr_ref)
             %% Returns cross correlation (and triggers computation if required)
             % -------------------------------------------------------------
             % Syntax:
@@ -162,6 +232,18 @@ classdef correlation_analysis < handle
             %       Default is [];
             %       If provided, update EXPE.cc_mode. see set.cc_mode for
             %       more details
+            %   crosscorr_ref ([] or INT or INT ARRAY or CHAR)
+            %       If a a list of integer is provided, the ref will be
+            %       calculated with the average signal from these ROIs.
+            %       If a single value is passed, the reference comlumn wil
+            %       lcorrespond to this ROi (in which case there will be 2
+            %       identical columns in the crosscorr matrix)
+            %       If the value is 0 or [], all ROIs will be used to
+            %       computed the average
+            %       If the value is 'soma', the average periosomatic signal
+            %       will be used as a reference. 
+            %       If the value is 'average', this is equivalent to 0 or
+            %       [].
             % -------------------------------------------------------------
             % Outputs:
             %   crosscorr (NxN DOUBLE)
@@ -177,11 +259,14 @@ classdef correlation_analysis < handle
             % Revision Date:
             %   13/05/2022
 
-            if nargin > 1
-                obj.cc_mode = cc_mode; % change cc mode
-            else
-                obj.disp_info(['Correlation based on ',obj.cc_mode],1)
+            if nargin >= 2
+                obj.cc_mode = cc_mode; % change cc mode                
             end
+            obj.disp_info(['Current obj.cc_mode is : ',obj.cc_mode],1)
+            if nargin >= 3
+                obj.crosscorr_ref = crosscorr_ref; % change cc reference
+            end
+            obj.disp_info(['Current obj.crosscorr_ref is : ',obj.crosscorr_ref],1)
 
             %% Get CC (and build the correlation matrix if the settings changed)
             cross_corr = obj.crosscorr;
@@ -192,21 +277,20 @@ classdef correlation_analysis < handle
             end
         end
         
-        function tp = set_crosscorr(obj, cc_mode)
-            %% Compute cross correlation
+        function set.crosscorr(obj, cc_mode)
+            %% Set method that compute cross correlation
             % -------------------------------------------------------------
             % Syntax:
-            %   EXPE.set_crosscorr(cc_mode)
+            %   EXPE.set.crosscorr(cc_mode)
             % -------------------------------------------------------------
             % Inputs:
             %   cc_mode (STR) - See Description for details - Optional -
             %       Default is [];
             %       If provided, update EXPE.cc_mode. see set.cc_mode for
-            %       more details
+            %       more details. Empty option will use the whole signal on 
+            %       ROIs all
             % -------------------------------------------------------------
             % Outputs:
-            %   tp(1 x N INT)
-            %       The timepoints used based on your fitlering criteria
             % -------------------------------------------------------------
             % Extra Notes:
             %       Cross correlation is computed between ROIs OR groups
@@ -219,46 +303,45 @@ classdef correlation_analysis < handle
             % Revision Date:
             %   13/05/2022
 
-            if nargin > 1
-                obj.cc_mode = cc_mode; % change cc mode
-            else
-                cc_mode = obj.cc_mode;
-                obj.disp_info(['Correlation based on ',obj.cc_mode],1)
+            obj.cc_mode = cc_mode;
+            if strcmp(cc_mode, 'none')
+                obj.crosscorr = [];
             end
+            obj.disp_info(['Correlation based on ',obj.cc_mode],1)
 
             %% Get signal to use
             if contains(obj.cc_mode, 'groups')
                 signal = obj.binned_data.median_traces;
-            else% if contains(obj.cc_mode, 'ROIs')
-                try
-                    if ~obj.use_hd_data
-                        signal = obj.rescaled_traces(:,obj.ref.indices.valid_swc_rois);
-                    else
-                        if contains(obj.cc_mode, 'ROIs')
-                            obj.disp_info('To use ROIs in correlation analysis,set obj.use_hd_data to false',4)
-                        end
-                        signal = obj.rescaled_traces;
-                        obj.disp_info('Full HD not filtering excluded ROIS / voxels for now',3)
-                    end
-                catch
-                    obj.disp_info('unable to get rescaled data. try to run obj.rescale_traces()',4)
+            else % 'ROIs', or no specific input
+                %% Do some quick check to see if we can do it
+                if obj.use_hd_data
+                    if contains(obj.cc_mode, 'ROIs')
+                        obj.disp_info('To use ROIs in correlation analysis,set obj.use_hd_data to false',4)
+                    end                        
+                    obj.disp_info('Full HD not filtering excluded ROIS / voxels for now',3)
                 end
+                
+                %% get ref signal
+                if contains(obj.cc_mode, 'subtracted')
+                    signal = obj.rescaled_traces;
+                    if isempty(signal)
+                        obj.disp_info('unable to get rescaled data, which is required for median subtraction. try to run obj.rescale_traces()',4)
+                    end
+                else
+                    signal = obj.extracted_traces_conc;
+                end
+                
             end           
             cc_mode = erase(cc_mode, {'ROIs','groups'});
             
             %% Subtract median if required
             if contains(obj.cc_mode, 'subtracted')
-                signal = signal - nanmedian(signal,2);
+                signal = signal - obj.global_median_rescaled;
             end
             cc_mode = erase(cc_mode, {'subtracted'});
 
-            %% Get ref ROIs and trace
-            if ~obj.use_hd_data
-                somatic_ROIs= obj.ref.indices.somatic_ROIs;
-            else
-                somatic_ROIs= obj.ref.indices.HD_somatic_ROIs;
-            end
-            ref         = nanmean(obj.rescaled_traces(:, somatic_ROIs),2); %always ref, unless you pass 'behref'
+            %% Get ref ROIs and trace (unless you passed 'behref')
+            ref         = nanmean(obj.extracted_traces_conc(:, obj.crosscorr_ref),2); % since correlation are scale insensitive, we do not need obj.rescaled_traces
 
             %% Add population signal if needed
             if contains(obj.cc_mode, 'pop')
@@ -317,15 +400,17 @@ classdef correlation_analysis < handle
             %   13/05/2022
 
             if isempty(obj.binned_data) && contains(obj.cc_mode, 'groups')
-                obj.disp_info('crossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first',3)
-                crosscorr = [];
+                obj.disp_info('crossscorr cannot be calculated using the "groups" flag if no groups were defined. Use obj.prepare_binning first',4)
+                obj.crosscorr = 'none';
                 return
             elseif isempty(obj.event) && contains(obj.cc_mode, 'peaks')
-                obj.disp_info('crossscorr cannot be calculated using the "peaks" flag if you have not run event detection. Use obj.detect_events first',3)
-                crosscorr = [];
+                obj.disp_info('crossscorr cannot be calculated using the "peaks" flag if you have not run event detection. Use obj.find_events first',4)
+                obj.crosscorr = 'none';
                 return
-            elseif isempty(obj.crosscorr) || size(obj.crosscorr, 1) ~= numel(obj.binned_data)
-                obj.set_crosscorr();
+            else
+                obj.crosscorr = obj.cc_mode;
+%             elseif isempty(obj.crosscorr) || size(obj.crosscorr, 1) ~= numel(obj.binned_data)
+%                 obj.crosscorr = obj.cc_mode;
             end
             crosscorr = obj.crosscorr;
         end

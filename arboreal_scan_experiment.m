@@ -1307,10 +1307,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
             
             %% Get signal time range     
-            tp          = true(1,obj.tp);
-            using_peaks = false;
+            tp              = true(1,obj.tp);
+            using_peaks     = false;
+            analysis_mode   = strrep(analysis_mode, '~active', 'quiet');
             if contains(analysis_mode, 'peaks') %% event time
-                tp              = ~tp;
+                tp              = ~tp; %set all timepoints to false
                 %tp(obj.event.peak_time{:}) = true
                 %tp(obj.event.fitting.pre_correction_peaks) = true;
                 tp(vertcat(obj.event.peak_time{:})) = true;% could be using obj.event.fitting.pre_correction_peaks

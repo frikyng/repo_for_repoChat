@@ -7,7 +7,7 @@ for exp_idx = numel(meta.experiments):-1:1
     try
         
         
-   % exp.detect_events
+   % exp.find_events
         
         
     peak_times = vertcat(exp.event.peak_time{:});

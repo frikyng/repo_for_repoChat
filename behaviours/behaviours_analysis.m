@@ -361,8 +361,17 @@ classdef behaviours_analysis < handle
             %   rendering (BOOL) - Optional - Default is false
             %       If true, display the selected behaviours
             %   invert (BOOL) - Optional - Default is false
-            %       * If true, the detected behaviours is inverted
-            %   thr (FLOAT) - Optional - Default is
+            %       If true, the detected behaviours is inverted
+            %   thr (FLOAT) - Optional - Default is obj.beh_thr. 
+            %       Defines the threshold used to start a bout.
+            %   window (INT or 2x1 or 3x3 INT) - Optional - default is
+            %   obj.bout_extra_win .
+            %       This is an expension/erosion factor for each bout. See 
+            %       Extra notes for some examples. If you provide a single
+            %       INT, the factor is applied to the beginning and to the 
+            %       end of each bout. Two value control independently the
+            %       expension/shrinkage of the onset and offset of each bout.
+            %       A 3rd value force the bout duration to this value
             % -------------------------------------------------------------
             % Outputs:
             %   bouts (1xN CELL ARRAY of 1x2P ARRAY)
@@ -376,6 +385,31 @@ classdef behaviours_analysis < handle
             %       if a given timepoint is active or inactive.
             % -------------------------------------------------------------
             % Extra Notes:
+            %   * window can be use to manipulate the liits of the bouts.
+            %   - IF you specifies window = 0, the bouts are unchanged. 
+            %   - If you specified 3, the beginning and end of each bout is
+            %   extended by that many points. If 2 bouts touch each other, 
+            %   they are merged
+            %   - If you specifies -3, the bouts are eroded on each side.
+            %   If the bout if fully eroded, it is removed.
+            %   - You could specifies [-10, 20] To ignore the first 10
+            %   points of a bout, but study the 20 points following the end
+            %   - Specifying a symmetrical window, but with inverted sign
+            %   will introduce a lag. For example [-5, 5] study the data
+            %   follwing bout onset by 5 seconds, until 5 second after 
+            %   offset . [5, -5] study the data preceding the bout by 5
+            %   seconds, until 5 seconds before the end of the bout.
+            %   - If you specify a 3rd value, it forced the bout duration.
+            %   Positive value align it to the onset, negative value align
+            %   it to the offset. For example :
+            %       * [0,0,10] create bouts of 10 points aligned on the
+            %       onset.
+            %       * [0,0, -10] create bouts of 10 points aligned on the
+            %       offset.
+            %       * [-5,0, 10] would create bout of 5 points preceding
+            %       the onset by 10 points (i.e. it would detecting a lag).
+            %       Note that in this case the second value has no affect
+            %       on the offset
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -419,17 +453,43 @@ classdef behaviours_analysis < handle
                     current_thr         = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
 
                     %% Define bouts
-                    active_tp{idx}      = abs(beh_sm{idx}) > abs(current_thr);
-                    [starts, stops]     = get_limits(active_tp{idx}, beh_sm{idx});
+                    dt                  = nanmedian(diff(obj.t));
+                    active_tp{idx}      = false(size(beh_sm{idx}));
+                    [starts, stops]     = get_limits(abs(beh_sm{idx}) > abs(current_thr), beh_sm{idx});
+                    
+                    %% Extend / shring bouts limits
+                    starts              = starts - round(window(1)*(1/dt));
+                    starts(starts < 1)  = 1; starts(starts > numel(active_tp{idx})) = numel(active_tp{idx});
+                    stops               = stops + round(window(2)*(1/dt));
+                    stops(stops < 1)    = 1; stops(stops > numel(active_tp{idx})) = numel(active_tp{idx});
+                    
+                    %% Force bouts duration if required
+                    if numel(window) == 3
+                        if window(3) >= 0
+                            stops = starts + round(window(3)*(1/dt));
+                            window(2) = 0;
+                        elseif window(3) < 0
+                            starts = stops + round(abs(window(3))*(1/dt));
+                            window(1) = 0;
+                        end
+                    end
 
-                    %% Add some pts before and after each epoch
-                    dt = nanmedian(diff(obj.t));
-                    for epoch = starts
-                        active_tp{idx}(max(1, epoch-round(window(1)*(1/dt))):epoch) = 1;
+                    %% Build range                    
+                    for epoch = 1:numel(starts)
+                        if numel(window) == 3
+                            pts = sort([starts(epoch), stops(epoch)]); % in some complicated lag + fixed windo cases, the acceptance windo can be inverted
+                            starts(epoch) = pts(1);stops(epoch) = pts(2);
+                        end
+                        R = (starts(epoch)-round(window(1)*(1/dt))):(stops(epoch)+round(window(2)*(1/dt)));
+                        R(R < 1) = []; R(R > numel(active_tp{idx})) = [];
+                        active_tp{idx}(R) = 1;
                     end
-                    for epoch = stops
-                        active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(window(2)*(1/dt)))) = 1;
-                    end
+%                     for epoch = starts
+%                         active_tp{idx}(max(1, epoch-round(window(1)*(1/dt))):epoch) = 1;
+%                     end
+%                     for epoch = stops
+%                         active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(window(2)*(1/dt)))) = 1;
+%                     end
                     
                     %% If required, invert
                     if invert(idx)

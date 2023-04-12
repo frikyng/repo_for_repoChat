@@ -1129,11 +1129,140 @@ axis equal;legend({'original','skeleton','simplified','filtered'});
 
 After extracting all the trees for the meta analysis, you may want to double-check 
 
- 
+
+
+
+
+
+
+
+
+
+
+
+
+ # Correlation analysis
+
+
+
+
+
+
+
+
+
+# Machine learning
+
+The machine learning tools can be used to predict a given temporal signal (for example, a behaviour) using a one or multiple predictors (for example, calcium responses from one or several regions of the tree).
+
+The toolbox relies on the use of a well curated arboreal_scan_experiment object. Predictors and observation are sensitive to smoothing, detrending, scaling of the variables used. Therefore, you first need to first know and define how the variable going into the machine learning algorithm are preprocessed. For example, the extracted data should come from very well motion corrected recordings, as signal fluctuations from motion artifacts would affect the prediction of the model. For these steps, see the previous chapters
+
+## ML pipeline
+
+### General process
+
+The general process for machine learning is the following
+
+```matlab
+%% Load or build an arboreal_scan_experiment object 
+obj = arboreal_scan_experiment(path_to_use);
+
+%% Preprocess the signal, adjust smoothing etc... And extract events
+% You probably want to adjust some options before this step
+obj.process(); 
+
+%% Do machine learning
+% This is a default linear regression on all median-subtracted events, against all behaviours
+results             = predict_behaviours(obj);      
+```
+
+
+
+### Details on the inputs and key functions
+
+#### key input variables
+
+`Predict_behaviours()` takes 4 inputs and machine learning options. See function doc for more details
+
+- obj is the arboreal scan object. It contains the predictors and the observations original data
+- predictors_type can be used to define temporal subsets of points, and defines the predictor data source (raw, rescaled or median subtracted signals)
+- observations is the list of behavioural variable that will be predicted (one at the time if it is a cell array)
+- predictor_ROI_groups defines what sets of ROIs will be used as predictors.
+
+#### key functions
+
+* `predict_behaviours()` is the top function that defines observations and predictors. It will loop through multiple iterations and test various observations.
+
+* For every iteration, `train_and_test()` is called. it will generate one iteration of the model, for all selected observations (including shuffles). Shuffles are generated at this level, therefore, each iteration has a different shuffling. shuffling will set a different test and train sets of points if you have held out data. for each model instance, it will call `prediction()` for the current predictor(s)/observation set, and call `get_ml_score()` to see how good was the prediction. `plot_prediction()` can also be called if ml_parameters.rendering is >= 2.
+
+* `prediction()` will run the regression or classification algorithm selected. It will also perform hyperparameter optimization if required.
+
+once the training completed, the result can be passed to bar_chart() which can plot the results and/or do statistics
+
+## ML options
+
+machine learning options are handled by `machine_learning_params` and, when required `machine_learning_hyper_params`.
+
+Here are the current default options
+
+```matlab
+params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+params.use_classifier           = false ; % If true, a classifier is used instead of a regression model
+params.method                   = 'linear'; % The type of model used for regression / classification
+params.holdout                  = 0.5   ; % This is to seperate the train and test dataset
+params.kFold                    = 5     ; % This is defining the kFold crossvalidation settings for the training dataset
+params.optimize_hyper           = false ; % if true, hyperparameters are optimized during training
+params.optimization_method      = 'native' ; % 'manual' or 'native'. manual is a custom grid search. native is the matlab baysian optimized approach
+params.rendering                = 2     ; % (0) no plot, (1) summary plot, (2) 1 + predictions, (3) 2 + hyperparameter tuning 
+params.svm_kernel               = 'gaussian' ; % gaussian or linear
+params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
+params.shuffling                = ''    ; % 'events' to shuffle timepoints, 'ROIs' to shuffle the spatial structure, 'behaviours' to shuffle observations. Use a cell array to cet more than one.
+params.block_shuffling          = 0     ; % If non 0, then we do block shuffling using this window size. holdout must be > 0. kFold must be 1  
+params.title                    = ''    ; % set final bar chart title
+params.alpha                    = []    ; % Set a value between 0 and 1 for elastic Net (1 is lasso and 0 is ridge)
+params.save                     = false ; % If true, the result is saved
+params.saving_level             = 1     ; % level 1 saves the model and its results, level 2 also saves the full predictor and observation traces
+params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+params.N_iter                   = 1     ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
+params.randomize_ROIs           = 0     ; % If 1, ROis are randomized. If you passed groups, random groups will be sized matched. If -1, only ROIs NOT listed in the predictor list will be used (if possible)
+params.add_shuffle              = false ; % If true, behaviour temporal shuffling is computed too 
+params.obs_shuf_block_sz        = 1     ; % when params.shuffling is 'behaviours', this defines the size of the block to shuffle. 1 will shuffle every timepoint, and values > 1 will shuffle blocks
+params.score_metrics            = 'pearson'; % pearson, rmse or a function handle
+```
+
+
+
+## Output model
+
+
+
+
+
+## Examples
+
+For a series of example of different classifiers and regressions approaches, see :
+
+`Demo_Classifier_or_Prediction.mlx`
+
+and for detailed example on the regression cases see :
+
+`Demo_FINAL_SERIES_OF_ANALYSIS.mlx`
 
  
 
- 
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 **Meta-analysis figure number**
 
