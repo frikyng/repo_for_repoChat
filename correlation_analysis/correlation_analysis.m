@@ -112,11 +112,10 @@ classdef correlation_analysis < handle
             % Revision Date:
             %   13/05/2022
 
-%         	if ~strcmp(obj.cc_mode, cc_mode)
-%                 obj.crosscorr = []; %if you change the cc mode, clear the previous correlation results
-%             end
-            obj.disp_info(obj.cc_mode_label, 1);
-            obj.cc_mode = cc_mode;
+            if numel(obj.arboreal_scans)
+                obj.disp_info(obj.cc_mode_label, 1);
+                obj.cc_mode = cc_mode;
+            end
         end
         
         function msg = get.cc_mode_label(obj)
@@ -303,6 +302,9 @@ classdef correlation_analysis < handle
             % Revision Date:
             %   13/05/2022
 
+            if ~numel(obj.arboreal_scans)
+                return
+            end
             obj.cc_mode = cc_mode;
             if strcmp(cc_mode, 'none')
                 obj.crosscorr = [];

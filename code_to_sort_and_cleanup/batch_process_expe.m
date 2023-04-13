@@ -1,4 +1,4 @@
-%% Set some analysis options
+% Set some analysis options
 opengl software
 save_data   = true;
 demo        = 0;                % 0 / false for no demo ; 1 for fitting demo ; 2 for fitting and scaling demo

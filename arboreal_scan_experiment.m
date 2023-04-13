@@ -308,14 +308,14 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             end
 
             function add_tree(pos, keep_2D)
-                %% INTERNAL FUNCTION THAT LOADS THE ARBOREAL_SCAN OBJECT
+                %% INTERNAL FUNCTION THAT LOADS THE ARBOREAL_SCAN OBJECT. REMOVE UNCOMPRESSED DATA IF REQUIRED
                 obj.arboreal_scans{pos}                             = load(obj.extracted_data_paths{pos});
                 if isa(obj.arboreal_scans{pos}.obj, 'arboreal_scan')
                     obj.arboreal_scans{pos}                         = obj.arboreal_scans{pos}.obj;
                     if ~keep_2D
-                        obj.arboreal_scans{pos}.full_data           = []; % clear full data to save space.
-                    end
-                    obj.arboreal_scans{pos}.population_data         = []; % clear population_data.
+                        obj.arboreal_scans{pos}.full_data               = []; % clear full data to save space.
+                        obj.arboreal_scans{pos}.population_data         = []; % clear population_data.
+                    end                    
                     obj.need_update(pos)                            = false;
                 else
                     obj.arboreal_scans(pos)                         = [];
