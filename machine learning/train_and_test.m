@@ -44,8 +44,14 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
     elseif strcmpi(ml_parameters.score_metrics, 'mse')
         LossFun = @mse_score;
         observation_data = normalize(observation_data,2);
+    elseif strcmpi(ml_parameters.score_metrics, 'explained_variance')
+        LossFun = @explained_variance_score;
+        observation_data = normalize(observation_data,2);
     elseif ishandle(ml_parameters.score_metrics)
-        LossFun = ml_parameters.score_metrics;
+        LossFun = ml_parameters.score_metrics;        
+    elseif strcmpi(ml_parameters.score_metrics, 'all')
+        LossFun = {@pearson_correlation_coefficient, @mse_score, @rmse_score, @explained_variance_score};
+        observation_data = normalize(observation_data,2);
     else
         error('score function not recognized. Use "pearson", "mse", "rmse" or a valid function handle (see pearson_correlation_coefficient.m as an example)')
     end
@@ -93,7 +99,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         beh_types = reshape([beh_types; shuffled_beh],[],1)';       
     end
 
-    score       = [];
+    score       = {};
     out         = {};
     for mdl_idx = 1:numel(beh_types)
         type                = strrep(beh_types{mdl_idx},' ','_');
@@ -141,10 +147,9 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         if isempty(y_test) && ml_parameters.kFold > 1
             %  score(el,:) = repmat(kfoldLoss(model)*100,1,4); % reveals the fraction of predictions that were incorrect, i.e. (1 - accuracy)
             ml_parameters.rendering = 1;
-            temp = kfoldLoss(model, 'Mode','individual', 'LossFun', LossFun)*100; 
-            score(mdl_idx,:) = repmat(nanmean(temp), 1, 4);
+            score{mdl_idx} = kfoldLoss(model, 'Mode','individual', 'LossFun', LossFun); 
         else
-            [score(mdl_idx,1), score(mdl_idx,2), score(mdl_idx,3), score(mdl_idx,4)] = get_ml_score(y_test, y_predict, '', LossFun);
+            score{mdl_idx} = get_ml_score(y_test, y_predict, '', LossFun);
         end
         
         %% Plot training result %% QQ RAW BEHAVIOUR IS NEVER SHUFFLED SO IT WONT LOOK RIGHT
@@ -155,6 +160,8 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             plot_prediction(calcium_ref, current_obs, timepoints, partition, y_predict, current_raw_behaviour , type, score(mdl_idx,:), mdl_idx);
         end
 
+        %% Save Machine learning output
+        out.ml_parameters                   = ml_parameters;
         if ml_parameters.saving_level < 2
             out.calcium                     = [];
             out.full_beh{mdl_idx}           = [];
@@ -179,9 +186,8 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         out.prediction{mdl_idx}             = y_predict;        
         out.beh_type{mdl_idx}               = type_corrected;
         out.shuffling_type{mdl_idx}         = ml_parameters.shuffling;
-        out.score{mdl_idx}                  = score(mdl_idx,:);
+        out.score{mdl_idx}                  = score{mdl_idx};
         out.model{mdl_idx}                  = model;
-
     end
     if numel(beh_types) > 1 && ml_parameters.rendering >= 1
         labels = reordercats(categorical(beh_types),beh_types);

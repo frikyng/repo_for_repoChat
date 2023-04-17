@@ -1,6 +1,5 @@
 function params = machine_learning_params(varargin)    
     params                          = {};
-    params.savefig                  = false ; % If true, the output figure is saved. If rendering is 0, this set rendering to 1
     params.use_classifier           = false ; % If true, a classifier is used instead of a regression model
     params.method                   = 'linear'; % The type of model used for regression / classification
     params.holdout                  = 0.5   ; % This is to seperate the train and test dataset
@@ -21,8 +20,10 @@ function params = machine_learning_params(varargin)
     params.randomize_ROIs           = 0     ; % If 1, ROis are randomized. If you passed groups, random groups will be sized matched. If -1, only ROIs NOT listed in the predictor list will be used (if possible)
     params.add_shuffle              = false ; % If true, behaviour temporal shuffling is computed too 
     params.obs_shuf_block_sz        = 1     ; % when params.shuffling is 'behaviours', this defines the size of the block to shuffle. 1 will shuffle every timepoint, and values > 1 will shuffle blocks
-    params.score_metrics            = 'pearson'; % pearson, rmse or a function handle
+    params.score_metrics            = 'all';  % pearson, mse, rmse, explained_variance, all (for all 4) or a function handle
+    params.show_dots                = true  ; % true or false. If true, individual model training are display in the bar chart
     params.split_shuffle            = true  ; % true or false. Set to false to make the charts a bit lighter
+    params.use_shuffle              = true  ; % true or false. Set to false to ignore shuffling results in the plots and the stats
     params.show_iterations          = true  ; % true or false. Set to false to hide the dots
     
     %% Unwrap varargin
@@ -42,6 +43,12 @@ function params = machine_learning_params(varargin)
     elseif nargin > 0 && ~isempty(varargin) && iscell(varargin)     
         %% Update default if any
         for i = 1:length(varargin)
+            if (strcmpi(varargin{i},'use_classifier'))
+                params.use_classifier = lower(varargin{i+1});
+            end    
+            if (strcmpi(varargin{i},'method'))
+                params.method = varargin{i+1};
+            end 
             if (strcmpi(varargin{i},'holdout'))
                 params.holdout = lower(varargin{i+1});
             end
@@ -51,14 +58,14 @@ function params = machine_learning_params(varargin)
             if (strcmpi(varargin{i},'optimize_hyper'))
                 params.optimize_hyper = lower(varargin{i+1});
             end
+            if (strcmpi(varargin{i},'optimization_method'))
+                params.optimization_method = lower(varargin{i+1});
+            end
             if (strcmpi(varargin{i},'rendering'))
                 params.rendering = lower(varargin{i+1});
             end
             if (strcmpi(varargin{i},'svm_kernel'))
                 params.svm_kernel = lower(varargin{i+1});
-            end
-            if (strcmpi(varargin{i},'optimization_method'))
-                params.optimization_method = lower(varargin{i+1});
             end
             if (strcmpi(varargin{i},'solver'))
                 if ischar(varargin{i+1})
@@ -70,6 +77,9 @@ function params = machine_learning_params(varargin)
             if (strcmpi(varargin{i},'shuffling'))
                 params.shuffling = lower(varargin{i+1});
             end
+            if (strcmpi(varargin{i},'block_shuffling'))
+                params.block_shuffling = lower(varargin{i+1});
+            end
             if (strcmpi(varargin{i},'title'))
                 params.title = varargin{i+1};
             end
@@ -79,18 +89,12 @@ function params = machine_learning_params(varargin)
             if (strcmpi(varargin{i},'save'))
                 params.save = varargin{i+1};
             end
+            if (strcmpi(varargin{i},'saving_level'))
+                params.saving_level = varargin{i+1};
+            end
             if (strcmpi(varargin{i},'savefig'))
                 params.savefig = varargin{i+1};
             end
-            if (strcmpi(varargin{i},'block_shuffling'))
-                params.block_shuffling = lower(varargin{i+1});
-            end
-            if (strcmpi(varargin{i},'use_classifier'))
-                params.use_classifier = lower(varargin{i+1});
-            end    
-            if (strcmpi(varargin{i},'method'))
-                params.method = varargin{i+1};
-            end 
             if (strcmpi(varargin{i},'N_iter'))
                 params.N_iter = lower(varargin{i+1});
             end 
@@ -99,9 +103,6 @@ function params = machine_learning_params(varargin)
             end  
             if (strcmpi(varargin{i},'add_shuffle'))
                 params.add_shuffle = varargin{i+1};
-            end
-            if (strcmpi(varargin{i},'saving_level'))
-                params.saving_level = varargin{i+1};
             end
             if (strcmpi(varargin{i},'obs_shuf_block_sz'))
                 params.obs_shuf_block_sz = varargin{i+1};
@@ -112,6 +113,12 @@ function params = machine_learning_params(varargin)
             if (strcmpi(varargin{i},'split_shuffle'))
                 params.split_shuffle = varargin{i+1};
             end  
+            if (strcmpi(varargin{i},'show_dots'))
+                params.show_dots = varargin{i+1};
+            end  
+            if (strcmpi(varargin{i},'use_shuffle'))
+                params.use_shuffle = varargin{i+1};
+            end               
             if (strcmpi(varargin{i},'show_iterations'))
                 params.show_iterations = varargin{i+1};
             end              

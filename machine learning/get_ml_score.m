@@ -1,9 +1,9 @@
-function [score, TPR, TNR, MCC] = get_ml_score(y_test, y_predict, Weights, func)
+function perf = get_ml_score(y_test, y_predict, Weights, LossFun)
     if nargin < 3 || isempty(Weights)
         Weights = ones(size(y_test));
     end
-    if nargin < 4 || isempty(func)
-        func = @pearson_correlation_coefficient;
+    if nargin < 4 || isempty(LossFun)
+        LossFun = @pearson_correlation_coefficient;
     end
     if ~iscolumn(y_test)
         y_test = y_test';
@@ -34,12 +34,22 @@ function [score, TPR, TNR, MCC] = get_ml_score(y_test, y_predict, Weights, func)
         %     FDR = FP / PP;
         %% https://en.wikipedia.org/wiki/Phi_coefficient
         MCC = 100*(TP*TN - FP*FN) / sqrt((TP+FP)*(TP+FN)*(TN+FP)*(TN+FN));
-        score = Balanced_Accuracy;
+        perf.score = Balanced_Accuracy;
+        perf.TPR = TPR;
+        perf.TNR = TNR;
+        perf.MCC = MCC;        
     else
         if numel(unique(y_predict))  == 1
             warning(['Prediction returned ',num2str(unique(y_predict)),' for all prediction. It was replaced by a random set of values to get correlation score '])
             y_predict = rand(size(y_predict)) * range(y_test);
         end
-        [score, TPR, TNR, MCC] = deal(func(y_test,y_predict)*100);      
+        if ishandle(LossFun)
+            LossFun = {LossFun};            
+        end
+        perf = {};
+        for el = 1:numel(LossFun)
+            name = erase(func2str(LossFun{el}),'_score');
+            perf.(name) = LossFun{el}(y_test,y_predict);
+        end
     end
 end

@@ -4,19 +4,15 @@
 
 
 
-function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(result, behaviour_filters, result_fieldname, additional_handle, condition_labels, rendering, do_stats, varargin)
+function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(result, behaviour_filters, result_fieldname, metric, condition_labels, rendering, do_stats, varargin)
     if nargin < 2 || isempty(behaviour_filters)
         behaviour_filters = '';
     end
     if nargin < 3 || isempty(result_fieldname)
         result_fieldname = 'score';
     end
-    if nargin < 4 || isempty(additional_handle)
-        if strcmp(result_fieldname, 'score')
-            additional_handle = @(x) x(end);
-        else
-            additional_handle = [];
-        end
+    if nargin < 4 || isempty(metric)
+        metric = 'explained_variance';
     end
     if nargin < 5 || isempty(condition_labels)
         condition_labels = '';
@@ -27,6 +23,16 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     if nargin < 7 || isempty(do_stats)
         do_stats = true;
     end
+    
+    
+
+%     if nargin < 4 || isempty(additional_handle)
+%         if strcmp(result_fieldname, 'score')
+%             additional_handle = @(x) x(end);
+%         else
+%             additional_handle = [];
+%         end
+%     end
     
     N_behaviours    = 1;
     N_iter          = 1;
@@ -59,7 +65,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 else
                     result{cond_idx}{iter_idx}.(result_fieldname) = cellfun(@(x) x(1), result{cond_idx}{iter_idx}.(result_fieldname), 'UniformOutput', false);
                     result{cond_idx}{iter_idx}.(result_fieldname)(1:2:N_max) = result{cond_idx}{iter_idx}.(result_fieldname);
-                    empty = NaN(size(result{cond_idx}{iter_idx}.(result_fieldname){1}));
+                    empty = struct(metric, NaN);%                    NaN(size(result{cond_idx}{iter_idx}.(result_fieldname){1}));
                     result{cond_idx}{iter_idx}.(result_fieldname)(2:2:N_max) = repmat({empty},1,N_max/2);
                     result{cond_idx}{iter_idx}.beh_type = result{max_loc}{iter_idx}.beh_type;   
                 end
@@ -72,23 +78,31 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     for cond_idx = 1:N_conditions
         for iter_idx = 1:N_iter
             for beh_idx = 1:N_behaviours  
-                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx};   
+                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx}.(metric);   
             end 
         end        
     end
     
+    %% Filter behaviours
     labels  = result{1}{1}.('beh_type');
     labels  = strrep(labels, '_', '\_');        
     labels  = reordercats(categorical(labels),labels);
-    prefilter_labels  = categories(labels);
-    
+    prefilter_labels  = categories(labels);    
     if ischar(behaviour_filters) && isempty(behaviour_filters)
         to_keep     = true(size(prefilter_labels));
     elseif (ischar(behaviour_filters) && ~isempty(behaviour_filters)) || iscell(behaviour_filters)         
         to_keep     = cellfun(@(x) any(contains(strrep(x, '\_', '_'), behaviour_filters)), prefilter_labels);
     end
+    
+    %% Exclude shuffle if required
+    if nargin >= 8 && isstruct(varargin{1}) && isfield(varargin{1}, 'use_shuffle') && ~varargin{1}.use_shuffle
+        to_keep = to_keep & ~cellfun(@(x) any(contains(x, 'shuffle')), prefilter_labels);
+        use_shuffle = false;
+    else
+        use_shuffle = true;
+    end
 
-    INVALID     = ~to_keep;% | all(cellfun(@isempty, values),2);
+    INVALID     = ~to_keep;
     INVALID     = INVALID(:,1,1); % may have to tweak this for more complex scenario
     values(INVALID, : , :) = [];
     for condition = 1:numel(result)
@@ -112,47 +126,46 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         N_behaviours_unique = N_behaviours_unique / 2;
     end
     
-
-
-    if ~isempty(additional_handle) % qq if non scalar output, need to be adjusted       
-        values = cellfun(@(y) additional_handle(y), values);
-    end
+%     if ~isempty(additional_handle) % qq if non scalar output, need to be adjusted       
+%         values = cellfun(@(y) additional_handle(y), values);
+%     end
     
     %value = cell2mat(cellfun(@(x) cell2mat(cellfun(@(y) y.(result_fieldname)), x)'), result, 'UniformOutput', false));
-
-    %% Get mean value if multiple iterations of more than one variable
-    meanvalue   = permute(nanmean(values,2),[1,3,2]);
-    sem_values  = permute(nanstd(values,[], 2)./sqrt(size(values, 2)),[1,3,2]);
-    initial_names = categories(labels);
+    values = cell2mat(values);
     
     %% Set default option in case no varargin is passed
     max_scores      = [];
     score_metrics   = 'performance';
     show_dots       = true;
-    split_shuffle   = true;   
+    split_shuffle   = true;  
     if nargin >= 8 && isstruct(varargin{1})
-        ml_parameters = varargin{1};
+        temp_meanvalue = permute(nanmean(values,2),[1,3,2]);
+        ml_parameters  = varargin{1};
         if isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(prefilter_labels)
             max_scores = ml_parameters.max_score;
-            if numel(prefilter_labels) ~= numel(initial_names) % if you had a filter
+            if numel(prefilter_labels) ~= numel(categories(labels)) % if you had a filter
                 max_scores(INVALID) = [];
             end
             max_scores = max_scores(1:2:end);
-        elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(meanvalue)
+        elseif isfield(ml_parameters, 'max_score') && numel(ml_parameters.max_score) == numel(temp_meanvalue) % i.e .numel meanvalues, but we haven't created it yet
             max_scores = ml_parameters.max_score(1:2:end);                
         end
 
         if isfield(ml_parameters, 'score_metrics')
             score_metrics = ml_parameters.score_metrics;
             if ishandle(score_metrics)
-                score_metrics = handle2str(score_metrics);
+                score_metrics = func2str(score_metrics);
             end
             if contains(score_metrics, 'pearson')
                 score_metrics = 'Predictive Score (r)';
             elseif strcmpi(score_metrics, 'mse')
-                score_metrics = '1/mse';
+                score_metrics = 'mse';
             elseif strcmpi(score_metrics, 'rmse')
-                score_metrics = '1/rmse';
+                score_metrics = 'rmse';
+            elseif strcmpi(score_metrics, 'explained_variance')
+                score_metrics = 'explained variance';
+            elseif strcmpi(score_metrics, 'all')
+                score_metrics = 'explained variance';                
             else
                 score_metrics = 'model performance';
             end
@@ -166,15 +179,25 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         end
 
         if N_conditions > numel(labels) % multi conditions
-            max_scores = repmat(max_scores, 1, numel(meanvalue));
+            max_scores = repmat(max_scores, 1, numel(temp_meanvalue));
         end
     end
+    split_shuffle = is_shuffle && split_shuffle;
+
+    if N_conditions > 1
+        condition_labels  = reordercats(categorical(condition_labels),condition_labels);
+    end
+    
+    %% Get mean value if multiple iterations of more than one variable
+    meanvalue   	= permute(nanmean(values,2),[1,3,2]);
+    sem_values      = permute(nanstd(values,[], 2)./sqrt(size(values, 2)),[1,3,2]);
+    initial_names   = categories(labels);
 
     %% Generate figure
-    fig_handle      = [];
-    shuffle_values  = [];
-    shuffle_semvalues     = [];
-    shuffle_meanvalue    = [];
+    fig_handle          = [];
+    shuffle_values      = [];
+    shuffle_semvalues   = [];
+    shuffle_meanvalue   = [];
     if rendering
         %% Fix for labels
         labels          = fix_labels(labels);
@@ -207,6 +230,9 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
             sem_values          = sem_values(idx(:,1),:,:);
             shuffle_meanvalue   = meanvalue(2,:,:)';
             meanvalue           = meanvalue(1,:,:)';
+        elseif N_conditions > 1
+            hb                  = bar(condition_labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
+            colororder(viridis(N_conditions))
         else
             hb                  = bar(labels, meanvalue, 'EdgeColor', 'none','FaceColor',lines(1));hold on;
             colororder(viridis(N_conditions))
@@ -230,7 +256,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         else
             n_sub_bars = 1:2;
         end
-        if split_shuffle
+        if split_shuffle || N_conditions > 1
             condition_list = N_conditions;
         else
             condition_list = 1;
@@ -246,7 +272,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 end               
                 
                 for sub_bar = n_sub_bars % 1 if not shuffle, 2 otherwise
-                    if N_conditions > 1 && ~split_shuffle
+                    if N_conditions > 1 && ~split_shuffle && use_shuffle
                         sub_bar_idx = (N_conditions*(sub_bar-1)+1) : N_conditions*(sub_bar);                             
                     else
                         sub_bar_idx = sub_bar;
@@ -301,10 +327,12 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
 
         %% Adjust plot limits
         ylim([-10,100]);hold on;
-
+        if ~isempty(condition_labels) && numel(condition_labels) ~= numel(unique(condition_labels))
+            error('Condition labels must all be different 9or the stat test regroup similar names together)')
+        end
         if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 1)
             %legend(condition_labels);
-        elseif ~isempty(condition_labels) && numel(condition_labels) ~= size(meanvalue, 1)
+        elseif ~isempty(condition_labels) && (numel(condition_labels) ~= size(meanvalue, 1) && numel(condition_labels) ~= size(meanvalue, 2))
             error(['labels must be a string array of ', num2str(size(meanvalue, 1)), ' elements'])
         end
         
@@ -329,7 +357,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         if N_conditions > 1
            values           = permute(values,[3,2,1]);
            shuffle_values   = permute(shuffle_values,[3,2,1]);
-           labels = categorical(condition_labels);
+           labels           = condition_labels;
            xticklabels(gca, categorical(condition_labels));
         end
         stats_results.equalvariances = vartestn(values','TestType','LeveneAbsolute','Display','off') > 0.05;
@@ -372,6 +400,11 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                     return
                 end
                 stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
+            elseif size(values, 1) == 2
+                disp('the two conditions are significantly different');
+                name = categories(labels);
+                [~,stats_results.table,stats_results.stats]                 = kruskalwallis(values', name, stat_disp); % should be replaced by MW
+                stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
             else
                 disp('the two conditions are significantly different');
                 name = categories(labels);
@@ -379,15 +412,18 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 stats_results.multi_comp                                    = multcompare(stats_results.stats, 'Display', stat_disp);
             end
             
-            if ~split_shuffle && N_conditions > 1
+            if ~split_shuffle && N_conditions > 1 && use_shuffle
                 for el = 1:N_conditions
                     col1 = stats_results.multi_comp(:,1);
                     col2 = stats_results.multi_comp(:,2);
                     stats_results.multi_comp(col1 == el, 1) = hb(el).XEndPoints;
                     stats_results.multi_comp(col2 == el, 2) = hb(el).XEndPoints;
                 end
+            elseif (~use_shuffle || ~split_shuffle) && N_conditions > 1
+                stats_results.multi_comp(:,[1,2]) = ceil(stats_results.multi_comp(:,[1,2]));
             elseif ~split_shuffle && N_conditions == 1
-                 stats_results.multi_comp(:,[1,2]) = ceil(stats_results.multi_comp(:,[1,2])/2);
+                stats_results.multi_comp(:,[1,2]) = ceil(stats_results.multi_comp(:,[1,2]));
+               %  stats_results.multi_comp(:,[1,2]) = ceil(stats_results.multi_comp(:,[1,2])/2);
             end
 
             if rendering
