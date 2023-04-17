@@ -1,3 +1,8 @@
+%% obj = arboreal_scan_dataset('C:\Users\Antoine.Valera\MATLAB\newextraction_raw_zscored')
+% 
+
+
+
 classdef arboreal_scan_dataset < handle
     %% This class handles meta analysis or arboreal scans
     % see meta_analyze_arboreal_scans for examples
@@ -19,43 +24,43 @@ classdef arboreal_scan_dataset < handle
             fold = [dir([source_folder,'/**/*-*-*_exp_??'])];
             fold = fold([fold.isdir]);            
             for idx = 1:(numel(fold))%1:numel(fold)
-                files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-                
-                if ~isempty(files)
-                    %                 if numel(files) == 0
-                    %                     warning([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'])
-                    %                     expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
-                    %                     expe.save(true);
-                    %                     files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
-                    %                 end
-
-                                   % for el = 1:numel(files)
-
-
-
-                   fname = [files(1).folder,'/',files(1).name];
-                   if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
-                       fprintf(['loading ',files(1).name,' ... please wait\n'])
-                       m = load(fname);  
-                       obj.experiments(idx) = m.obj;
-                   end
-
-
-                      % if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
-    %                         if isempty(obj.experiments)
-    %                             obj.experiments = m.obj;
-    %                         else
-    %                             %% SQUEEZE IDENTIFY HERE
-    %                             try
-
-    %                             catch
-    %                                 1
-    %                             end
-                      %  end
-                            %break
-                      %  end
-                   % end
+                files = dir([fold(idx).folder,'/',fold(idx).name,'/',fold(idx).name,'.mat']);
+                %% If no matfile, extrac it now
+                if numel(files) == 0
+                    disp_info([fold(idx).folder,'/',fold(idx).name, ' has not been extracted yet. A simple experiment (no processing) will be generated for you. Please wait'],2)
+                    expe = arboreal_scan_experiment([fold(idx).folder,'/',fold(idx).name]);
+                    expe.save(true);
+                    files = dir([fold(idx).folder,'/',fold(idx).name,'/*.mat']);
                 end
+
+                %% If there is now a matfile
+                if ~isempty(files)
+                    fname = [files(1).folder,'/',files(1).name];
+                    if strcmp(obj.fast_class_check(fname), 'arboreal_scan_experiment')
+                        fprintf(['loading ',files(1).name,' ... please wait\n'])
+                        m = load(fname);  
+                        obj.experiments(idx) = m.obj;
+                    end
+                else
+                        
+                    1
+                end
+
+
+                                      % if isfield(m,'obj') && isa(m.obj, 'arboreal_scan_experiment')
+                    %                         if isempty(obj.experiments)
+                    %                             obj.experiments = m.obj;
+                    %                         else
+                    %                             %% SQUEEZE IDENTIFY HERE
+                    %                             try
+
+                    %                             catch
+                    %                                 1
+                    %                             end
+                                      %  end
+                                            %break
+                                      %  end
+                                   % end
             end       
         end
         
@@ -251,13 +256,6 @@ classdef arboreal_scan_dataset < handle
 %             end            
 %         end
 % 
-%         
-
-
-
-
-
-
 
         function expe = identify(obj, filter)
             expe = find(arrayfun(@(x) contains(x.ref.data_folder, filter), obj.experiments));
@@ -330,7 +328,7 @@ classdef arboreal_scan_dataset < handle
 
         function plot_gallery(obj, mode, range, proj_axis)
             if nargin < 2 || isempty(mode)
-                mode = 'corr';
+                mode = 'none';
             end
             if nargin < 3 || isempty(range)
                 range = obj.valid_expe;
@@ -340,10 +338,13 @@ classdef arboreal_scan_dataset < handle
             end
             
             %% Now generate the figures
-            [all_trees,  all_soma, all_values]  = deal({});
+            [all_trees,  all_soma, all_values, tree_segments]  = deal({});
             %range(2) = []
             for expe = range
-                if strcmp(mode, 'corr')
+                if strcmp(mode, 'none')
+                    [f, all_values{expe}, all_trees{expe}, all_soma{expe}] = obj.experiments(expe).ref.plot_value_tree();
+                    tree_segments{expe} = [cell2mat(arrayfun(@(x) x.XData, f, 'UniformOutput', false)), cell2mat(arrayfun(@(x) x.YData, f, 'UniformOutput', false)), cell2mat(arrayfun(@(x) x.ZData, f, 'UniformOutput', false))];
+                elseif strcmp(mode, 'corr')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_corr_tree();
                 elseif strcmp(mode, 'dim')
                     [all_trees{expe}, all_soma{expe}, all_values{expe}] = obj.experiments(expe).plot_dim_tree(0); 
@@ -354,13 +355,12 @@ classdef arboreal_scan_dataset < handle
                 end
                 close all;
             end
-
             
             L23 = 100 * double(~strcmp(proj_axis, 'xy'));
             L5a = 444 * double(~strcmp(proj_axis, 'xy'));
             L5b = 644 * double(~strcmp(proj_axis, 'xy'));       
             figure(); axis equal;set(gcf,'Color','w');hold on; % FF
-            x_offset = 0; y_offset = 0; max_fig_w = 5000; y_max_in_row = 0;
+            x_offset = 0; y_offset = 0; max_fig_w = 3000; y_max_in_row = 0;
             for expe = range
                 if ~isempty(all_values{expe})
                     if x_offset > (max_fig_w-500) || expe == 1
@@ -383,25 +383,55 @@ classdef arboreal_scan_dataset < handle
                     else
                         error('proj axis must be xz, yz or xy')                        
                     end
-                    shifted_x_coor = all_values{expe}{req_x};
-                    shifted_z_coor = all_values{expe}{req_y};
                     
-                    zero_shifted_coor = -min(shifted_x_coor) + x_offset;
-                    shifted_x_coor = shifted_x_coor + zero_shifted_coor;
-                    X = shifted_x_coor;
-                    Y = shifted_z_coor+y_offset;
-                    Z = all_values{expe}{req_z};
-                    S = all_values{expe}{4};
-                    %% QQ Need to add the NANs at the end of branches
-                    HP = surface('XData'    ,[X';X'],...
-                                 'YData'    ,[Y';Y'],...
-                                 'ZData'    ,[Z';Z'],...
-                                 'CData'    ,[S';S'],...
-                                 'facecol'  ,'no',...
-                                 'edgecol'  ,'interp',...
-                                 'linew'    ,1); hold on;
+                    tree_type = 'simple'
+                    if strcmp(tree_type, 'curved')
+                        shifted_x_coor = all_values{expe}{req_x};
+                        shifted_z_coor = all_values{expe}{req_y};
+                        shifted_y_coor = all_values{expe}{req_z}; 
+                        zero_shifted_coor = -min(shifted_x_coor) + x_offset;
+                        shifted_x_coor = shifted_x_coor + zero_shifted_coor;
+                        X = shifted_x_coor;
+                        Y = shifted_z_coor+y_offset;
+                        Z = shifted_y_coor;
+                        S = all_values{expe}{4};
+%                     %% QQ Need to add the NANs at the end of branches
+%                     HP = surface('XData'    ,[X';X'],...
+%                                  'YData'    ,[Y';Y'],...
+%                                  'ZData'    ,[Z';Z'],...
+%                                  'CData'    ,[S';S'],...
+%                                  'facecol'  ,'no',...
+%                                  'edgecol'  ,'interp',...
+%                                  'linew'    ,1); hold on;
+                    else                  
+                        %[X1 X2 Y1 Y2 Z1 Z2] = cyl_tree (all_trees{expe}{1});
+                        shifted_x_coor = tree_segments{expe}(:, (req_x*2-1):(req_x*2));
+                        shifted_z_coor = tree_segments{expe}(:, (req_y*2-1):(req_y*2));
+                        zero_shifted_coor = -min(shifted_x_coor(:)) + x_offset;
+                        shifted_x_coor = shifted_x_coor + zero_shifted_coor;                        
+                        shifted_y_coor = tree_segments{expe}(:, (req_z*2-1):(req_z*2));
+                        X = shifted_x_coor;
+                        Y = shifted_z_coor+y_offset;
+                        Z = shifted_y_coor;
+                        S = all_values{expe}{4};                       
+                        
+                        HP = line(X', Y', Z');
+                        
+%                         X1 = tree_loc(:, (req_x*2-1));
+%                         X2 = tree_loc(:, (req_x*2));
+%                         Y1 = tree_loc(:, (req_y*2-1));
+%                         Y2 = tree_loc(:, (req_y*2));
+%                         Z1 = tree_loc(:, (req_z*2-1));
+%                         Z2 = tree_loc(:, (req_z*2));  
+                        colors = parula(size(X,1));
+                        
+                        for roi = 1 : length(size(X,1))
+                            set (HP(roi), 'color', colors (roi, :));
+                        end
+                    end     
+                             
                     scatter(all_soma{expe}(req_x) + zero_shifted_coor,all_soma{expe}(req_y)+y_offset,50,'k','filled'); hold on;
-                    x_offset = max(shifted_x_coor);
+                    x_offset = max(shifted_x_coor(:));
                     y_max_in_row = max([y_max_in_row, max(Y-y_offset), all_soma{expe}(req_y), L5b]);
                 end
             end
