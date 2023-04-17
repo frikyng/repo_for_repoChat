@@ -45,8 +45,8 @@ function [obj, source_signal, signal_indices, timepoints, lag] = prepare_analysi
     if ischar(path_or_obj)
         [~,~,ext] = fileparts(path_or_obj);
         if strcmp(ext, '.mat')
-            load('C:\Users\vanto\Documents\MATLAB\extracted_arboreal_scans 2\arboreal_scans_thin_mask.mat');
-        else
+            obj = arboreal_scan_experiment(path_or_obj, use_hd_data);
+        else % use current folder
             obj = arboreal_scan_experiment('', use_hd_data);
         end
     else
