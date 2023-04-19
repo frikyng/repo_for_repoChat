@@ -457,7 +457,6 @@ classdef behaviours_analysis < handle
                 end
                 beh_name = {obj.behaviours.types{find(to_test)}};
                 
-                
                 beh_end_loc = strfind(current_type, beh_name{1}) + numel(beh_name{1});
                 if ~isempty(beh_end_loc) && beh_end_loc < numel(current_type) && strcmp(current_type(beh_end_loc), '[')
                     loc             = strfind(current_type,']');
@@ -543,20 +542,14 @@ classdef behaviours_analysis < handle
                         R(R < 1) = []; R(R > numel(active_tp{idx})) = [];
                         active_tp{idx}(R) = 1;
                     end
-%                     for epoch = starts
-%                         active_tp{idx}(max(1, epoch-round(window(1)*(1/dt))):epoch) = 1;
-%                     end
-%                     for epoch = stops
-%                         active_tp{idx}(epoch:min(numel(active_tp{idx}), epoch+round(window(2)*(1/dt)))) = 1;
-%                     end
                     
                     %% If required, invert
                     if invert(idx)
                         active_tp{idx}       = ~active_tp{idx};
                     end    
                     
-%                     %% Update bouts edges now that we extended the range
-%                     [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
+                     %% Update bouts edges now that we extended the range
+                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
 
                     if rendering
                         figure(1027);hold on;
