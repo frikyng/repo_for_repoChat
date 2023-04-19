@@ -466,6 +466,9 @@ classdef behaviours_analysis < handle
                 else
                     window          = obj.bout_extra_win;
                 end
+                if numel(window) == 1
+                    window = [window, window];
+                end
                 
                 if ~isempty(beh.value)
                     beh_sm{idx}         = beh.value;
