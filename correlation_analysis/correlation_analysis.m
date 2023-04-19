@@ -167,6 +167,13 @@ classdef correlation_analysis < handle
             end
         end
         
+        function crosscorr_ref = get.crosscorr_ref(obj)
+            crosscorr_ref = obj.crosscorr_ref;
+            if ischar(crosscorr_ref)
+                obj.crosscorr_ref = crosscorr_ref; % will force convertion to numbers
+            end
+        end
+        
         function set.crosscorr_ref(obj, crosscorr_ref)
             %% Defines the ROIs to use for the reference comun of the
             % correlation matrix
@@ -235,7 +242,7 @@ classdef correlation_analysis < handle
             %       If a a list of integer is provided, the ref will be
             %       calculated with the average signal from these ROIs.
             %       If a single value is passed, the reference comlumn wil
-            %       lcorrespond to this ROi (in which case there will be 2
+            %       lcorrespond to this ROI (in which case there will be 2
             %       identical columns in the crosscorr matrix)
             %       If the value is 0 or [], all ROIs will be used to
             %       computed the average
@@ -251,6 +258,7 @@ classdef correlation_analysis < handle
             %       set.cc_mode doc for the deails
             % -------------------------------------------------------------
             % Extra Notes:
+            %   * obj.bout_extra_win is updated whenever 
             % -------------------------------------------------------------
             % Author(s):
             %   Antoine Valera.
@@ -304,6 +312,9 @@ classdef correlation_analysis < handle
 
             if ~numel(obj.arboreal_scans)
                 return
+            end
+            if ~ischar(cc_mode)
+                cc_mode = '';
             end
             obj.cc_mode = cc_mode;
             if strcmp(cc_mode, 'none')
