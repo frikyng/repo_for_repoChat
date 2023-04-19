@@ -404,7 +404,7 @@ classdef arboreal_scan_plotting < handle
            % update_tree_cmap(f, f(1).Parent.Colormap, [0.8, 1]); 
             f(1).Parent.Colorbar.Label.String = ['Correlation between ',label_name,' with Reference'];
 
-%
+% %
 %             [S,Q] = genlouvain(double(cc),[],[],1);
 %             [a,b] = sort(S);
 %             figure(1008);clf();imagesc(cc(b,b))
