@@ -159,8 +159,6 @@ classdef arboreal_scan_plotting < handle
             %% Project correlation value onto the tree
             if ~isempty(cross_corr)
                 obj.plot_corr_tree(cross_corr);
-            else
-                1
             end
         end
         
@@ -228,20 +226,6 @@ classdef arboreal_scan_plotting < handle
                 colors = 'jet';
             end
             [f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(obj.dimensionality.cluster_idx, find(obj.dimensionality.valid_trace_idx), obj.default_handle, 'Clusters','',tree_handle, 'curved', colors, 'discrete');
-%             cmap = jet(range(obj.dimensionality.cluster_idx)+1);
-%             if any(obj.dimensionality.cluster_idx <= 0)
-%                 cmap(1,:) = UNASSIGNED_ROI_COLOR;
-%             end
-%             colormap(cmap);
-
-            p = plot([NaN, NaN; NaN, NaN]);
-            [~, objH] = legend(p, 'Excluded ROIs','Unassigned Cluster', 'Box', false, 'Location', 'northwest');             % Reorder handles
-            set(p, 'Vis', 'off');                                       % Make "junk" lines invisible
-            set(findobj(objH, 'Tag', 'Excluded ROIs'), 'Color', EXCLUDED_ROI_COLOR, 'LineWidth',4);
-            set(findobj(objH, 'Tag', 'Unassigned Cluster'), 'Color', UNASSIGNED_ROI_COLOR, 'LineWidth',4);
-%             pos = get(objH(3), 'Pos');                                  % Get text box position
-%                % Stretch box and change text
-            
 
             %% Display rearranged Loadings and Cluster limits 
             if ~isvalid(map_handle) || isa(map_handle, 'matlab.graphics.axis.Axes')
