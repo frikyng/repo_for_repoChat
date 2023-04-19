@@ -1334,30 +1334,8 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             analysis_mode_no_win = analysis_mode_no_win(1:3:end);
                   
             if ~all(cellfun(@isempty, analysis_mode_no_win)) && any(contains(obj.behaviours.types, analysis_mode_no_win, 'IgnoreCase',true))
-                to_test = [];
-                for el = obj.behaviours.types
-                    if contains(analysis_mode_no_win, el{1},'IgnoreCase',true) || contains(el{1},analysis_mode_no_win,'IgnoreCase',true)
-                        to_test(end+1) = 1;
-                    else
-                        to_test(end+1) = 0;
-                    end
-                end
-                beh_name = {obj.behaviours.types{find(to_test)}};
- 
-                %% Check if there is window suffix
-                beh_end_loc = strfind(analysis_mode, beh_name{1}) + numel(beh_name{1});
-                if ~isempty(beh_end_loc) && beh_end_loc < numel(analysis_mode) && strcmp(analysis_mode(beh_end_loc), '[')
-                    loc             = strfind(analysis_mode,']');
-                    loc             = loc(find(loc > beh_end_loc, 1, 'first'));
-                    range           = analysis_mode(beh_end_loc:loc);
-                    bout_extra_win  = str2num(range);
-                else
-                    bout_extra_win  = obj.bout_extra_win;
-                end
-
-                %% Get behaviour bouts
-                [~, ~, beh]         = obj.get_behaviours(beh_name); 
-                [~, ~, active_tp]   = obj.get_activity_bout(beh_name, true, invert, '', bout_extra_win);
+                %% Get behaviour bouts   
+                [~, beh, active_tp]   = obj.get_activity_bout(analysis_mode, true, invert, '');
                 
                 %% Valid tp are either (in)active behaviour, or peaks during behaviours
                 if using_peaks

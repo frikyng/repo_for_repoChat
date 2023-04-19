@@ -104,15 +104,11 @@ classdef behaviours_analysis < handle
             else
                 error('filter window must be a set of one (for symmetrical gaussian kernel) or 2 (for asymetrical gaussian kernel) values. Values are rounded. Values < 0 indicate a window in points')
             end
-            
-            if any(obj.beh_smoothing < 0)
-                1
-            end
         end
         
         function set.shuffling_block_size(obj, shuffling_block_size)
             if all(isnumeric(shuffling_block_size)) && all(shuffling_block_size == obj.shuffling_block_size)
-                %% no change, pass                
+                %% No change, pass                
             elseif all(isnumeric(shuffling_block_size))
                 if shuffling_block_size < 0
                     shuffling_block_size = round(abs(shuffling_block_size) * nanmedian(1./obj.timescale.sr));
@@ -156,9 +152,11 @@ classdef behaviours_analysis < handle
             %   average (BOOL) - Optional - Default is false
             %       If true, all requested beahviours are averaged
             %   smoothing (INT or 2x1 INT) - Optional - Default is 
-            %       obj.beh_smoothing. If > 0, defines a smoothing window
-            %       in points. If < 0 defines a smoothing window in
-            %       seconds. Smoothing is a guassian filter. If 2x1 INT,
+            %       obj.beh_smoothing.
+            %       * If > 0, defines a smoothing window in points
+            %       * If < 0 defines a smoothing window in
+            %       seconds. Default smoothing is a gaussian filter, 
+            %       unless you change obj.beh_sm_func. If 2x1 INT,
             %       an asymmetrical filter is set.
             % -------------------------------------------------------------
             % Outputs:
@@ -342,7 +340,7 @@ classdef behaviours_analysis < handle
             end
         end
 
-        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, invert, thr, window)
+        function [bouts, beh_sm, active_tp] = get_activity_bout(obj, beh_types, rendering, invert, thr)
             %% Return the selected behaviour and corresponding timescale
             % -------------------------------------------------------------
             % Syntax:
@@ -363,15 +361,10 @@ classdef behaviours_analysis < handle
             %   invert (BOOL) - Optional - Default is false
             %       If true, the detected behaviours is inverted
             %   thr (FLOAT) - Optional - Default is obj.beh_thr. 
-            %       Defines the threshold used to start a bout.
-            %   window (INT or 2x1 or 3x3 INT) - Optional - default is
-            %   obj.bout_extra_win .
-            %       This is an expension/erosion factor for each bout. See 
-            %       Extra notes for some examples. If you provide a single
-            %       INT, the factor is applied to the beginning and to the 
-            %       end of each bout. Two value control independently the
-            %       expension/shrinkage of the onset and offset of each bout.
-            %       A 3rd value force the bout duration to this value
+            %       Defines the threshold used to start a bout. The
+            %       threshold is defined as a value exceeding obj.beh_thr
+            %       of the signal soft range (i.e. on the 1st-99th
+            %       percentile range).
             % -------------------------------------------------------------
             % Outputs:
             %   bouts (1xN CELL ARRAY of 1x2P ARRAY)
@@ -385,10 +378,20 @@ classdef behaviours_analysis < handle
             %       if a given timepoint is active or inactive.
             % -------------------------------------------------------------
             % Extra Notes:
-            %   * window can be use to manipulate the liits of the bouts.
-            %   - IF you specifies window = 0, the bouts are unchanged. 
+            %   * A "window" flag can be added to the behaviour (eg
+            %       "encoder" becomes "encoder[10,-3]". The flag format is 
+            %       (INT or 2x1 or 3x3 INT). If absent the value used is
+            %       obj.bout_extra_win.
+            %       This is an expension/erosion factor for each bout. See 
+            %       Extra notes for some examples. If you provide a single
+            %       INT, the factor is applied to the beginning and to the 
+            %       end of each bout. Two value control independently the
+            %       expension/shrinkage of the onset and offset of each bout.
+            %       A 3rd value force the bout duration to this value
+            %   "window" can be use to manipulate the limits of the bouts.
+            %   - If you specifies window = 0, the bouts are unchanged. 
             %   - If you specified 3, the beginning and end of each bout is
-            %   extended by that many points. If 2 bouts touch each other, 
+            %   extended by that many seconds. If 2 bouts touch each other, 
             %   they are merged
             %   - If you specifies -3, the bouts are eroded on each side.
             %   If the bout if fully eroded, it is removed.
@@ -435,43 +438,96 @@ classdef behaviours_analysis < handle
             else
                 obj.beh_thr = thr;
             end 
-            if nargin < 6 || isempty(window)
-                window = obj.bout_extra_win;
-            elseif numel(window) == 1
-                window = [window, window];
-            end 
             
             plts = {};
             for idx = 1:numel(beh_types)
                 current_type    = beh_types{idx};
                 [~, ~, beh]     = obj.get_behaviours(current_type, false);
+                
+                %% Check if there is window suffix
+                analysis_mode_no_win = strsplit(current_type,{'[',']'});
+                analysis_mode_no_win = analysis_mode_no_win(1:3:end);
+                to_test = [];
+                for el = obj.behaviours.types
+                    if contains(analysis_mode_no_win, el{1},'IgnoreCase',true) || contains(el{1},analysis_mode_no_win,'IgnoreCase',true)
+                        to_test(end+1) = 1;
+                    else
+                        to_test(end+1) = 0;
+                    end
+                end
+                beh_name = {obj.behaviours.types{find(to_test)}};
+                
+                
+                beh_end_loc = strfind(current_type, beh_name{1}) + numel(beh_name{1});
+                if ~isempty(beh_end_loc) && beh_end_loc < numel(current_type) && strcmp(current_type(beh_end_loc), '[')
+                    loc             = strfind(current_type,']');
+                    loc             = loc(find(loc > beh_end_loc, 1, 'first'));
+                    window          = str2num(current_type(beh_end_loc:loc));
+                else
+                    window          = obj.bout_extra_win;
+                end
+                
                 if ~isempty(beh.value)
                     beh_sm{idx}         = beh.value;
                     beh_sm{idx}         = nanmean(beh_sm{idx},1);
                     %beh_sm{idx}         = detrend(fillmissing(beh_sm{idx},'nearest'),'linear',cumsum(obj.timescale.tp));
-                    %thr                = prctile(beh_sm{idx}(beh_sm{idx} > 0), 20);
-                    current_thr         = prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % 5% of max
+                    
+                    %% Define threshold. We used a "soft range" (the signal 1-99th percentile range) on the absolute value to determine a threshold
+                    temp_beh            = abs(beh_sm{idx});
+                    noise               = range(temp_beh)/100;
+                    temp_beh            = abs(temp_beh + randn(size(temp_beh))*noise);                    
+                    current_thr         = prctile(temp_beh,10) + ((prctile(temp_beh,99) - prctile(temp_beh,1)) * (obj.beh_thr/100));   %prctile(beh_sm{idx},(100/obj.beh_thr)) + range(beh_sm{idx})/(100/obj.beh_thr); % obj.beh_thr 'th percentile of the behaviour + obj.beh_thr % of the range
 
-                    %% Define bouts
+                    %% Define bouts starts and stops
                     dt                  = nanmedian(diff(obj.t));
                     active_tp{idx}      = false(size(beh_sm{idx}));
                     [starts, stops]     = get_limits(abs(beh_sm{idx}) > abs(current_thr), beh_sm{idx});
                     
-                    %% Extend / shring bouts limits
-                    starts              = starts - round(window(1)*(1/dt));
-                    starts(starts < 1)  = 1; starts(starts > numel(active_tp{idx})) = numel(active_tp{idx});
-                    stops               = stops + round(window(2)*(1/dt));
-                    stops(stops < 1)    = 1; stops(stops > numel(active_tp{idx})) = numel(active_tp{idx});
+                    if numel(window) == 3 && window(3) == 0
+                        obj.disp_info('You set 3 values for the window control but the third value is 0. This will select only one timepoint. Make sure this is the intended behaviour',3)
+                    end
+                    if numel(window) == 3 && window(3) < 0 && window(1) ~=0
+                        obj.disp_info('You set a negative value for the window control setting #3, which means you want to use events occuring before/after the OFFSET. However, you still have a setting# 1 value that will expend/shrink the ONSET. Make sure this is the intended behaviour',3)
+                    end
+                    if numel(window) == 3 && window(3) > 0 && window(2) ~=0
+                        obj.disp_info('You set a positive value for the window control setting #3, which means you want to use events occuring before/after the ONSET. However, you still have a setting# 2 value that will expend/shrink the OFFSET. Make sure this is the intended behaviour',3)
+                    end
                     
+                    
+                    %% Extend the bouts limits
+                    if window(1) > 0
+                        starts              = starts - round(window(1)*(1/dt));
+                        starts(starts < 1)  = 1; starts(starts > numel(active_tp{idx})) = numel(active_tp{idx});
+                    end
+                    if window(2) > 0
+                        stops               = stops + round(window(2)*(1/dt));
+                        stops(stops < 1)    = 1; stops(stops > numel(active_tp{idx})) = numel(active_tp{idx});
+                    end
+                    [starts, stops] = merge_epochs(starts, stops);
+                    
+                    %% Now shrink bouts limits
+                    if window(1) < 0
+                        starts              = starts - round(window(1)*(1/dt));
+                        starts(starts < 1)  = 1; starts(starts > numel(active_tp{idx})) = numel(active_tp{idx});
+                    end
+                    if window(2) < 0
+                        stops               = stops + round(window(2)*(1/dt));
+                        stops(stops < 1)    = 1; stops(stops > numel(active_tp{idx})) = numel(active_tp{idx});
+                    end
+                    [starts, stops] = merge_epochs(starts, stops);
+                    obj.disp_info(['N bouts after extension / shrinkage and merging = ',num2str(numel(starts))],1)
+
                     %% Force bouts duration if required
                     if numel(window) == 3
                         if window(3) >= 0
                             stops = starts + round(window(3)*(1/dt));
                             window(2) = 0;
+                            obj.disp_info(['all detected bouts adjusted to a duration of = ',num2str(numel(abs(window(3))*(1/dt))),' seconds before/after onset'],1)
                         elseif window(3) < 0
                             starts = stops + round(abs(window(3))*(1/dt));
                             window(1) = 0;
-                        end
+                            obj.disp_info(['all detected bouts adjusted to a duration of = ',num2str(numel(abs(window(3))*(1/dt))),' seconds before/after offset'],1)
+                        end                        
                     end
 
                     %% Build range                    
@@ -496,8 +552,8 @@ classdef behaviours_analysis < handle
                         active_tp{idx}       = ~active_tp{idx};
                     end    
                     
-                    %% Update bouts edges now that we extended the range
-                    [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
+%                     %% Update bouts edges now that we extended the range
+%                     [starts, stops] = get_limits(active_tp{idx}, beh_sm{idx}); 
 
                     if rendering
                         figure(1027);hold on;
@@ -540,6 +596,41 @@ classdef behaviours_analysis < handle
                     starts = 1; stops = size(beh_sm,2);
                 end
             end
+            
+            function [merged_starts, merged_stops] = merge_epochs(starts, stops)
+                % Combine starts and stops into a single array with tags
+                timepoints = [starts(:); stops(:)];
+                tags = [ones(size(starts(:))); 2*ones(size(stops(:)))]; % 1 for start, 2 for stop
+
+                % Sort timepoints and tags
+                [sorted_timepoints, sort_idx] = sort(timepoints);
+                sorted_tags = tags(sort_idx);
+
+                % Initialize output arrays and other variables
+                merged_starts = [];
+                merged_stops = [];
+                active_epochs = 0;
+                current_start = NaN;
+
+                % Loop through sorted timepoints
+                for i = 1:length(sorted_timepoints)
+                    if sorted_tags(i) == 1 % start
+                        if active_epochs == 0
+                            current_start = sorted_timepoints(i);
+                        end
+                        active_epochs = active_epochs + 1;
+                    elseif sorted_tags(i) == 2 % stop
+                        active_epochs = active_epochs - 1;
+                        if active_epochs == 0
+                            merged_starts = [merged_starts; current_start];
+                            merged_stops = [merged_stops; sorted_timepoints(i)];
+                        end
+                    end
+                end
+            end
+
+            
+            
         end
 
         function set.detrend_behaviour(obj, detrend_behaviour)
