@@ -9,13 +9,15 @@ function non_parametric_chart(values, input_labels, errors, paired)
     if ~iscategorical(input_labels)
         label   = categorical(input_labels);
         label   = reordercats(categorical(label),input_labels); % preserve input label order
+    else
+        label   = input_labels;
     end
     n_samples = size(values, 2);
     figure();
     bar(label,nanmean(values'));hold on;ylim([-10,100]);
     errorbar(label,nanmean(values'),std(values')/sqrt(n_samples),'k.','CapSize',0);
     hold on; scatter(label,values,'ko', 'filled', 'MarkerFaceAlpha',0.3)
-    set(gcf, 'Color', 'w');set(gca,'box','off'); ylabel('Predictive Score (r)');
+    set(gcf, 'Color', 'w');set(gca,'box','off'); ylabel('Explained Variance');
     stats_results = {};
     disp('some conditions are significantly different from others')
     if ~paired
