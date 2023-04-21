@@ -4,7 +4,7 @@ classdef signal_manipulation < handle
         %% Analysis/extraction settings
         time_smoothing          = [0, 0];       % Smoothing kernet to apply to the extracted Ca2+ signals. 2x1 Int indicate asymatrical kernel. Use negative value for smoothing windo in seconds
         filter_type             = 'gaussian';   % Type of time filter kernel (one of the valid method is smoothdata())
-        bad_ROI_thr             = 0.2;          % Threshold to delimit bad vs good ROIs. Average cross correlation across ROIs < bad_ROI_thr are excluded from the analysis
+        bad_ROI_thr             = 0.5;          % Threshold to delimit bad vs good ROIs. Average cross correlation across ROIs < bad_ROI_thr are excluded from the analysis
         detrend                 = false;
         is_detrended            = false;        % is set to True once you ran the detrending once.
         is_rescaled             = false;        % is set to True once you ran the rescaling step.
