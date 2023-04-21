@@ -95,13 +95,26 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     end
     
     %% Exclude shuffle if required
-    if nargin >= 8 && isstruct(varargin{1}) && isfield(varargin{1}, 'use_shuffle') && ~varargin{1}.use_shuffle
+    beh_unique_no_filt = result{1}{1}.('beh_type');
+    beh_unique_no_filt = beh_unique_no_filt(to_keep);    
+    beh_no_filt_is_shufle = any(contains(beh_unique_no_filt, 'shuffle'));
+    if beh_no_filt_is_shufle
+        beh_unique_no_filt = beh_unique_no_filt(~contains(beh_unique_no_filt, 'shuffle'));
+    end
+        
+    if numel(beh_unique_no_filt) > 1 && N_conditions > 1
+        %% Not sure how to handle this without breaking all the other cases.
+        to_keep = to_keep & ~cellfun(@(x) any(contains(x, 'shuffle')), prefilter_labels);
+        use_shuffle = false;
+        do_stats = false;
+        warning('special case for exploration only. This cannot handle shuffle and stats for now. Use single behaviour filter to use stats and/or shuffled data')
+    elseif nargin >= 8 && isstruct(varargin{1}) && isfield(varargin{1}, 'use_shuffle') && ~varargin{1}.use_shuffle
         to_keep = to_keep & ~cellfun(@(x) any(contains(x, 'shuffle')), prefilter_labels);
         use_shuffle = false;
     else
         use_shuffle = true;
     end
-
+    
     INVALID     = ~to_keep;
     INVALID     = INVALID(:,1,1); % may have to tweak this for more complex scenario
     values(INVALID, : , :) = [];
@@ -125,6 +138,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         is_shuffle = 1;
         N_behaviours_unique = N_behaviours_unique / 2;
     end
+    
     
 %     if ~isempty(additional_handle) % qq if non scalar output, need to be adjusted       
 %         values = cellfun(@(y) additional_handle(y), values);
@@ -182,8 +196,9 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
             max_scores = repmat(max_scores, 1, numel(temp_meanvalue));
         end
     end
+    
     split_shuffle = is_shuffle && split_shuffle;
-
+    
     if N_conditions > 1
         condition_labels  = reordercats(categorical(condition_labels),condition_labels);
     end
@@ -328,7 +343,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         %% Adjust plot limits
         ylim([-10,100]);hold on;
         if ~isempty(condition_labels) && numel(condition_labels) ~= numel(unique(condition_labels))
-            error('Condition labels must all be different 9or the stat test regroup similar names together)')
+            error('Condition labels must all be different or the stat test regroup similar names together)')
         end
         if ~isempty(condition_labels) && numel(condition_labels) == size(meanvalue, 1)
             %legend(condition_labels);

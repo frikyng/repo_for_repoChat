@@ -1,10 +1,12 @@
 %% STANDARD SETTINGS FOR DEMO SRIPTS AND ANALYSIS. THIS IS CALLED ACROSS SEVERAL FUNCTIONS
 
-%% Load an arboreal_scan_experiment object if required
-path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newextraction_raw_zscored\2019-10-01_exp_1';  
-if ~exist('obj','var')     
-    obj = arboreal_scan_experiment(path_to_use);
-    path_to_use = obj.source_folder;  
+if ~exist('skip_path','var') || (exist('skip_path','var') && ~skip_path)
+    %% Load an arboreal_scan_experiment object if required
+    path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newextraction_raw_zscored\2019-10-01_exp_1';  
+    if ~exist('obj','var')     
+        obj = arboreal_scan_experiment(path_to_use);
+        path_to_use = obj.source_folder;  
+    end
 end
 
 %% Arboreal Scan settings
@@ -51,5 +53,5 @@ time_step       = 0.25;
 time_ext        = 5;
 sr              = 1/nanmedian(obj.timescale.sr);
 lag_list        = [(0:time_step:time_ext)*-1, (0:time_step:time_ext)];
-lag_list        = unique(round(sort(lag_list) * sr))
-lag_smoothing   = 0
+lag_list        = unique(round(sort(lag_list) * sr));
+lag_smoothing   = 0;

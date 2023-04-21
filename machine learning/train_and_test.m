@@ -27,6 +27,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         ml_parameters = machine_learning_params(ml_parameters);
     end
     
+    %% Make sure this is correct if you passed the value manually
+    if ~ml_parameters.optimize_hyper
+        ml_parameters.optimization_method = 'none';
+    end
+    
     %% Filter out invalid prediction points, or invalid predictors, or invalid observations
     USABLE_BEH                      = ~all(isnan(observation_data),2);
     INVALID_TP                      = any(isnan(observation_data(USABLE_BEH,:)),1);
@@ -157,7 +162,7 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
             if ~isempty(raw_behaviour)
                 current_raw_behaviour = raw_behaviour(beh_idx,:);
             end
-            plot_prediction(calcium_ref, current_obs, timepoints, partition, y_predict, current_raw_behaviour , type, score(mdl_idx,:), mdl_idx);
+            plot_prediction(calcium_ref, current_obs, timepoints, partition, y_predict, current_raw_behaviour , type, score, mdl_idx);
         end
 
         %% Save Machine learning output

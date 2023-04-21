@@ -9,6 +9,7 @@ function params = machine_learning_params(varargin)
     params.rendering                = 2     ; % (0) no plot, (1) summary plot, (2) 1 + predictions, (3) 2 + hyperparameter tuning 
     params.svm_kernel               = 'gaussian' ; % gaussian or linear
     params.solver                   = ''    ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Solver" section
+    params.postfit_bias             = true  ; % see https://fr.mathworks.com/help/stats/fitrlinear.html, "Tips" section
     params.shuffling                = ''    ; % 'events' to shuffle timepoints, 'ROIs' to shuffle the spatial structure, 'behaviours' to shuffle observations. Use a cell array to cet more than one.
     params.block_shuffling          = 0     ; % If non 0, then we do block shuffling using this window size. holdout must be > 0. kFold must be 1  
     params.title                    = ''    ; % set final bar chart title
@@ -74,6 +75,9 @@ function params = machine_learning_params(varargin)
                     params.solver = cellfun(@lower, varargin{i+1}, 'UniformOutput', false); % for multiple solver sequences
                 end
             end
+            if (strcmpi(varargin{i},'postfit_bias'))
+                params.postfit_bias = varargin{i+1};
+            end            
             if (strcmpi(varargin{i},'shuffling'))
                 params.shuffling = lower(varargin{i+1});
             end
@@ -138,4 +142,8 @@ function params = machine_learning_params(varargin)
     if params.obs_shuf_block_sz < 1
         error('Minimal value for obs_shuf_block_sz is 0. Shuffling is only used if params.shuffling is "behaviours"');
     end
+    if ~params.optimize_hyper
+        params.optimization_method = 'none';
+    end
+    
 end

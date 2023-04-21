@@ -39,9 +39,10 @@ function plot_prediction(raw_data, YData, timepoints, partition, y_predict, raw_
         
     figure(Fig_nb);clf();
     if numel(score) == 1 || ~islogical(YData)
-        sgtitle([behaviour_name, ' accuracy is ',num2str(score(1), 3),'%']);hold on;
+        sgtitle([behaviour_name, ' accuracy is ',num2str(score{1}.explained_variance, 3),'%']);hold on;
     else
-        sgtitle({[behaviour_name, ' accuracy is ',num2str(score(1), 3),'%'],['specificity = ',num2str(round(score(2))),' %; sensitivity = ',num2str(round(score(3))),' %; MCC = ',num2str(round(score(4))),' %']});hold on;
+        error('to fix next time you need it')
+        sgtitle({[behaviour_name, ' accuracy is ',num2str(score{1}.explained_variance, 3),'%'],['specificity = ',num2str(round(score(2))),' %; sensitivity = ',num2str(round(score(3))),' %; MCC = ',num2str(round(score(4))),' %']});hold on;
     end
     ax1 = subplot(3,1,1); hold on;       
     plot(raw_data);hold on
