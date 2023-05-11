@@ -2,7 +2,7 @@
 
 if ~exist('skip_path','var') || (exist('skip_path','var') && ~skip_path)
     %% Load an arboreal_scan_experiment object if required
-    path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newextraction_raw_zscored\2019-10-01_exp_1';  
+    path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newnewextraction_raw_zscored\2019-10-01_exp_1';  
     if ~exist('obj','var')     
         obj = arboreal_scan_experiment(path_to_use);
         path_to_use = obj.source_folder;  
@@ -28,7 +28,7 @@ obj.detrend_behaviour               = false;
 use_classifier  = false;                % true or false
 method          = 'linear';             % 'linear' or 'svm'    
 N_iter          = 20;                   % N iterations
-N_iter_for_lag  = 20;                   % N iterations when testing lag
+N_iter_for_lag  = 3;                   % N iterations when testing lag
 KFold           = 1;                    % N-Kfold. Set to 1 if using  
 holdout         = 0.2;                  % percentage of data held out for final testing. If 0, we use KFoldLoss with custom Pearson coeff to estimate the score
 rendering       = 1;                    % If 0 no figure, if 1 summary plot is display per iteraton + averages, if 2, individual iteration data is displayed , if 3 hyperparameter optimization plot are displayed.
@@ -49,8 +49,8 @@ ml_parameters = machine_learning_params(   'optimize_hyper'   , true          ,.
                                            'shuffling'        , 'behaviours')  ;  
                                        
 % For lag analysis, define the range and step size
-time_step       = 0.25;
-time_ext        = 5;
+time_step       = 0.2;
+time_ext        = 3;
 sr              = 1/nanmedian(obj.timescale.sr);
 lag_list        = [(0:time_step:time_ext)*-1, (0:time_step:time_ext)];
 lag_list        = unique(round(sort(lag_list) * sr));

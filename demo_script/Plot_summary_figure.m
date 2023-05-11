@@ -11,7 +11,7 @@ switch demo_case
         base_extraction_settings = analysis_params('source',data_folder,'signal_channel',2,'smoothing',[1, 0],'z_score',-5,'hi_res',true,'norm_method','dF/F0');
         base_extraction_settings.branch_ids = [  1   2   3   4   5   6   7   8   9  13  14  15  16  17  18  19  20  21  22  23  24];%  25  26  27  28  29  30  31  32  33  34  35  36 ]      
         %% Load Experiment Image
-        data_image = load_experiment(apply_default_posthoc_mc(base_extraction_settings),'rendering_mode','realistic','fill_gaps',true,'patch_expansion_factor',5,'tracing_source','swc');
+        data_image = load_experiment(default_registration_params(base_extraction_settings),'rendering_mode','realistic','fill_gaps',true,'patch_expansion_factor',5,'tracing_source','swc');
         projection = correlation_image(squeeze(data_image{1}(:,:,:,:,1)));
         
         %% Load SWC Data
