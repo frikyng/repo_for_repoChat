@@ -44,38 +44,42 @@ classdef ML_analysis < handle
             max_lag         = x(max_lag);
             obj.settings.max_score   = max_score;
             obj.settings.max_lag     = max_lag;
+            obj.settings.score_metrics = 'explained_variance'
         end
         
-        function [meanvalue, sem_values, stats_results, values] = show_shuffle(obj, title, behaviour_filter)
+        function [meanvalue, sem_values, stats_results, values] = show_result(obj, condition, behaviour_filter)
             %% Display one or several behaviour and its/theirs shuffled control(s)
-            if nargin < 2 || isempty(title)
-                title = {'Prediction on all behaviours',' using events amplitude modulations on all ROIs'};
+            if nargin < 2 || isempty(condition)
+                condition = {'Prediction on all behaviours',' using events modulation on all ROIs'}; % condition is the file title
             end
             if nargin < 3 || isempty(behaviour_filter)
                 behaviour_filter = '';
             end
-            path = obj.get_file_path_from_title(title);
+            path = obj.get_file_path_from_title(condition);
             load(path);
-            [meanvalue, sem_values, fig_handle, stats_results, values]      = bar_chart(results,behaviour_filter,'','','','','',obj.settings);
+            settings = obj.settings;
+            settings.split_shuffle = false;
+            [meanvalue, sem_values, fig_handle, stats_results, values]      = bar_chart(results,behaviour_filter,'','','','','',settings);
             save_myfig(fig_handle,'temp_chart','png')
         end
         
-        
-        function show_randomization_controls(obj, behaviour_filter)
+        function temporal_shuffle(obj, behaviour_filter)
             if nargin < 2 || isempty(behaviour_filter)
                 behaviour_filter = '';
             elseif ~iscell(behaviour_filter)
                 behaviour_filter = {behaviour_filter};
             end
             
-            results = {};            
+            results     = {};            
             all_titles  = {
-            'Prediction on all behaviours using events amplitude modulations on all ROIs but ROIs are shuffled for each event',...
-            'Prediction on all behaviours using events amplitude modulations on all ROIs',...
-            'Prediction on all behaviours using events magnitude on all ROIs but ROIs are shuffled for each event',...
-            'Prediction on all behaviours using events magnitudes on all ROIs'};
-            all_ticks = {'Spatial Shuffle (mod.)','All Segements (mod)','Spatial Shuffle (amp.)','All Segments (amp)'};
-            x_ticks  = {};
+                'Prediction on all behaviours using events magnitudes on all ROIs',...
+                'Prediction on all behaviours using events magnitude on all ROIs, but Behaviour and Ca2+ events are shuffled',...
+                'Prediction on all behaviours using events modulation on all ROIs',...
+                'Prediction on all behaviours using events modulation on all ROIs, but Behaviour and Ca2+ events are shuffled'};
+            all_ticks   = {'Magnitude','Temporal Shuffle on Magnitude','Modulation','Temporal Shuffle on Modulation'};
+            settings = obj.settings;
+            settings.use_shuffle = false;
+            x_ticks     = {};
             
             for cond = 1:numel(all_titles)
                 new = load(obj.get_file_path_from_title(all_titles{cond}));
@@ -90,9 +94,47 @@ classdef ML_analysis < handle
             end
             if isempty(behaviour_filter)
                 behaviour_filter = results{1}{1}.beh_type(~contains(results{1}{1}.beh_type, 'shuffle'));
-            end
+            end            
             for beh = behaviour_filter
-                [~,~, fig_handle]           = bar_chart(results, beh{1},'','',x_ticks,'','',obj.settings);
+                [~,~, fig_handle]           = bar_chart(results, beh{1},'','',x_ticks,'','',settings);
+                save_myfig(fig_handle,'temp_chart','png')
+            end
+        end
+        
+        function spatial_shuffle(obj, behaviour_filter)
+            if nargin < 2 || isempty(behaviour_filter)
+                behaviour_filter = '';
+            elseif ~iscell(behaviour_filter)
+                behaviour_filter = {behaviour_filter};
+            end
+            
+            results     = {};            
+            all_titles  = {
+                'Prediction on all behaviours using events magnitudes on all ROIs',...
+                'Prediction on all behaviours using events magnitude on all ROIs but ROIs are shuffled for each event',...
+                'Prediction on all behaviours using events modulation on all ROIs',...
+                'Prediction on all behaviours using events modulation on all ROIs but ROIs are shuffled for each event'};
+            all_ticks   = {'Magnitude','Spatial Shuffle on Magnitude','Modulation','Spatial Shuffle on Modulation'};
+            settings = obj.settings;
+            settings.use_shuffle = false;
+            x_ticks     = {};
+            
+            for cond = 1:numel(all_titles)
+                new = load(obj.get_file_path_from_title(all_titles{cond}));
+                if iscell(new.results{1})
+                    new = {new.results{3}}; % {horzcat(new.results{:})}; % merge all groups
+                else
+                    new = {new.results};
+                end
+                newtick = all_ticks{cond};
+            	results = [results, new];
+                x_ticks  = [x_ticks, newtick];
+            end
+            if isempty(behaviour_filter)
+                behaviour_filter = results{1}{1}.beh_type(~contains(results{1}{1}.beh_type, 'shuffle'));
+            end            
+            for beh = behaviour_filter
+                [~,~, fig_handle]           = bar_chart(results, beh{1},'','',x_ticks,'','',settings);
                 save_myfig(fig_handle,'temp_chart','png')
             end
         end
@@ -106,7 +148,7 @@ classdef ML_analysis < handle
             
             results = {};            
             all_titles  = { {'Prediction on all behaviours',' using events magnitudes on all ROIs'},...
-                            {'Prediction on all behaviours',' using events amplitude modulations on all ROIs'}};
+                            {'Prediction on all behaviours',' using events modulation on all ROIs'}};
             all_ticks = {'Magnitude', 'Modulation'};
             x_ticks  = {};
             
@@ -130,33 +172,39 @@ classdef ML_analysis < handle
             end
         end
         
-        function [meanvalue, sem_values, stats_results, values] = show_selected_conditions(obj, behaviour_filter, optimized)
+        function [meanvalue, sem_values, stats_results, values] = show_selected_conditions(obj, behaviour_filter, comparaison)
             if nargin < 2 || isempty(behaviour_filter)
                 behaviour_filter = '';
             elseif ~iscell(behaviour_filter)
                 behaviour_filter = {behaviour_filter};
             end
-            if nargin < 3 || isempty(optimized)
-                optimized = false;                
+            if nargin < 3 || isempty(comparaison)
+                comparaison = 0;                
             end
             
             all_results = {};         
-            if ~optimized
-                all_titles  = {{'Prediction on all behaviours',' using events magnitude on perisomatic ROIs (averaged)'},... %{'Prediction on all behaviours',' using events amplitude modulations on perisomatic ROIs (averaged)'}
+            if ~comparaison
+                all_titles  = {{'Prediction on all behaviours',' using events magnitude on perisomatic ROIs (averaged)'},... %{'Prediction on all behaviours',' using events modulation on perisomatic ROIs (averaged)'}
                                {'Prediction on all behaviours',' using events magnitude on all ROIs (averaged)'},...
-                               {'Prediction on all behaviours',' using events amplitude modulations on the individual highest phate',[' of group ', num2str(1)]},...
-                               {'Prediction on all behaviours';[' using events amplitude modulations on the 3 Highest Phates'];' (* ROIs)'},...
-                               {'Prediction on all behaviours',' using events amplitude modulations on all ROIs'}};
-            else
-                all_titles  = {{'Prediction on all behaviours',' using events magnitude on perisomatic ROIs (averaged)'},... % {'Prediction on all behaviours',' using events amplitude modulations on perisomatic ROIs (averaged)'}
+                               {'Prediction on all behaviours',' using events modulation on the individual highest phate',[' of group ', num2str(1)]},...
+                               {'Prediction on all behaviours';[' using events modulation on the 3 Highest Phates'];' (* ROIs)'},...
+                               {'Prediction on all behaviours',' using events modulation on all ROIs'}};
+                           all_ticks = {'Soma Average','Cell Average','Highest Phate','3 High Phates','All ROIs'};
+            elseif comparaison == 1
+                all_titles  = {{'Prediction on all behaviours',' using events magnitude on perisomatic ROIs (averaged)'},... % {'Prediction on all behaviours',' using events modulation on perisomatic ROIs (averaged)'}
                                {'Prediction on all behaviours',' using events magnitude on all ROIs (averaged)'},...
-                               {'Prediction on all behaviours',' using events amplitude modulations on the individual highest phate',[' of group ?']},...
-                               {'Prediction on all behaviours';[' using events amplitude modulations on the 3 Highest Phates'];' (* ROIs)'},...
-                               {'Prediction on all behaviours',' using events amplitude modulations on all ROIs'}};
+                               {'Prediction on all behaviours',' using events modulation on the individual highest phate',[' of group ?']},...
+                               {'Prediction on all behaviours';[' using events modulation on the 3 Highest Phates'];' (* ROIs)'},...
+                               {'Prediction on all behaviours',' using events modulation on all ROIs'}};
+                           all_ticks = {'Soma Average','Cell Average','Highest Phate','3 High Phates','All ROIs'};
+            elseif  comparaison == 2
+                all_titles  = {{'Prediction on all behaviours',' using events magnitude on perisomatic ROIs (averaged)'},... % {'Prediction on all behaviours',' using events modulation on perisomatic ROIs (averaged)'}
+                               {'Prediction on all behaviours',' using events modulation on the individual highest phate',[' of group ?']}};
+                all_ticks = {'Soma Average','Highest Phate'};
             end
-            all_ticks = {'Soma Average','Cell Average','Highest Phate','3 High Phates','All ROIs'};
-            x_ticks  = {};
             
+            x_ticks  = {};
+             %                  {'Prediction on all behaviours';[' using events modulation on the highest beta coefs trained on ',behaviour_filter{:}]},...
             for cond = 1:numel(all_titles)
                 if any(contains(all_titles{cond}, '?'))
                     %% When not specify a subgroup, go through all groups and find the highest score
@@ -208,12 +256,12 @@ classdef ML_analysis < handle
 %             
 %             subset = 1:6;
 %             results = {};            
-%             all_titles  = {{'Prediction on all behaviours',' using events amplitude modulations on perisomatic ROIs (averaged)'},...
-%                            {'Prediction on all behaviours',' using events amplitude modulations on perisomatic ROIs'},...
+%             all_titles  = {{'Prediction on all behaviours',' using events modulation on perisomatic ROIs (averaged)'},...
+%                            {'Prediction on all behaviours',' using events modulation on perisomatic ROIs'},...
 %                            {'_ML_individual_clusters'},...
-%                            {'Prediction on all behaviours';[' using events amplitude modulations on the 3 Highest Phates'];' (* ROIs)'},...
-%                            {'Prediction on all behaviours';[' using events amplitude modulations on the 9 Highest Phates'];' (* ROIs)'},...
-%                            {'Prediction on all behaviours',' using events amplitude modulations on all ROIs'}};
+%                            {'Prediction on all behaviours';[' using events modulation on the 3 Highest Phates'];' (* ROIs)'},...
+%                            {'Prediction on all behaviours';[' using events modulation on the 9 Highest Phates'];' (* ROIs)'},...
+%                            {'Prediction on all behaviours',' using events modulation on all ROIs'}};
 %             all_ticks = {'Cell Average','Perisomatic Segments','Random Sets','3 High Phates','9 High Phates','All ROIs'};
 %             x_ticks  = {};
 %             
