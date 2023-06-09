@@ -49,10 +49,12 @@ classdef cluster_analysis < handle
                     obj.disp_info('No auto auto-determination of the number of cluster for this method',4)
                 end
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
-                if obj.dimensionality.N_clust > 0
+                if obj.dimensionality.N_clust <= 0
                     obj.dimensionality.epsilon = obj.dimensionality.N_clust;
+                    obj.disp_info(['Epsilon value for clustering set to ',num2str(obj.dimensionality.N_clust),'. To force a number of cluster use a negative integer'],1)
                     obj.dimensionality.N_clust = [];
                 else
+                     obj.disp_info(['Epsilon value auto adjusted to get ',num2str(obj.dimensionality.N_clust),' Clusters and a minimum of unassigned points'],1)
                     [obj.dimensionality.epsilon, obj.dimensionality.N_clust] = test_epsilon(obj, obj.dimensionality.LoadingsPM,[],[],[],obj.dimensionality.N_clust);
                 end
             end
