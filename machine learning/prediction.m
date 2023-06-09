@@ -107,7 +107,7 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
             func = @fitrlinear;
         end
 
-        Lambda        = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, ml_parameters);   
+        Lambda        = linear_hyperparameters_optimization(base_varargin, func, x_test, y_test, ml_parameters);   
         base_varargin = [base_varargin, {'Lambda', Lambda}];
         if ml_parameters.kFold > 1
             base_varargin = [base_varargin, {'KFold', ml_parameters.kFold}]; 
@@ -260,80 +260,6 @@ function y_predict = get_consensus_prediction(Model, x_test, x_train)
     end    
 end
 
-function Lmax = linear_hyperparameters_optimization(x_train, y_train, x_test, y_test, cost, func, base_varargin, parameters)
-    %% Set default Hyperparameter optimization options
-    HyperparameterOptimizationOptions = machine_learning_hyper_params; 
-
-    if strcmpi(parameters.score_metrics, 'pearson')
-        LossFun = @pearson_correlation_coefficient;
-    elseif strcmpi(parameters.score_metrics, 'rmse')
-        LossFun = @rmse_score;
-    elseif strcmpi(parameters.score_metrics, 'mse')
-        LossFun = @mse_score;
-    elseif strcmpi(parameters.score_metrics, 'explained_variance')
-        LossFun = @explained_variance_score;
-    elseif ishandle(parameters.score_metrics)
-        LossFun = ml_parameters.score_metrics;        
-    elseif strcmpi(parameters.score_metrics, 'all')
-        LossFun = {@pearson_correlation_coefficient, @mse_score, @rmse_score, @explained_variance_score};
-    else
-        error('score function not recognized. Use "pearson", "mse", "rmse" or a valid function handle (see pearson_correlation_coefficient.m as an example)')
-    end
-
-    if ~parameters.optimize_hyper
-    	Lmax = 1e-4;    
-    elseif strcmpi(parameters.optimization_method, 'native')
-        optimize_varargin   = [base_varargin, {'OptimizeHyperparameters',"Lambda", 'HyperparameterOptimizationOptions', HyperparameterOptimizationOptions}];    
-        model               = func(optimize_varargin{:}); 
-        Lmax                = model.Lambda;
-    elseif strcmpi(parameters.optimization_method, 'manual')
-        lrange              = logspace(-4,4,40);
-        score               = num2cell(NaN(numel(lrange),1));
-        base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
-        if isempty(x_test)
-            base_varargin = [base_varargin, {'KFold', HyperparameterOptimizationOptions.KFold}];
-            Timeout = 3;
-        else
-            Timeout = 0.5;
-        end
-        for k = 1:numel(lrange)            
-            temp_varargin           = [base_varargin, 'Lambda', lrange(k)];
-            fut(k)                  = parfeval(func, 1, temp_varargin{:});
-        end 
-        for k = 1:numel(lrange)
-            [idx,mdl]               = fetchNext(fut, Timeout);
-            if ~isempty(mdl)
-                if isempty(x_test)
-                    score{idx}      = kfoldLoss(mdl, 'Mode','individual', 'LossFun', LossFun)*100; 
-                else
-                    y_predict       = mdl.predict(x_test);                
-                    score{idx}      = get_ml_score(y_test, y_predict, '' ,LossFun);
-                end
-            end
-        end
-        
-        names = fieldnames(score{1})';
-        for name = names
-            name = name{1};
-            for iter = 1:numel(score)
-                score{iter}.(name)   = smoothdata(score{iter}.(name), 'gaussian', 5);
-            end
-        end
-
-        if parameters.rendering >= 3
-            error('to update with nexttile and score(idx).(name) to handle the new flexible sciring method')
-            %             figure(1002);clf();
-            %             
-            %             subplot(2,2,1);im = plot(MCC, 'XData', lrange);im.Parent.XScale = 'log';title('MCC');xlabel('Lambda');
-            %             subplot(2,2,2);im = plot(score, 'XData', lrange);im.Parent.XScale = 'log';title('Accuracy');xlabel('Lambda');
-            %             subplot(2,2,3);im = plot(TPR, 'XData', lrange);im.Parent.XScale = 'log';title('TPR');xlabel('Lambda');
-            %             subplot(2,2,4);im = plot(TNR, 'XData', lrange);im.Parent.XScale = 'log';title('TNR');xlabel('Lambda');
-            drawnow();
-        end
-        score_used = cellfun(@(x) x.(names{1}), score);
-        [~, loc] = max(score_used); Lmax = lrange(loc);       
-    end     
-end
 
 
 
@@ -344,7 +270,7 @@ function [bmax, kmax] = svm_hyperparameters_optimization(x_train, y_train, x_tes
     elseif strcmpi(parameters.optimization_method, 'manual')
         krange = logspace(-1,4,10);
         brange = logspace(0,6,10);
-        [score, TPR, TNR, MCC] = deal(NaN(numel(krange),numel(brange)));
+        [score, TPR, TNR, MCC] = deal(repmat({},numel(krange),numel(brange)));
         base_varargin{find(strcmp(base_varargin, 'CrossVal'))+1} = 'off';
         base_varargin([find(strcmp(base_varargin, 'KFold')), find(strcmp(base_varargin, 'KFold'))+1]) = [];
         for k = 1:numel(krange)

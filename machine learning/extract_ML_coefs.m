@@ -89,25 +89,12 @@ function [all_scores, valid_trace_idx]  = extract_ML_coefs(obj, training_output,
     not_shuffled_idx= find(~contains(training_output{1}.beh_type, '_shuffled'));
     
     %% If you use explained variance, we need to rextract the predictors and observations if they were not saved.
-    if strcmpi(metric, 'explained_variance')
-        obj.beh_smoothing               = [-1.5, 0];
-        obj.bad_ROI_thr                 = 0;
-        obj.find_events();
-        obj.rescale_traces();
-        tp                              = training_output{1}.timepoints{1};
-        predictors                      = obj.rescaled_traces(tp,:) - obj.global_median_rescaled(tp);
-        behaviours                      = training_output{1}.beh_type(not_shuffled_idx);
-        [~, raw_behaviours, ~, names]   = prepare_behaviour_data(obj, behaviours);
-        raw_behaviours                  = normalize(raw_behaviours');
-        raw_behaviours                  = raw_behaviours(tp,sort(repmat(1:7,1,2)));
-        close all
-        %ROI_list = find(~ismember(obj.ref.indices.valid_swc_rois, obj.bad_ROI_list));
-    end
     ROI_list                        = cell2mat(training_output{1}.used_ROIs); % List of ROis used during training
     
     %% Now, get value for each type of observation
-    for beh_idx = not_shuffled_idx
-        all_scores{beh_idx}   = [];        
+    for beh_idx = not_shuffled_idx%(4)
+        all_scores{beh_idx}   = [];   
+        ROI_list_sorted = [];
         for iter = 1:numel(training_output)            
             model           = training_output{iter}.model{beh_idx};
             if isprop(model, 'Trained')
@@ -124,44 +111,104 @@ function [all_scores, valid_trace_idx]  = extract_ML_coefs(obj, training_output,
                     all_scores{beh_idx}(iter, :)            = model.Beta;     
                 elseif strcmpi(metric, 'order')
                     [~, all_scores{beh_idx}(iter, :)]       = sort(abs(model.Beta));    
-                elseif strcmpi(metric, 'explained_variance')
-                    predictions                             = model.Bias + model.Beta .* predictors(:,ROI_list)';
+                elseif contains(metric, 'explained_variance')
+                    true_behaviours                         = training_output{iter}.observation{beh_idx};
+                    predictors                              = training_output{iter}.predictors;
+                    predictions                             = model.Bias + model.Beta .* predictors;
                     for roi = 1:numel(ROI_list)
-                        all_scores{beh_idx}(iter, roi)      = explained_variance_score(predictions(roi, :), raw_behaviours(:, beh_idx), '');
+                        all_scores{beh_idx}(iter, roi)      = explained_variance_score(predictions(roi, :), true_behaviours, '');
+                    end                  
+                    if strcmpi(metric, 'cum_explained_variance')    
+                        [~, ordered_beta]                       = sort(abs(model.Beta), 'descend');
+                        beta_sorted                             = model.Beta(ordered_beta);
+                        ROI_list_sorted(iter, :)                = ordered_beta;
+                        %ROI_list_sorted                        = ROI_list(order);
+                        n_coefs                                 = 1:numel(model.Beta);
+                        for coef = n_coefs
+                            current_pred = model.Bias;
+                            for i = 1:coef
+                                current_pred = current_pred + beta_sorted(i) * predictors(ROI_list_sorted(iter, i),:);
+                            end  
+                            expl_var(iter, coef) = explained_variance_score(current_pred, true_behaviours, '');                        
+                        end
                     end
-                    [~, order]          = sort(abs(model.Beta), 'descend');
-                    beta_sorted         = model.Beta(order);
-                    ROI_list_sorted     = ROI_list(order);
-                    n_coefs             = 1:numel(model.Beta);
-                    for coef = n_coefs
-                        current_pred = model.Bias;
-                        for i = 1:coef
-                            current_pred = current_pred + beta_sorted(i) * predictors(:,ROI_list_sorted(i));
-                        end  
-                        expl_var(iter, coef) = explained_variance_score(current_pred, raw_behaviours(:, beh_idx), '');                        
-                    end
+                elseif strcmpi(metric, 'partialcorr')
+                    true_behaviours                         = training_output{iter}.observation{beh_idx};
+                    predictors                              = training_output{iter}.predictors;
+                    all_scores{beh_idx}(iter, :)            = semi_partial_correlation_coefficients(true_behaviours, predictors, training_output{iter}.ml_parameters);
                 end
             end
         end
         
         %% Plot learning performance
-        if rendering && strcmpi(metric, 'explained_variance')
-            %close all
+        if rendering && strcmpi(metric, 'cum_explained_variance')
+            added = NaN(size(all_scores{1}));
+            for iter = 1:numel(training_output) 
+                % get current variance values
+                current = expl_var(iter, :);
+                % get the added variance when each ROi is added to the model
+                current_diff = diff([0, current]);
+                % set the added variance to the correct ROI # (because they
+                % were sorted by beta coef until now)
+                added(iter, ROI_list_sorted(iter, :)) = current_diff;
+            end
+            
+            
             figure();plot(n_coefs, expl_var, 'Color', [0.8,0.8,0.8]); hold on
             plot(n_coefs, nanmean(expl_var, 1),'ko-','MarkerFaceColor', 'k'); hold on;ylim([0,75])   
             set(gca,'box','off');hold on;xlabel('number of ROI');ylabel('Explained Variance');set(gcf, 'Color', 'w');title(['Explained variance for ',labels{beh_idx},' with increasing number of ROIs']);
-            all_scores{beh_idx} = expl_var;
+            all_scores{beh_idx} = nanmedian(added,1);
+        
         end
-                
+        
+%             %all_scores{beh_idx} = expl_var;            
+%             next_fig
+%             [v, order] = sort(mean(expl_var,1));
+%             v = diff([0, v]);
+%             obj.ref.plot_value_tree(v, ROI_list(ordered_beta(order)),'',labels{beh_idx},'',beh_idx,'','viridis','invalid_color');
+%             if strcmpi(metric, 'explained_variance')
+%                 caxis([0,max(v)]);
+%             end
+            
         if rendering
             next_fig
-            obj.ref.plot_value_tree(mean(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'',cmap,'invalid_color');
-            if strcmpi(metric, 'explained_variance')
-                caxis([0,max(nanmean(expl_var,1))]);
-            end
+            if strcmpi(metric, 'cum_explained_variance')
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'',[cmap, 'symmetrical'],'invalid_color');
+                set(gca,'Color',[0.9,0.9,0.9])
+            elseif strcmpi(metric, 'beta')
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'','parula','invalid_color');
+                set(gca,'Color',[0.9,0.9,0.9])
+            elseif strcmpi(metric, 'order')
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'','parula','invalid_color');
+                set(gca,'Color',[0.9,0.9,0.9])
+            elseif strcmpi(metric, 'explained_variance')
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'','parula','invalid_color');
+                caxis([0,max(nanmean(all_scores{beh_idx},1))]);
+            elseif strcmpi(metric, 'partialcorr')  
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'','hot','invalid_color');
+                % Plotting the results
+                figure('Color', 'w'); % Create a new figure with white background
+                bar(median(all_scores{beh_idx},1)); % Create a bar chart
+                xlabel('Predictor'); % Label x-axis
+                ylabel('Squared Semi-partial Correlation'); % Label y-axis
+                title('Squared Semi-partial Correlations for each Predictor'); % Title for the graph
+                
+            else
+                obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'',cmap,'invalid_color');
+            end 
         end
     end
     
+    
+    %% Control block
+    % display bet coefs for all iteration for a specific behaviour
+    %     close all
+    %     beh_idx = find(strcmp(training_output{1}.beh_type, 'BodyCam_L_whisker'));
+    %     figure();plot(abs(all_scores{beh_idx})');
+    %     title('Beta coefs across 20 iterations')
+    %     set(gcf, 'Color', 'w');
+    %     xlabel('ROIs #')
+    %     ylabel('beta (abs)')
     
 %     close all
 %     ref = nanmean(cat(1, all_scores{:}));
@@ -181,3 +228,71 @@ function [all_scores, valid_trace_idx]  = extract_ML_coefs(obj, training_output,
     
 end
 
+function semipartial_r2 = semi_partial_correlation_coefficients(true_behaviours, predictors, ml_params)
+    use_kfold           = false;
+    optimize_hyper  = true;
+    
+    SSR_full = get_prediction(true_behaviours, predictors, use_kfold, optimize_hyper, ml_params);
+       
+    %     optimalIndices = sequentialfs(fun, predictors', true_behaviours', 'direction', 'backward');
+    %     disp(find(optimalIndices));
+
+
+    % initialize an array to hold semi-partial correlation coefficients
+    semipartial_corr = zeros(1, size(predictors, 1));
+
+    % loop over predictors
+    for i = 1:size(predictors, 1)
+        round(i/size(predictors, 1)*100, 1)
+        % reduced model: fit model without predictor i
+        predictors_reduced = predictors;
+        predictors_reduced(i, :) = [];
+        
+        SSR_reduced = get_prediction(true_behaviours, predictors_reduced, use_kfold, optimize_hyper, ml_params);
+
+        % semi-partial correlation coefficient
+        semipartial_corr(i) = (SSR_reduced - SSR_full) / SSR_reduced;
+        
+        if abs(semipartial_corr(i)) > 1 % that should happen because the SSR should be lower than in the full model, however, if there is an overfitting issue, it's possible
+            1
+        end
+    end
+
+    % Squaring the semi-partial correlation coefficients to get squared semi-partial correlation coefficients
+    semipartial_r2 = semipartial_corr.^2;
+
+    % Plotting the results
+    figure('Color', 'w'); % Create a new figure with white background
+    bar(semipartial_r2); % Create a bar chart
+    xlabel('Predictor'); % Label x-axis
+    ylabel('Squared Semi-partial Correlation'); % Label y-axis
+    title('Squared Semi-partial Correlations for each Predictor'); % Title for the graph
+end
+
+function SS_res = get_prediction(observation, predictors, use_kfold, optimize_hyper, ml_params)
+    base_varargin = {predictors'     , ...
+                     observation , ...                              
+                     'PostFitBias'   , ml_params.postfit_bias,...
+                     'PassLimit'     , 10,...
+                     'Learner'       , 'leastsquares'}; % default is no regularization, no standardization (e.g. data is not mean centered)
+                        
+    if optimize_hyper            
+        Lambda        = linear_hyperparameters_optimization(base_varargin, @fitrlinear, '', '', ml_params);   
+        base_varargin = [base_varargin, {'Lambda', Lambda}];
+    end
+    
+    if use_kfold > 1
+        base_varargin = [base_varargin, {'KFold', 5}]; 
+    end
+
+    % full model
+    mdl_full = fitrlinear(base_varargin{:});
+    % SSR for the full model
+    if ~use_kfold        
+    	yhat_full = predict(mdl_full, predictors');
+    else
+        yhat_full = kfoldPredict(mdl_full)';
+    end
+    
+    SS_res = sum((observation - yhat_full).^2);
+end

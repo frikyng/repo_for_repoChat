@@ -90,6 +90,21 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end
     end
     
+    %% Control bloc to uncomment. This sort the ROIs again, and should counteract the effect of the spatial shuffling
+    % This will, for each event, give the strongest upmodulation to ROI 1
+    % and strongest downmodulation to the last
+    %     for tp = 1:size(predictor_data,2)
+    %         predictor_data(:,tp) = sort(predictor_data(:, tp));
+    %     end
+    
+    %% Control bloc to uncomment. assigne a random, but stable order to the tree 
+    % this is just scrambling the tree structure, but in a consistent way
+    %     new_order = randperm(size(predictor_data,1));
+    %     for tp = 1:size(predictor_data,2)
+    %         predictor_data(:,tp) = predictor_data(new_order, tp);
+    %     end
+    
+    
     %% Get a random set of timepoints for training vs testing
     if ml_parameters.block_shuffling
         partition       = block_shuffle(timepoints, round(ml_parameters.block_shuffling), size(raw_behaviour, 2), ml_parameters.holdout);
@@ -170,12 +185,11 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         if ml_parameters.saving_level < 2
             out.calcium                     = [];
             out.full_beh{mdl_idx}           = [];
-            out.predictors                  = [];
         else
             out.calcium                     = calcium_ref;
-            out.full_beh{mdl_idx}           = raw_behaviour(beh_idx,:);
-            out.predictors                  = predictor_data(roi_subset,:);
-        end            
+            out.full_beh{mdl_idx}           = raw_behaviour(beh_idx,:);            
+        end 
+        out.predictors                      = predictor_data(roi_subset,:);
         out.observation{mdl_idx}            = current_obs;        
         out.timepoints{mdl_idx}             = timepoints;
         if ~isempty(y_test) && ~ml_parameters.block_shuffling
