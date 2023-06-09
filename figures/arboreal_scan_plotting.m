@@ -302,6 +302,8 @@ classdef arboreal_scan_plotting < handle
             %% Display rearranged Loadings and Cluster limits 
             if ~isvalid(map_handle)
                 map_handle = figure(1017);map_handle = gca();
+            else
+                figure(map_handle.Parent.Number); % make sure figure is on top
             end
             cla(map_handle);
             imagesc(map_handle, obj.dimensionality.LoadingsPM(:,weights_to_show));caxis([0,1]);xlabel('Factors');hold(map_handle, 'on')
@@ -314,6 +316,8 @@ classdef arboreal_scan_plotting < handle
             %% Display average weightings
             if ~isvalid(trace_handle) % for some reason, when running within a live script the handle gets deleted during thhis fnction
                 trace_handle = figure(7777);trace_handle = gca();
+            else
+                figure(trace_handle.Parent.Number); % make sure figure is on top
             end
             cla(trace_handle);
             for w = weights_to_show
@@ -391,20 +395,69 @@ classdef arboreal_scan_plotting < handle
            % update_tree_cmap(f, f(1).Parent.Colormap, [0.8, 1]); 
             f(1).Parent.Colorbar.Label.String = ['Correlation between ',label_name,' with Reference'];
 
-% %
-%             [S,Q] = genlouvain(double(cc),[],[],1);
-%             [a,b] = sort(S);
-%             figure(1008);clf();imagesc(cc(b,b))
-%             obj.ref.plot_value_tree(S,'','','','',124,'ddd','lines');
-%             R = unique(S);
-%             colorbar('Ticks',R);
-%             caxis([nanmin(R)-0.5, nanmax(R)+0.5])
-%             colormap(lines(numel(unique(S))));
-%
-%             figure(125);clf();
-%             for community = R'
-%                 plot(nanmean(obj.extracted_traces_conc(:,S == community),2)); hold on;
-%             end
+            
+            %% Cleanup correlation matrix from NaN
+            valid_ROI           = ~isnan(cc(:,1)); % by doing this here instead of later, we don't have issues when ROI #1 was excluded
+            cc(1,:) = [];cc(:,1) = [];valid_ROI(1) = [];
+            
+            cc                  = cc(valid_ROI, valid_ROI);
+            cc(isnan(cc))       = 1;
+            
+            %% Cluster cc
+            method = 'hierarchical'
+
+            if strcmp(method, 'louvain')
+                % Convert the correlation matrix to a network adjacency matrix
+                % You might want to adjust this step depending on your data
+                A = 1 - abs(cc);
+                
+                % Compute the modularity matrix
+                gamma = 1.0;  % Resolution parameter, adjust this value as needed
+                B = A - gamma * (sum(A, 2) * sum(A, 1)) / sum(A(:));
+
+                % Run the GenLouvain method
+                [clusters, Q] = genlouvain(double(B));
+            elseif strcmp(method, 'hierarchical')
+%                 clustTree = linkage(squareform(1-abs(cc)), 'average');
+%                 order = optimalleaforder(clustTree, squareform(1-abs(cc)), 'Criteria', 'group');
+                eva = evalclusters(cc,'linkage','silhouette','KList',1:20);
+                clusters = clusterdata(cc,'Linkage', 'ward', 'MAXCLUST', eva.OptimalK);
+            elseif strcmp(method, 'spectral')
+                % Specify the number of clusters
+                num_clusters = 5;  % adjust this value as needed
+
+                % Run the spectral clustering method
+                clusters = spectralcluster(A, num_clusters);
+            elseif strcmp(method, 'kmeans')
+                %...
+            end
+
+            % Reorder the correlation matrix
+            num_clusters = numel(unique(clusters));
+            [~, order]      = sort(clusters);
+            cc_ordered      = cc(order, order);
+            unique_clusters = unique(clusters);
+            colormap        = lines(num_clusters);  % generates a colormap with 'num_clusters' distinct colors
+
+            figure(1008); clf(); imagesc(cc_ordered);
+            hold on;
+            for i = 1:num_clusters
+                idx = find(clusters(order) == unique_clusters(i));
+                rectangle('Position', [min(idx), min(idx), max(idx)-min(idx)+1, max(idx)-min(idx)+1], ...
+                          'EdgeColor', colormap(i,:), 'LineWidth', 4);
+            end
+            hold off;
+            
+            %% Map cluster index on the tree
+            clusters_full = NaN(numel(mean_bin_cc), 1);
+            clusters_full(valid_ROI) = clusters;
+            obj.ref.plot_value_tree(clusters_full,'','','','',124,'ddd','lines','discrete');
+
+            %% Plot mean traces per cluster
+            figure(125);clf();xlabel('time');ylabel('response');set(gcf, 'Color', 'w');title('Average response per cluster');
+            for community = unique_clusters'
+                plot(obj.t, nanmean(obj.rescaled_traces(:,clusters_full == community),2)); hold on;
+            end
         end
         
         function [tree, soma_location, tree_values, values] = plot_dim_tree(obj, comp, fig_handle, cmap, tree_type)
@@ -468,7 +521,8 @@ classdef arboreal_scan_plotting < handle
                     else
                     	[f, tree_values, tree, soma_location] = obj.ref.plot_value_tree(values(comp_idx, :), Valid_ROIs,'',titl,'',ax,tree_type,cmap);
                     end
-                end
+                    M = nanmax(abs(values(:)));caxis([-M,M])
+                end 
             end
         end
 
