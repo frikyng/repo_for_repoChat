@@ -6,7 +6,7 @@ classdef behaviours_analysis < handle
         detrend_win         = -100      % Defines a moving min subtraction of the behaviour. Only if detrend_behaviour is true
         beh_thr             = 10        % Threshold in Percent of Max behavioural value, after detrending
         bout_extra_win      = [3, 3]    % Enlarge bouts windows by [before, after] seconds.
-        beh_smoothing       = [-1,0]    % The smoothing window for behaviour. Values < 1 are in seconds
+        beh_smoothing       = NaN       % The smoothing window for behaviour. Values < 1 are in seconds
         beh_sm_func         = 'gaussian'% any valid smoothdata option. If contains "robust", outlier are filtered before smoothing
         multi_beh_func      = @nanmean  % The function applied to behaviours that contains multiple arrays (along dim 1)
         shuffling_block_size=0         % number of timepoints for the behaviour shuffling window (applied if a behaviour contains "shuffle" in its name

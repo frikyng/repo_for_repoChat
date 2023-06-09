@@ -171,6 +171,11 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
 
             %% Load arboreal scans
             obj.update(true, keep_2D, varargin);
+            
+            %% Post-initialization fixes
+            if any(isnan(obj.beh_smoothing))
+                obj.beh_smoothing = [-1, 0];
+            end
         end
 
         function extracted_data_paths = list_sources(obj)
@@ -495,6 +500,12 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
             if any(obj.time_smoothing)
                 extracted_traces = cellfun(@(x) smoothdata(x, 'gaussian', obj.time_smoothing), extracted_traces, 'UniformOutput', false);
             end
+            
+%             rng(0);  % Replace 0 with your desired seed
+%             extracted_traces = cellfun(@(x) x + randn(size(x))*3, extracted_traces, 'UniformOutput', false);
+
+            %extracted_traces_conc =  extracted_traces_conc + randn(size(extracted_traces_conc));
+            
         end
 
         function extracted_pop = get.extracted_pop(obj) % checked
