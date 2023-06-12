@@ -1,6 +1,82 @@
-% This function tries to find the optimal epsilon value for DBSCAN clustering given a Low_Dim_Data input matrix. 
-% The obj argument is a larger object that contains parameterizable settings, a few of which are used within this function.
-% We can either set a target number of clusters, or find the optimal epsilon that minimizes unassigned values
+%% Suggests an optimal epsilon for clustering based on DBSCAN or HDBSCAN
+% 	Given a set of low-dimensional data, this function performs DBSCAN or 
+%   HDBSCAN clustering with a range of epsilon values, storing the number 
+%   of clusters and noise points for each epsilon. It then suggests an 
+%   optimal epsilon based on the data.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	[suggested, n_clust] = test_epsilon(obj, Low_Dim_Data, current_signal, 
+%                                        all_ROIs, valid_ROIs, n_clust)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	obj(object):
+%                                   The main object that contains parameters 
+%                                   for clustering such as minimum group size 
+%                                   for DBSCAN.
+%
+% 	Low_Dim_Data(Matrix) - Optional:
+%                                   Low dimensional data for clustering.
+%
+% 	current_signal(Matrix) - Optional:
+%                                   Current signals associated with each data point.
+%
+% 	all_ROIs(Array) - Optional:
+%                                   The complete set of Regions of Interest (ROIs).
+%
+% 	valid_ROIs(Array) - Optional:
+%                                   The valid set of Regions of Interest (ROIs).
+%
+% 	n_clust(Int) - Optional:
+%                                   The number of clusters. If not provided or
+%                                   empty, it is initialized within the function.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	suggested(Double)
+%                                   The suggested optimal epsilon for clustering.
+%
+% 	n_clust(Int)
+%                                   The optimal number of clusters found.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * If the `n_clust` is not provided, the function will look for an epsilon 
+%   value where the ratio of noise points is less than 5%.
+% * If the `n_clust` is provided, it will find the last epsilon value where 
+%   the number of clusters is equal to `n_clust`.
+% * In case of no suggested epsilon, the first epsilon in the range is 
+%   suggested.
+% -------------------------------------------------------------------------
+%% Examples:
+% * With number of clusters
+% 	[suggested, n_clust] = test_epsilon(obj, Low_Dim_Data, current_signal, 
+%                                        all_ROIs, valid_ROIs, n_clust);
+%
+% * Without number of clusters
+% 	[suggested, ~] = test_epsilon(obj, Low_Dim_Data, current_signal, 
+%                                        all_ROIs, valid_ROIs);
+% -------------------------------------------------------------------------
+%% Author(s):
+%   Antoine Valera
+%
+% -------------------------------------------------------------------------
+%                               Notice
+%
+% paste license here
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	09-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+%	dbscan, hdbscan
+%
+% TODO : Check the behavior of the function with different types of data
+% and different parameter settings. Improve the function's speed and
+% efficiency.
+
 function [suggested, n_clust] = test_epsilon(obj, Low_Dim_Data, current_signal, all_ROIs, valid_ROIs, n_clust)
     % Check if n_clust is given as argument, if not, initialize it as empty
     if nargin < 6 || isempty(n_clust)

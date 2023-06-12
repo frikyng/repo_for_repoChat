@@ -69,6 +69,7 @@ classdef cluster_analysis < handle
                 figure(3);clf(); silhouette(obj.dimensionality.LoadingsPM,cluster_idx)
                 %Y = pdist(obj.dimensionality.LoadingsPM ,'euclidean');Z = linkage(Y,'ward');figure();dendrogram(Z);                                
             elseif strcmp(obj.dimensionality.clust_meth, 'dbscan')
+                obj.dimensionality.epsilon  = abs(obj.dimensionality.epsilon);
                 obj.disp_info('Clustering done using dbscan',1)
                 cluster_idx                 = dbscan(obj.dimensionality.LoadingsPM, obj.dimensionality.epsilon, obj.dbscan_min_gp_size, 'Distance', 'euclidean');
                 obj.dimensionality.N_clust  = numel(unique(cluster_idx(cluster_idx > 0)));
