@@ -901,7 +901,7 @@ ADD IMAGE COMPRESSION
 
 Changes of signal intensity can occur during the course of the experiment. They can have multiple non-biological cause that you can try to mitigate. Baseline detrending will assume that the lowest value recorded in a given ROI correspond to the F0 of your sample. This value should not change over time, and we will consider that any recorded change is due to external factors (eg. bleaching or change of focus) that linearly decrease the intensity of the signal captured. baseline detrending will rectify the signal over time by applying a gain factor. Different methods are available.
 
-To use detrending, set `obj.detrending` to a non-zero value.
+To use detrending, set `obj.detrend` to a non-zero value.
 
 ## Continuous linear and polynomial fit
 

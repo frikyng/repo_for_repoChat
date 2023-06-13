@@ -1,3 +1,61 @@
+%% Fix Gain Changes in Extracted Traces
+% 	This function is used to correct for changes in gain in extracted
+%   fluorescence traces. It does this through several methods, including
+%   detrending via linear regression, normalization, or calculation of 
+%   delta F/F0. It is an important step for pre-processing imaging data.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	[extracted_traces] = fix_gain_changes(expe, extracted_traces)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	expe(STRUCTURE):
+%       A structure containing the parameters of the imaging experiment.
+%       It includes fields for detrending type, timescale, and breakpoints.
+%
+% 	extracted_traces(CELL ARRAY OF MATRICES):
+%       A cell array, where each cell contains a matrix of fluorescence 
+%       traces extracted from a single imaging trial.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	extracted_traces(CELL ARRAY OF MATRICES):
+%       A cell array with the corrected fluorescence traces. The structure 
+%       is identical to the input, but the values of the traces have been
+%       adjusted to correct for gain changes.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * This function assumes that the dark noise level does not change due to
+%   gain changes as it is not amplified by the photomultiplier tubes (PMTs).
+% * The breakpoints defined in the `expe` structure are used to determine
+%   when gain changes occurred.
+% * Detrending can be performed using linear regression or median interquartile 
+%   normalization, as defined by the `expe` structure.
+% * The function can also calculate delta F/F0 for the signal channel.
+% -------------------------------------------------------------------------
+%% Examples:
+% * Correcting gain changes for a given experiment
+% 	fixed_traces = fix_gain_changes(experiment, traces);
+% -------------------------------------------------------------------------
+%% Author(s):
+% 	Antoine Valera
+% -------------------------------------------------------------------------
+%% Notice
+% 	paste license here
+% -------------------------------------------------------------------------
+%% Revision Date:
+% 	13-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+%	normalize, findchangepts, cell2mat, cellfun, polyfit, polyval...
+% -------------------------------------------------------------------------
+% TODO : 
+% 	Add a check for the presence of necessary fields in the `expe` structure.
+%   Provide support for more detrending options.
+
 
 %% Rescale traces
 % - if expe.detrend == -1, for each ROI, we rescale the F0 of each trial to the median F0 of the ROI
@@ -9,6 +67,7 @@
 %   then a linear detrending per block is applied
 % - if breakpoints_idx is not empty, the fit is done per block of trials,
 %   as defined by the breakpoints_idx limits.
+
 
 function extracted_traces = fix_gain_changes(expe, extracted_traces)
     temp        = vertcat(extracted_traces{:}); % get traces
@@ -166,4 +225,6 @@ function extracted_traces = fix_gain_changes(expe, extracted_traces)
         end
     end
 end
+
+
 

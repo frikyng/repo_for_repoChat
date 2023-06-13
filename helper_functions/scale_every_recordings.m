@@ -1,3 +1,116 @@
+%% Scale all the recordings and return the best scale and offset for each.
+%  This function scales every recordings based on the best scaling factor 
+%  per bin matching the overall median. The function also optimizes 
+%  the offset and scale of each recording to minimize the error 
+%  with respect to a reference trace.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+%  [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
+%  N_pt_bsl] = scale_every_recordings(all_traces_per_rec, demo, pk_locs, 
+%  bsl_range, smoothing, weighted)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	all_traces_per_rec(cell array of matrices):
+%       Each cell contains a matrix of traces for a single recording. 
+%       Each column in the matrix represents an individual trace. 
+%
+% 	demo(integer) - Optional - Default is 0:
+%       Debugging parameter. Controls the verbosity level.
+% 
+% 	pk_locs(vector) - Optional - Default is autoestimated:
+%       A vector containing the locations of the peaks in the data. 
+%       If not provided, peaks will be auto-estimated.
+% 
+% 	bsl_range(vector) - Optional - Default is autoestimated:
+%       A vector containing the range of baseline data points. 
+%       If not provided, the range will be autoestimated.
+% 
+% 	smoothing(integer) - Optional - Default is 0:
+%       The window size for Gaussian smoothing. If zero or empty, 
+%       no smoothing is performed.
+% 
+% 	weighted(boolean) - Optional - Default is true:
+%       If true, a weighted mean is used for calculating global scaling 
+%       and offset. Otherwise, a simple median is used.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	global_scaling(vector) - double:
+%       A vector containing the best overall scaling factor for each trace.
+%
+% 	global_offset(vector) - double:
+%       A vector containing the best overall offset for each trace.
+%
+% 	best_ind_scal(cell array of vectors) - double:
+%       Each cell contains a vector of the best individual scaling factors
+%       for each trace in a given recording.
+%
+% 	best_ind_offset(cell array of vectors) - double:
+%       Each cell contains a vector of the best individual offsets for 
+%       each trace in a given recording.
+%
+% 	N_pks(vector) - integer:
+%       Number of peaks in each recording.
+%
+% 	N_pt_bsl(vector) - integer:
+%       Number of baseline points in each recording.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * This function uses parallel processing to speed up the computations. 
+%   The number of cores used is determined by the demo parameter and the 
+%   number of cores available on the machine.
+%
+% * The function uses optimization to determine the best scale and offset 
+%   parameters for each trace in a recording.
+%
+% -------------------------------------------------------------------------
+%% Examples:
+% * Apply scaling to a set of recordings and display intermediate steps
+% 	[global_scaling, global_offset] = scale_every_recordings(all_traces_per_rec, 2);
+%
+% * Apply scaling without smoothing and without weighted mean
+% 	[global_scaling, global_offset] = scale_every_recordings(all_traces_per_rec, 0, [], [], 0, false);
+%
+% * Specify peak locations and baseline range
+% 	[global_scaling, global_offset] = scale_every_recordings(all_traces_per_rec, 0, pk_locs, bsl_range);
+% -------------------------------------------------------------------------
+%%                               Notice
+%
+%% Author(s):
+%   Main/Initial Programmer, Other Programmer 2, etc...
+%	if using code for elsewhere, mention the original authors here.
+%                 -----------------------------------------
+% This function was initially released as part of The SilverLab MatLab
+% Imaging Software, an open-source application for controlling an
+% Acousto-Optic Lens laser scanning microscope. The software was 
+% developed in the laboratory of Prof Robin Angus Silver at University
+% College London with funds from the NIH, ERC and Wellcome Trust.
+%
+% Copyright © 2015-2020 University College London
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+% 
+%     http://www.apache.org/licenses/LICENSE-2.0
+% 
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License. 
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	DD-MM-YYYY
+% -------------------------------------------------------------------------
+% See also: 
+%	parent_related_function_1, parent_related_function_2,
+% 	children_related_function_1, children_related_function_2 ...
+
 %% all_traces_per_rec
 % 1 x N trials cell array of t x M ROI matrices to rescale
 %% demo
@@ -14,18 +127,24 @@
 % of datapoints / events (respectively)
 
 
+% This function scales all the provided recordings, such that their individual
+% peaks and baselines match a common reference derived from all recordings.
+
 function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, N_pt_bsl] = scale_every_recordings(all_traces_per_rec, demo, pk_locs, bsl_range, smoothing, weighted)
+    
+    % Check if demo parameter is provided, else set default
     if nargin < 2 || isempty(demo)
         demo = 0;
     end
+
+    % Check if pk_locs is provided, else auto-estimate peak detection level
     if nargin < 3 || isempty(pk_locs)
         %error('to check and revise')
         %% Autoestimate peak detection level
 
-        %% Filter signal
+        % Filter signal and remove noise
         representative_trace    = fillmissing(representative_trace,'linear');
         ref_signal              = wdenoise(double(representative_trace));
-
         noise                   = representative_trace - ref_signal;
 
         %% For threshold debugging
@@ -34,37 +153,44 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     %         hold on;plot(noise,'b')
     %         hold on; envelope(noise,50,'rms');
 
+        % Calculate envelope of noise for threshold
         [top_noise, ~]          = envelope(noise,50,'rms'); % used to be 20, 'peak'
         initial_thr             = mean(top_noise)*5;    
         %initial_thr             = (prctile(top_noise-bottom_noise,99) - prctile(top_noise-bottom_noise,1))*5;
+
+        % Detect peaks in the denoised signal
         [pks, pk_locs]             = findpeaks(wavelet_denoise(representative_trace')', 'MinPeakProminence', initial_thr);
     end
+
+    % Check if bsl_range is provided, else throw error for now
     if nargin < 4 || isempty(bsl_range)
         error('to do')    
         %bsl_percentile          = sum(tp(1:end-1)) / numel(bsl_range);
         bsl_percentile = '?';
     else
-        bsl_percentile = 50; % since we alrady use a range for the baseline, we just stick to the median value
+        bsl_percentile = 50; % Use the median value since we already use a range for the baseline
     end
+
+    % Apply smoothing if smoothing argument is given
     if nargin < 5 || isempty(smoothing) || ~any(smoothing)
         % no smoothing, pass
     else
-        all_traces_per_rec                  = cellfun(@(x) smoothdata(x,'gaussian',smoothing), all_traces_per_rec, 'UniformOutput', false);
         %% CONSIDER --> %[~, t_peak_all]         = findpeaks(wavelet_denoise(nanmedian(all_trace,2))', 'MinPeakProminence', obj.event.peak_thr);
+        all_traces_per_rec = cellfun(@(x) smoothdata(x,'gaussian',smoothing), all_traces_per_rec, 'UniformOutput', false);
     end
+
+    % Check if weighted parameter is provided, else set default
     if nargin < 6 || isempty(weighted)
         weighted = true;
     end
-    
-    %% Defines how the reference trace is obtained from individual recordings.
+
+    % Function to obtain reference trace
     consensus_trace_func    = @nanmedian;
-    
-    %% Optimization function values (N iteration etc...)
+
+    % Define options for optimization
     options                 = optimset;
-    
-    %% For each recording, get the best scaling factor per bin matching the cell-wide median
-    best_ind_scal           = {};
-    best_ind_offset         = {};
+
+    % Prepare for parallel processing. Use number of available cores, unless in demo mode
     ncores                  = (feature('numcores') * double(~(demo >= 2)));
     tp                      = [cellfun(@(x) size(x, 1), all_traces_per_rec), inf];
     N_pks                   = zeros(size(all_traces_per_rec))'; % for weights, if you use them
@@ -73,29 +199,23 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     
     parfor (rec = 1:numel(all_traces_per_rec), ncores)
     %for rec = 1:numel(all_traces_per_rec)
+
         all_traces_in_rec       = all_traces_per_rec{rec};
         representative_trace    = consensus_trace_func(all_traces_in_rec, 2);
-        figure(123);cla();plot(representative_trace);
 
-        
         tp_range        = [(sum(tp(1:rec-1))+1),sum(tp(1:rec))];
         pk_tp_current   = pk_locs(pk_locs > tp_range(1) & pk_locs < tp_range(2)) - tp_range(1)+1;
         bsl_tp_current  = bsl_range(bsl_range > tp_range(1) & bsl_range < tp_range(2)) - tp_range(1)+1;        
         N_pks(rec)      = numel(pk_tp_current);
         N_pt_bsl(rec)   = numel(bsl_tp_current);
 
-%         
-%         
-%         tp_range                      = 1:size(all_traces_in_rec, 1);
-%         tp_range(bsl_range(bsl_range < 1490)) = NaN;
-%         pk_tp = isnan(tp_range);
-%         bsl_tp = find(~pk_tp);
-%         pk_tp = find(pk_tp);
-        
-
         best_ind_scal{rec}    = [];
-        best_ind_offset{rec}    = [];
+        best_ind_offset{rec}  = [];
+
+        % Loop over each trace in the recording
         for trace_idx =  1:size(all_traces_in_rec, 2) 
+
+            % Skip if trace is all NaNs
             if all(isnan(all_traces_in_rec(:,trace_idx)))
                 best_ind_offset{rec}(trace_idx) = NaN;
                 best_ind_scal{rec}(trace_idx)   = NaN;
@@ -104,12 +224,15 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
                 
                 %demo = 2 * double(rec == 2); 
                  
-                %% Adjust offset so both traces baselines are at 0     
+
+                % Adjust offset so both traces baselines are at 0     
                 if isempty(bsl_tp_current)
                     bsl_tp_current = prctile(representative_trace, 10);
                     bsl_tp_current = find(representative_trace < bsl_tp_current);
                 end
-                best_ind_offset{rec}(trace_idx)   = fminbnd(@(f) find_traces_offset_func(f, representative_trace(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo == 2 && trace_idx == subset_for_demo, bsl_percentile), 0.01, 99.99, options); % find best percentile to normalize traces
+
+                % Find best percentile to normalize traces
+                best_ind_offset{rec}(trace_idx)   = fminbnd(@(f) find_traces_offset_func(f, representative_trace(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo == 2 && trace_idx == subset_for_demo, bsl_percentile), 0.01, 99.9999, options); 
                 [~ ,offset_median, current_trace] = find_traces_offset_func(best_ind_offset{rec}(trace_idx), representative_trace, all_traces_in_rec(:,trace_idx)); % apply value
 
                 if ~isempty(pk_tp_current)
@@ -138,7 +261,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     end
     clear data_f_idx % just to remove parfor warning
 
-    %% All recordings, compute the best scaling factor per bin matching the overall median
+    % Compute the best scaling factor per bin matching the overall median
     if ~weighted
         global_scaling   = nanmedian(vertcat(best_ind_scal{:}), 1);
         global_offset    = nanmedian(vertcat(best_ind_offset{:}), 1);
@@ -150,6 +273,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     end    
 end
 
+% Function to calculate weighted mean
 function out = w_mean(var, weights)
     dim = 1;
     out = nansum(weights.*var,dim)./nansum(weights,dim);
