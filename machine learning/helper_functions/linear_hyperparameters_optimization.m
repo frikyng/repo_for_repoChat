@@ -1,5 +1,94 @@
+%% Optimizes linear hyperparameters.
+%  Performs linear hyperparameters optimization based on given parameters and
+%  score metrics. The optimization can be either manual or native. It uses
+%  machine learning to find optimal values.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	Lmax = linear_hyperparameters_optimization(base_varargin, func, x_test, 
+%                                              y_test, parameters)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	base_varargin({Cell} of various object types) - Optional:
+%                                   Cell array with all base variable 
+%                                   arguments needed for the function.
+%
+% 	func(Function Handle):
+%                                   Function handle for the function to be 
+%                                   optimized.
+%
+% 	x_test(Matrix):
+%                                   Test data set used for optimization.
+%
+% 	y_test(Matrix):
+%                                   Test labels corresponding to the test
+%                                   data set.
+%
+% 	parameters(Struct):
+%                                   Structure with fields controlling the 
+%                                   optimization, including 'score_metrics', 
+%                                   'optimize_hyper' and 'optimization_method'.
+%                                   Each field can take on various values and 
+%                                   control different aspects of the 
+%                                   optimization process.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	Lmax(Numeric):
+%                                   The optimal value of the hyperparameter 
+%                                   Lambda.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * In the case of manual optimization, this function will iterate over a
+%   range of Lambda values, storing the corresponding scores for each. The
+%   function will then select the Lambda value that yields the highest score.
+%
+% -------------------------------------------------------------------------
+%% Examples:
+% * Optimizing linear hyperparameters:
+% 	Lmax = linear_hyperparameters_optimization(base_varargin, func, x_test, 
+%                                              y_test, parameters);
+%
+% -------------------------------------------------------------------------
+%% Author(s):
+%   Antoine Valera
+%
+% -------------------------------------------------------------------------
+%                               Notice
+%
+% This function was initially released as part of The SilverLab MatLab
+% Imaging Software, an open-source application for controlling an
+% Acousto-Optic Lens laser scanning microscope. The software was 
+% developed in the laboratory of Prof Robin Angus Silver at University
+% College London with funds from the NIH, ERC and Wellcome Trust.
+%
+% Copyright © 2015-2020 University College London
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+% 
+%     http://www.apache.org/licenses/LICENSE-2.0
+% 
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License. 
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	09-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+%	machine_learning_hyper_params, pearson_correlation_coefficient,
+%   rmse_score, mse_score, explained_variance_score
 
-% xtrain and ytrain are included in base_varargin
+% TODO : Improve the rendering for the new flexible scoring method
+% 	      Handle errors related to unrecognized score function
+
 function Lmax = linear_hyperparameters_optimization(base_varargin, func, x_test, y_test, parameters)
     %% Set default Hyperparameter optimization options
     HyperparameterOptimizationOptions = machine_learning_hyper_params; 

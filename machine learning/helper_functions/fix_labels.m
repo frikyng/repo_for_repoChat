@@ -1,3 +1,52 @@
+
+%% Fixes and standardizes the names of labels
+%  The function standardizes the naming convention of labels in a dataset,
+%  especially useful when labels may have variations due to the use of
+%  different naming protocols.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	[labels] = fix_labels(labels)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	labels(Array of Strings OR Categorical Array):
+%                                   The labels to be standardized. The
+%                                   labels can be a cell array of strings
+%                                   or a categorical array.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	labels(Array of Strings OR Categorical Array)
+%                                   The labels after the naming has been
+%                                   standardized.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * Labels are renamed according to a fixed pairs list defined in the
+%   function. If the label is not found in the pairs list, it is kept as is.
+% -------------------------------------------------------------------------
+%% Examples:
+% * Standardize a cell array of string labels
+% 	labels = fix_labels({'encoder', 'EyeCam_L_forelimb'});
+%
+% * Standardize a categorical array of labels
+% 	labels = fix_labels(categorical({'encoder', 'EyeCam_L_forelimb'}));
+% -------------------------------------------------------------------------
+%% Author(s):
+%   Antoine Valera
+%
+% -------------------------------------------------------------------------
+%                               Notice
+%
+% Paste license here.
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	09-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+
 function labels = fix_labels(labels)
     if iscategorical(labels)
         oldnames = categories(labels);

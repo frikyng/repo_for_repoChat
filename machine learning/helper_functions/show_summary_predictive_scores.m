@@ -1,3 +1,85 @@
+%% Shows summary predictive scores in a figure
+% This function takes in predictive scores in a cell array and presents them
+% in a figure. The results are shown in two subplots, each subplot has its 
+% results normalized differently.
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	fig_handle = show_summary_predictive_scores(all_results, x_ticks, y_ticks, y_label)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	all_results(cell array): 
+%                                   This is a cell array of predictive scores 
+%                                   to be displayed.
+%
+% 	x_ticks(cell array) - Optional:
+%                                   This is an optional cell array of labels 
+%                                   for the x-axis. If not provided, default
+%                                   labels are used.
+%
+% 	y_ticks(cell array) - Optional:
+%                                   This is an optional cell array of labels 
+%                                   for the y-axis. If not provided, default
+%                                   labels are used.
+%
+% 	y_label(string) -- Optional:
+%                                   This is an optional label for the y-axis.
+%                                   If not provided, default label 'Phate #' 
+%                                   is used.
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	fig_handle(Figure Handle) Handle
+%                                   This is a handle to the figure that is 
+%                                   created by this function.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * The function takes in all_results as a cell array of numbers and displays
+%   them in a figure. The results are normalized and displayed in two subplots.
+% * This function also sets the color of the figure to white.
+% -------------------------------------------------------------------------
+%% Examples:
+% * Displaying predictive scores with default labels
+% 	fig_handle = show_summary_predictive_scores(all_results);
+%
+% * Displaying predictive scores with custom labels
+% 	fig_handle = show_summary_predictive_scores(all_results, x_ticks, y_ticks, y_label);
+% -------------------------------------------------------------------------
+%% Author(s):
+%   Antoine Valera
+%
+% -------------------------------------------------------------------------
+%                               Notice
+%
+% This function was initially released as part of The SilverLab MatLab
+% Imaging Software, an open-source application for controlling an
+% Acousto-Optic Lens laser scanning microscope. The software was 
+% developed in the laboratory of Prof Robin Angus Silver at University
+% College London with funds from the NIH, ERC and Wellcome Trust.
+%
+% Copyright © 2015-2020 University College London
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+% 
+%     http://www.apache.org/licenses/LICENSE-2.0
+% 
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License. 
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	09-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+
+% TODO : Extend the function to handle additional normalization methods.
+
 function fig_handle = show_summary_predictive_scores(all_results, x_ticks, y_ticks, y_label)
     x_ticks = fix_labels(x_ticks);
     results = cell2mat(all_results)';%a(a < 20) = 0;

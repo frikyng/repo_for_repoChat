@@ -1,3 +1,88 @@
+%% Plot non-parametric chart for given data
+% 	This function plots a non-parametric chart for given data, allowing for
+% 	calculation with or without pairing and with optional error bars. It also
+%   computes statistical analysis based on the provided data.
+%
+% -------------------------------------------------------------------------
+%% Syntax:
+% 	non_parametric_chart(values, input_labels, errors, paired)
+%
+% -------------------------------------------------------------------------
+%% Inputs:
+% 	values(Matrix of Numeric values):
+%                                   Matrix of the data values for which the 
+%                                   non-parametric chart should be plotted.
+%
+% 	input_labels(Array of Strings or Categorical array) - Optional:
+%                                   Labels for each data group. If not provided,
+%                                   the default will be the column index.
+%
+% 	errors(Numeric value) - Optional:
+%                                   If provided, error bars will be added 
+%                                   to the chart with the error value provided.
+%
+% 	paired(Boolean) -- Optional - any in {true, false}:
+%                                   If true, the function will assume the data
+%                                   are paired and adjust the statistical analysis
+%                                   accordingly. Default is false (unpaired).
+%
+% -------------------------------------------------------------------------
+%% Outputs:
+% 	This function doesn't return any output arguments. It generates a bar
+%   chart with optional error bars and performs statistical analysis.
+%
+% -------------------------------------------------------------------------
+%% Extra Notes:
+%
+% * This function computes ANOVA or Friedman tests based on the 'paired'
+%   flag. It then performs a post-hoc multicomparison and represents the
+%   significant results on the chart.
+% * For optional input 'errors', if not provided, it takes the maximum 
+%   value of 'values' as the default error.
+% -------------------------------------------------------------------------
+%% Examples:
+% * Plot chart for unpaired data
+% 	non_parametric_chart(values, labels);
+%
+% * Plot chart for paired data with error bars
+% 	non_parametric_chart(values, labels, errors, true);
+%
+% -------------------------------------------------------------------------
+%% Author(s):
+%   Antoine Valera
+%
+% -------------------------------------------------------------------------
+%                               Notice
+%
+% This function was initially released as part of The SilverLab MatLab
+% Imaging Software, an open-source application for controlling an
+% Acousto-Optic Lens laser scanning microscope. The software was 
+% developed in the laboratory of Prof Robin Angus Silver at University
+% College London with funds from the NIH, ERC and Wellcome Trust.
+%
+% Copyright © 2015-2020 University College London
+%
+% Licensed under the Apache License, Version 2.0 (the "License");
+% you may not use this file except in compliance with the License.
+% You may obtain a copy of the License at
+% 
+%     http://www.apache.org/licenses/LICENSE-2.0
+% 
+% Unless required by applicable law or agreed to in writing, software
+% distributed under the License is distributed on an "AS IS" BASIS,
+% WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+% See the License for the specific language governing permissions and
+% limitations under the License. 
+% -------------------------------------------------------------------------
+% Revision Date:
+% 	09-06-2023
+% -------------------------------------------------------------------------
+% See also: 
+%	kruskalwallis, anova1, multcompare, friedman
+% 
+% TODO : Handle cases with missing data, add more customization for plot.
+
+
 function non_parametric_chart(values, input_labels, errors, paired)
     if nargin < 3 || isempty(errors)
         errors = max(values);
