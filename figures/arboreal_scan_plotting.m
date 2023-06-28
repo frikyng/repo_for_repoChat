@@ -494,8 +494,10 @@ classdef arboreal_scan_plotting < handle
 
             %% Plot components (or strongest factor location if comp == 0)
             tiledlayout(n_row, n_col, 'Padding', 'none', 'TileSpacing', 'none'); 
+            all_axes = [];
             for comp_idx = 1:numel(comp)
                 ax = nexttile; % a bit beter than subplot, but if you have matlab < 2019b, you can use the line below
+                all_axes = [all_axes, ax];
                 %ax = subplot(n_row, n_col, comp_idx);
                 dim = comp(comp_idx);
                 for roi = 1:numel(Valid_ROIs)
@@ -524,6 +526,10 @@ classdef arboreal_scan_plotting < handle
                     M = nanmax(abs(values(:)));caxis([-M,M])
                 end 
             end
+
+            Link = linkprop(all_axes,{'CameraUpVector', 'CameraPosition', 'CameraTarget'});
+            setappdata(gcf, 'StoreTheLink', Link);
+
         end
 
         function [tree, soma_location, tree_values, values] = plot_distance_tree(obj, bin)
