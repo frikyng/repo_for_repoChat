@@ -246,7 +246,13 @@ classdef behaviours_analysis < handle
                 raw_beh = {};
                 warning(['Type not detected. Valid behaviours are :\n', strjoin(all_beh.types,'\n')]);
                 return
-            end
+			end
+			
+			if ~any(all_beh.valid_behaviours(:))
+                raw_beh = {};
+                warning('No valid behaviour available');
+                return
+			end
 
             %% Extract variables
             for beh = 1:numel(type)
