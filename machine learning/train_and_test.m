@@ -6,7 +6,7 @@
 function out = train_and_test(predictor_data, observation_data, timepoints, roi_subset, beh_types, raw_behaviour, calcium_ref, ml_parameters)
     if nargin < 3 || isempty(timepoints)
         timepoints      = 1:size(observation_data, 2);
-        raw_behaviour   = [];
+        raw_behaviour   = []; % QQ maybe we should keep the mean because it seems to cause some issues with block shuffling later
         calcium_ref     = [];
     end
     if nargin < 4 || isempty(roi_subset) %% Define the ROIs we want to use for the training   
@@ -146,13 +146,13 @@ function out = train_and_test(predictor_data, observation_data, timepoints, roi_
         end   
         
         if all(isnan(current_obs))
-            warning([type_corrected, ' has only NaNs']);
-            out.calcium         = calcium_ref;
+            disp_info([type_corrected, ' has only NaNs'], 3);
+            out.calcium              = calcium_ref;
             out.bin_beh{mdl_idx}     = current_obs;
             out.peak_tp{mdl_idx}     = timepoints;
             out.train_range{mdl_idx} = [];  
             out.prediction{mdl_idx}  = [];
-            out.full_beh{mdl_idx}    = raw_behaviour(mdl_idx,:);
+            out.full_beh{mdl_idx}    = [];%raw_behaviour(mdl_idx,:);
             out.beh_type{mdl_idx}    = type_corrected;
             out.score{mdl_idx}       = NaN(1,4);
             out.model{mdl_idx}       = {};

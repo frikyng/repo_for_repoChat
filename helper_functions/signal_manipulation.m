@@ -301,6 +301,9 @@ classdef signal_manipulation < handle
                 elseif contains(obj.rescaling_method, 'trials')
                     t_peak_all              = unique(vertcat(obj.event.peak_time{obj.event.is_global}));
                     t_for_baseline          = find(~ismember(1:obj.tp,unique([obj.event.t_win_no_overlap{:}])));
+                    if isempty(t_for_baseline)
+                        [~, t_for_baseline] = nanmin(obj.global_median_raw);
+                    end
                     [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
                 end                
 %             else
@@ -348,7 +351,7 @@ classdef signal_manipulation < handle
                 rescaled_traces                         = obj.extracted_traces_conc;
                 transition                              = cumsum([1,obj.timescale.tp(1:end-1)]);
                 rescaled_traces([transition,transition+1],  obj.bad_ROI_list) = NaN; % remove bad ROis and transition timepoints
-                rescaled_traces = rescaled_traces - diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offset percentile for each trace. much faster than  a loop
+                rescaled_traces = rescaled_traces - obj.rescaling_info.offset;%diag(prctile(rescaled_traces, obj.rescaling_info.offset,1))'; %remove correct offset percentile for each trace. much faster than  a loop
                 try
                     obj.rescaling_info.scaling; % debug hack. somtimes it needs to be called twice at initialisation --> to be fixed
                 end

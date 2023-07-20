@@ -139,24 +139,15 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
 
     % Check if pk_locs is provided, else auto-estimate peak detection level
     if nargin < 3 || isempty(pk_locs)
-        %error('to check and revise')
-        %% Autoestimate peak detection level
 
         % Filter signal and remove noise
         representative_trace    = fillmissing(representative_trace,'linear');
         ref_signal              = wdenoise(double(representative_trace));
         noise                   = representative_trace - ref_signal;
 
-        %% For threshold debugging
-    %         figure(25);cla();plot(representative_trace)
-    %         hold on;plot(denoised,'r')
-    %         hold on;plot(noise,'b')
-    %         hold on; envelope(noise,50,'rms');
-
         % Calculate envelope of noise for threshold
         [top_noise, ~]          = envelope(noise,50,'rms'); % used to be 20, 'peak'
         initial_thr             = mean(top_noise)*5;    
-        %initial_thr             = (prctile(top_noise-bottom_noise,99) - prctile(top_noise-bottom_noise,1))*5;
 
         % Detect peaks in the denoised signal
         [pks, pk_locs]             = findpeaks(wavelet_denoise(representative_trace')', 'MinPeakProminence', initial_thr);
@@ -165,7 +156,6 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     % Check if bsl_range is provided, else throw error for now
     if nargin < 4 || isempty(bsl_range)
         error('to do')    
-        %bsl_percentile          = sum(tp(1:end-1)) / numel(bsl_range);
         bsl_percentile = '?';
     else
         bsl_percentile = 50; % Use the median value since we already use a range for the baseline
@@ -175,7 +165,6 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     if nargin < 5 || isempty(smoothing) || ~any(smoothing)
         % no smoothing, pass
     else
-        %% CONSIDER --> %[~, t_peak_all]         = findpeaks(wavelet_denoise(nanmedian(all_trace,2))', 'MinPeakProminence', obj.event.peak_thr);
         all_traces_per_rec = cellfun(@(x) smoothdata(x,'gaussian',smoothing), all_traces_per_rec, 'UniformOutput', false);
     end
 
@@ -195,7 +184,6 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     tp                      = [cellfun(@(x) size(x, 1), all_traces_per_rec), inf];
     N_pks                   = zeros(size(all_traces_per_rec))'; % for weights, if you use them
     N_pt_bsl                = zeros(size(all_traces_per_rec))'; % for weights, if you use them
-
     
     parfor (rec = 1:numel(all_traces_per_rec), ncores)
     %for rec = 1:numel(all_traces_per_rec)
@@ -205,14 +193,30 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
 
         tp_range        = [(sum(tp(1:rec-1))+1),sum(tp(1:rec))];
         pk_tp_current   = pk_locs(pk_locs > tp_range(1) & pk_locs < tp_range(2)) - tp_range(1)+1;
-        bsl_tp_current  = bsl_range(bsl_range > tp_range(1) & bsl_range < tp_range(2)) - tp_range(1)+1;        
+        bsl_tp_current  = bsl_range(bsl_range > tp_range(1) & bsl_range < tp_range(2)) - tp_range(1)+1;      
+%         figure();plot(representative_trace); hold on; scatter(pk_tp_current, representative_trace(pk_tp_current),'ko', 'filled')
+%         figure();plot(representative_trace); hold on; scatter(bsl_tp_current, representative_trace(bsl_tp_current),'kv', 'filled')
         N_pks(rec)      = numel(pk_tp_current);
         N_pt_bsl(rec)   = numel(bsl_tp_current);
+        %N_pt_bsl        = 1
+        
+        
+        %% Set representative_trace baseline close to 0
+        % Adjust offset so both traces baselines are at 0     
+        if isempty(bsl_tp_current)
+            bsl_tp_current = prctile(representative_trace, 10);
+            bsl_tp_current = find(representative_trace < bsl_tp_current);
+        end   
+        % Loop over each trace in the recording
+        bsl = zeros(size(all_traces_in_rec(:,1)));
 
+        best_offset_for_ref     = fminbnd(@(f) find_traces_offset_func(f, bsl(bsl_tp_current), representative_trace(bsl_tp_current), demo == 2, bsl_percentile), 0.01, 99.9999, options); 
+        best_offset_for_ref     = prctile(representative_trace(bsl_tp_current), best_offset_for_ref);
+        representative_trace    = representative_trace - best_offset_for_ref;
+     
         best_ind_scal{rec}    = [];
         best_ind_offset{rec}  = [];
 
-        % Loop over each trace in the recording
         for trace_idx =  1:size(all_traces_in_rec, 2) 
 
             % Skip if trace is all NaNs
@@ -220,27 +224,17 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
                 best_ind_offset{rec}(trace_idx) = NaN;
                 best_ind_scal{rec}(trace_idx)   = NaN;
             else
-                subset_for_demo = trace_idx; % can change that to a fixed index to display only one trace                
-                
-                %demo = 2 * double(rec == 2); 
-                 
-
-                % Adjust offset so both traces baselines are at 0     
-                if isempty(bsl_tp_current)
-                    bsl_tp_current = prctile(representative_trace, 10);
-                    bsl_tp_current = find(representative_trace < bsl_tp_current);
-                end
-
-                % Find best percentile to normalize traces
-                best_ind_offset{rec}(trace_idx)   = fminbnd(@(f) find_traces_offset_func(f, representative_trace(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo == 2 && trace_idx == subset_for_demo, bsl_percentile), 0.01, 99.9999, options); 
-                [~ ,offset_median, current_trace] = find_traces_offset_func(best_ind_offset{rec}(trace_idx), representative_trace, all_traces_in_rec(:,trace_idx)); % apply value
+                % Find best percentile to subtstract baseline traces, then
+                % convert to baseline offset
+                best_ind_offset{rec}(trace_idx)     = fminbnd(@(f) find_traces_offset_func(f, bsl(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo == 2 && trace_idx == subset_for_demo, bsl_percentile), 0.01, 99.9999, options); 
+                best_ind_offset{rec}(trace_idx)     = prctile(all_traces_in_rec(bsl_tp_current,trace_idx), best_ind_offset{rec}(trace_idx));
+                all_traces_in_rec(bsl_tp_current,trace_idx) = all_traces_in_rec(bsl_tp_current,trace_idx) - best_ind_offset{rec}(trace_idx);
 
                 if ~isempty(pk_tp_current)
                     try
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
-                    catch % very rare ;  not sure why
-                       % peak_times_in_record = [peak_times_in_record;peak_times_in_record]; % otherwise following function sem to crash
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, offset_median, current_trace, demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                    catch 
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
                     end
                     if demo >= 3
                         uiwait(figure(6663))
@@ -248,14 +242,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
                 else                    
                     best_ind_scal{rec}(trace_idx) = NaN;
                 end
-
-                %% #### DEBUG
-                %% Show why we need to do scaling on events --> bsl noise scaling way too variable
-                %   figure();plot(offset_median .\ current_trace)
-                %% Show why we canot take the entir event for scaling --> decays perturbate measurment
-                %   figure();plot(offset_median(pk_tp) .\ current_trace(pk_tp))
                 
-                %figure(123);cla();plot(offset_median);hold on; plot(current_trace/best_ind_scal{rec}(trace_idx))
             end
         end
     end
@@ -269,6 +256,9 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
         N_pt_bsl(:)      = NaN;
     else
         global_scaling = w_mean(vertcat(best_ind_scal{:}), N_pks);
+        if N_pt_bsl == 0 
+            N_pt_bsl = 1
+        end
         global_offset   = w_mean(vertcat(best_ind_offset{:}), N_pt_bsl); 
     end    
 end
