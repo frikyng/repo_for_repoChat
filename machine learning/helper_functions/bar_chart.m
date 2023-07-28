@@ -151,7 +151,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     max_scores      = [];
     score_metrics   = 'performance';
     show_dots       = true;
-    split_shuffle   = true;  
+    split_shuffle   = false;  
     if nargin >= 8 && isstruct(varargin{1})
         temp_meanvalue = permute(nanmean(values,2),[1,3,2]);
         ml_parameters  = varargin{1};
@@ -183,6 +183,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
             else
                 score_metrics = 'model performance';
             end
+            score_metrics = 'pearson';
         end
 
         if isfield(ml_parameters, 'show_dots')
@@ -217,7 +218,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
         %% Fix for labels
         labels          = fix_labels(labels);
         fig_handle      = figure();clf();
-        fig_handle.Position(4) = fig_handle.Position(4)*1.3;
+        %%fig_handle.Position(4) = fig_handle.Position(4)*1.3;
         if is_shuffle
             idx             = reshape(reshape(1:size(meanvalue,1),2,size(meanvalue,1 )/2)',[],2);
             labels          = removecats(labels,initial_names(idx(:,2)));
@@ -341,7 +342,7 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
 %         end
 
         %% Adjust plot limits
-        ylim([-10,100]);hold on;
+        ylim([-0.4,1]);hold on;
         if ~isempty(condition_labels) && numel(condition_labels) ~= numel(unique(condition_labels))
             error('Condition labels must all be different or the stat test regroup similar names together)')
         end
@@ -460,18 +461,24 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 
                 [M,loc]     = max(meanvalue);
                 M           = M + sem_values(loc);
-                step        = (100 - M)/ (sum(stats_results.multi_comp(:,6) < 0.05)+1);
+                step        = (1 - M)/ (sum(stats_results.multi_comp(:,6) < 0.05)+1);
                 for el = 1:size(p0_01, 1)
                     M           = M+step;
-                    overbar(p0_01(el,1) ,p0_01(el,2), M,'*'); %  ['p=',num2str(round(p0_01(el,3),3))]
+                    M = max(values) + 0.1
+                    %overbar(p0_01(el,1) ,p0_01(el,2), M,'*'); %  ['p=',num2str(round(p0_01(el,3),3))]
+                    overbar(x',x_shuff', M, '*')
                 end
                 for el = 1:size(p0_001, 1)
                     M           = M+step;
-                    overbar(p0_001(el,1) ,p0_001(el,2), M, '**'); %['p=',num2str(round(p0_001(el,3),3))]
+                    M = max(values) + 0.1
+                    %overbar(p0_001(el,1) ,p0_001(el,2), M, '**'); %['p=',num2str(round(p0_001(el,3),3))]
+                    overbar(x' ,x_shuff', M, '**')
                 end
                 for el = 1:size(p_strong, 1)
                     M           = M+step;
-                    overbar(p_strong(el,1) ,p_strong(el,2), M, '***'); %  ['p=',num2str(round(p_strong(el,3),3))]
+                   M = max(values) + 0.1
+                    %overbar(p_strong(el,1) ,p_strong(el,2), M, '***'); %  ['p=',num2str(round(p_strong(el,3),3))]
+                    overbar(x' ,x_shuff', M, '***')
                 end
             end
         else

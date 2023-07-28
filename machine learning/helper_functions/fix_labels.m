@@ -48,6 +48,7 @@
 % See also: 
 
 function labels = fix_labels(labels)
+    return
     if iscategorical(labels)
         oldnames = categories(labels);
     else

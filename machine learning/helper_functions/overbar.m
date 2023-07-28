@@ -73,7 +73,7 @@
 function [hl,ht] = overbar(x1, x2, y, txt)
     sz = get(gca,'FontSize');
     %bg = get(gca,'Color');
-    d = 1; % size of hook, change depending on y axis scaling
+    d = 0.1; % size of hook, change depending on y axis scaling
     hl = line([x1,x1,x2,x2], [y,y+d,y+d,y], 'LineWidth', 2, 'Color',[0.6,0.6,0.6]);
     ht = text((x1+x2)/2, y+d, txt, ...
               'HorizontalAlignment','center', ...
