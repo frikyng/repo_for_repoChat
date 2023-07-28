@@ -253,6 +253,9 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
         figure();imagesc(corr(processed_behaviours));
     end
 
+    %% Control block if you have a single ROI
+    %     data = repmat(data, 50, 1);
+    %     data = data + randn(size(data))*50;
     
     %% FYI find(all(isnan(source_signal))) should be empty, or you have observation with only NaN    
     All_ROIs    = 1:size(data, 1);
@@ -330,7 +333,7 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
             if contains(ml_parameters.savefig, '.mat')
                 ml_parameters.savefig = parse_paths(fileparts(ml_parameters.savefig));
             end
-            save_myfig(fig_handle,[ml_parameters.savefig, ml_parameters.title],{'png','pdf'})
+            save_myfig(fig_handle,[ml_parameters.savefig, '\', ml_parameters.title],{'png','pdf'})
         end
     end 
     
@@ -340,6 +343,6 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
             ml_parameters.save = parse_paths(fileparts(ml_parameters.save));
         end
         indexes = predictor_ROI_groups;
-        save([ml_parameters.save, ml_parameters.title], 'results', 'indexes', 'stats', 'ind_scores', '-v7.3')
+        save([ml_parameters.save,'\',  ml_parameters.title], 'results', 'indexes', 'stats', 'ind_scores', '-v7.3')
     end
 end
