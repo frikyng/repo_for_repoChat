@@ -75,8 +75,7 @@ classdef arboreal_scan_experiment < handle & arboreal_scan_plotting & event_dete
     end
 
     properties (Dependent = true, Transient = true, Hidden = true)
-        external_variables                      % Pointer to behavioural variables of each arboreal scan --> set in obj.behaviours
-        
+        external_variables                      % Pointer to behavioural variables of each arboreal scan --> set in obj.behaviours        
     end
 
     methods
