@@ -121,12 +121,18 @@ function Lmax = linear_hyperparameters_optimization(base_varargin, func, x_test,
         base_varargin([find(strcmp(base_varargin, 'Lambda')), find(strcmp(base_varargin, 'Lambda'))+1]) = [];
         if isempty(x_test)
             base_varargin = [base_varargin, {'KFold', HyperparameterOptimizationOptions.KFold}];
-            Timeout = 3;
+            Timeout = 30;
         else
-            Timeout = 0.5;
+            Timeout = 30;
         end
-        for k = 1:numel(lrange)            
-            temp_varargin           = [base_varargin, 'Lambda', lrange(k)];
+        for k = 1:numel(lrange)  
+            if strcmpi(parameters.method, 'linear')
+                temp_varargin           = [base_varargin, 'Lambda', lrange(k)];
+            elseif strcmpi(parameters.method, 'glm')
+                temp_varargin           = [base_varargin, 'Lambda', lrange(k)];
+            else
+                error('model not implemented')
+            end
             fut(k)                  = parfeval(func, 1, temp_varargin{:});
         end 
         for k = 1:numel(lrange)
