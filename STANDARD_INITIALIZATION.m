@@ -2,7 +2,7 @@
 
 if ~exist('skip_path','var') || (exist('skip_path','var') && ~skip_path)
     %% Load an arboreal_scan_experiment object if required
-    path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newnewextraction_raw_zscored\2019-10-01_exp_1';  
+    path_to_use = 'C:\Users\Antoine.Valera\MATLAB\newnewnewextraction_raw_zscored\2019-10-01_exp_1';  
     if ~exist('obj','var')     
         obj = arboreal_scan_experiment(path_to_use);
         path_to_use = obj.source_folder;  
@@ -18,6 +18,12 @@ obj.bad_ROI_thr                     = 0.6;
 
 %% Behaviour Settings
 behaviours                          = {'encoder','EyeCam_L_forelimb','EyeCam_R_forelimb','BodyCam_L_whisker','BodyCam_R_whisker','EyeCam_Perioral','trigger'};
+if ~all(ismember(behaviours, obj.behaviours.types))
+    behaviours = behaviours(ismember(behaviours, obj.behaviours.types));
+    obj.disp_info('Some behaviours are missing and CANNOT be used for machine learning', 3)
+end
+
+obj.behaviours.types
 obj.beh_smoothing                   = [-1.5, 0];
 obj.beh_sm_func                     = 'gaussian';
 obj.shuffling_block_size            = -3;
@@ -26,7 +32,7 @@ obj.detrend_behaviour               = false;
 
 %% Machine Learning settings
 use_classifier  = false;                % true or false
-method          = 'linear';             % 'linear' or 'svm'    
+method          = 'glm';             % 'linear' or 'svm'    
 N_iter          = 20;                   % N iterations
 N_iter_for_lag  = 3;                   % N iterations when testing lag
 KFold           = 1;                    % N-Kfold. Set to 1 if using  
