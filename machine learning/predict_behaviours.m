@@ -129,7 +129,7 @@
 % use expe 07-26 to fix gaps in behaviour
 % Cell 2019-09-17_exp_1 anticorelated to running
 
-function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = predict_behaviours(obj, predictors_type, observations, predictor_ROI_groups, varargin)
+function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = predict_behaviours(obj, predictors_type, observations_labels, predictor_ROI_groups, varargin)
     if nargin < 1 || isempty(obj) || ischar(obj)
         %% Get object if it needs loading/building
         if ischar(obj)
@@ -144,13 +144,13 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
         predictors_type   = 'subtracted_peaks'; % ['subtracted' OR 'rescaled' OR 'raw'] AND ['peaks' or '']. eg 'subtracted_peaks' , or 'raw'
     end
     build_beh           = true;
-    if nargin < 3 || isempty(observations)
+    if nargin < 3 || isempty(observations_labels)
         % pass      
-    elseif isstruct(observations)
-        raw_behaviours              = observations.raw_behaviours;
-        beh_thr                     = observations.beh_thr;
-        formatted_behaviour_list    = observations.formatted_behaviour_list;
-        observations                = observations.original_behaviour_list;
+    elseif isstruct(observations_labels)
+        raw_behaviours              = observations_labels.raw_behaviours;
+        beh_thr                     = observations_labels.beh_thr;
+        formatted_behaviour_list    = observations_labels.formatted_behaviour_list;
+        observations_labels                = observations_labels.original_behaviour_list;
         build_beh                   = false;
     end
     single_matrix_input = false;
@@ -196,16 +196,16 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
     
     %% If required add shufffing
     if ml_parameters.add_shuffle
-        shuffled_beh    = strcat(observations, '_shuffled');
-        observations    = reshape([observations; shuffled_beh],[],1)';
+        shuffled_beh            = strcat(observations_labels, '_shuffled');
+        observations_labels     = reshape([observations_labels; shuffled_beh],[],1)';
     end
     
     %% Get observations. If not provided, compute the values from behaviours
     if ~build_beh
         %% If we already had the extracted behaviours, at this stage we just update the formatted name 
-    	observations    = formatted_behaviour_list;
+    	observations_labels    = formatted_behaviour_list;
     else
-        [~, raw_behaviours, beh_thr, observations] = prepare_behaviour_data(obj, observations);
+        [~, raw_behaviours, beh_thr, observations_labels] = prepare_behaviour_data(obj, observations_labels);
     end
     
     %% Filter timepoints
@@ -265,7 +265,7 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
         %% Regular case, run N_iter
         for iter = 1:ml_parameters.N_iter
             fprintf(['Iteration : ',num2str(iter),'\n'])
-            results{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, observations, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            results{iter}               = train_and_test(data, processed_behaviours, timepoints, All_ROIs, observations_labels, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
             results{iter}.used_ROIs     = predictor_ROI_groups;
         end
     else  
@@ -311,7 +311,7 @@ function [results, data, predictor_ROI_groups, mean_score, stats, ind_scores] = 
             end   
             
             %% Train and test model
-            results{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), observations, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
+            results{iter}               = train_and_test(data, processed_behaviours, timepoints, 1:numel(ROI_groups_rdm), observations_labels, raw_behaviours, nanmedian(obj.rescaled_traces(:,~invalid_ROIs_logical),2), ml_parameters);
             results{iter}.used_ROIs     = ROI_groups_rdm;
         end
     end
