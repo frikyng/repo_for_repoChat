@@ -130,6 +130,55 @@ function [y_predict, y_test, score, x_test, x_train, y_train, model] = predictio
         end
     
         score = [];
+    elseif strcmpi(ml_parameters.method, 'forest')  
+        % Number of trees for Random Forest
+        nTrees = 100;
+        
+        if ml_parameters.optimize_hyper
+            % Define the range for MinLeafSize
+            range_minLeafSize = optimizableVariable('MinLeafSize', [1, 50], 'Type', 'integer');
+
+            % Create hyperparameter optimization options
+            opts = struct('OptimizeHyperparameters', {'MinLeafSize'},...
+                'HyperparameterOptimizationOptions',struct('AcquisitionFunctionName',...
+                'expected-improvement-plus', 'ShowPlots', true, 'UseParallel', true));
+
+            % Train the model with hyperparameter optimization
+            model = fitrensemble(x_train, y_train,...
+                'Method', 'LSBoost',...
+                'NumLearningCycles', nTrees, ...
+                'OptimizeHyperparameters', opts.OptimizeHyperparameters, ...
+                'HyperparameterOptimizationOptions', opts.HyperparameterOptimizationOptions);
+
+        else
+            % Create a TreeBagger (Random Forest) model
+            model = TreeBagger(nTrees, x_train, y_train, ...
+                               'Method', 'regression', ...
+                               'OOBPrediction', 'On', ...
+                               'OOBVarImp', 'On');
+        end
+
+        % If you want to perform k-fold cross-validation, you would need to 
+        % manually split your data into k parts, train on (k-1) parts and 
+        % test on the remaining part, and then rotate through the parts. 
+        % This is because TreeBagger does not directly support cross-validation.
+        %
+        % But, for simplicity, let's just train the model and make predictions:
+
+        
+
+        
+        
+        
+        % Predictive score
+        if ~isempty(x_test)
+            y_predict = predict(model, x_test);
+        else
+            y_predict = predict(model, x_train);
+        end
+        
+        score = [];
+
     elseif strcmpi(ml_parameters.method, 'glm')  
         % Set the base hyperparameters
         base_varargin = {x_train, ...
