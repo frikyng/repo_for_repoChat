@@ -78,7 +78,13 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
     for cond_idx = 1:N_conditions
         for iter_idx = 1:N_iter
             for beh_idx = 1:N_behaviours  
-                values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx}.(metric);   
+                if isstruct(result{cond_idx}{iter_idx}.(result_fieldname){beh_idx})
+                    values{beh_idx, iter_idx, cond_idx} = result{cond_idx}{iter_idx}.(result_fieldname){beh_idx}.(metric);   
+                elseif isnumeric(result{cond_idx}{iter_idx}.(result_fieldname){beh_idx}) && all(isnan(result{cond_idx}{iter_idx}.(result_fieldname){beh_idx}))
+                    values{beh_idx, iter_idx, cond_idx} = NaN;
+                else
+                    error('Problem with the handling of the ML output')
+                end
             end 
         end        
     end
@@ -396,6 +402,8 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                         hb(1).CData(beh,:) = [0.6,0.6,0.6];
                         ignore_list(end+1) = beh;
                     end
+                else
+                    stats_results.shuffle_stat(beh) = NaN;
                 end
             end            
         end
@@ -447,10 +455,10 @@ function [meanvalue, sem_values, fig_handle, stats_results, values] = bar_chart(
                 
                 %non_parametric_chart(values, input_labels, errors)
                 
-                ns          = stats_results.multi_comp(stats_results.multi_comp(:,6) >= 0.05, [1,2]);
-                p0_01       = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.05 & stats_results.multi_comp(:,6) >= 0.01, [1,2,6]);
-                p0_001      = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2,6]);
-                p_strong    = stats_results.multi_comp(stats_results.multi_comp(:,6) < 0.001, [1,2,6]);
+                ns          = stats_results.multi_comp(~isnan(stats_results.multi_comp(:,5)) & stats_results.multi_comp(:,6) >= 0.05, [1,2]);
+                p0_01       = stats_results.multi_comp(~isnan(stats_results.multi_comp(:,5)) & stats_results.multi_comp(:,6) < 0.05 & stats_results.multi_comp(:,6) >= 0.01, [1,2,6]);
+                p0_001      = stats_results.multi_comp(~isnan(stats_results.multi_comp(:,5)) & stats_results.multi_comp(:,6) < 0.01 & stats_results.multi_comp(:,6) >= 0.001, [1,2,6]);
+                p_strong    = stats_results.multi_comp(~isnan(stats_results.multi_comp(:,5)) & stats_results.multi_comp(:,6) < 0.001, [1,2,6]);
 
                 if ~isempty(ignore_list)
                     p0_01 = p0_01(~ismember(p0_01(:,[1,2]), ignore_list, 'rows'),:);
