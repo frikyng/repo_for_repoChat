@@ -106,6 +106,8 @@ function [all_scores, valid_trace_idx]  = extract_ML_coefs(obj, training_output,
                         [~, all_scores{beh_idx}(trained_idx, :)] = sort(abs(model.Beta));  
                     end
                 end
+            elseif isempty(model) % empty if the behaviour was missing
+                continue
             else
                 if strcmpi(metric, 'beta')
                     all_scores{beh_idx}(iter, :)            = model.Beta;     
@@ -170,7 +172,7 @@ function [all_scores, valid_trace_idx]  = extract_ML_coefs(obj, training_output,
 %                 caxis([0,max(v)]);
 %             end
             
-        if rendering
+        if rendering && ~isempty(model)
             next_fig
             if strcmpi(metric, 'cum_explained_variance')
                 obj.ref.plot_value_tree(median(all_scores{beh_idx},1), ROI_list,'',labels{beh_idx},'',beh_idx,'',[cmap, 'symmetrical'],'invalid_color');
