@@ -47,9 +47,9 @@ classdef behaviours_analysis < handle
             behaviours.valid_mc_log     = cellfun(@(x) isfield(x,'RT3D_MC'), behaviours.external_var);
             [Max_var, Max_var_loc]      = max(cellfun(@(x) numel(fieldnames(x)), behaviours.external_var));
             behaviours.types            = fieldnames(behaviours.external_var{Max_var_loc})';
-            behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
             
-            behaviours.valid_behaviours = cellfun(@(x) cellfun(@(f) isfield(x, f) && any(any(~isempty(x.(f).value) & ~isnan(x.(f).value))), behaviours.types), behaviours.external_var, 'UniformOutput', false);
+            behaviours.valid_behaviours = false(numel(behaviours.valid_encoder), Max_var);
+            behaviours.valid_behaviours = cellfun(@(x) cellfun(@(f) isfield(x, f) && (iscell(x.(f).value) || (any(any(~isempty(x.(f).value) & ~isnan(x.(f).value))))), behaviours.types), behaviours.external_var, 'UniformOutput', false);
             behaviours.valid_behaviours = vertcat(behaviours.valid_behaviours{:});
 
             
