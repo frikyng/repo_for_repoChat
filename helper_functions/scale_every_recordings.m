@@ -189,6 +189,7 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
     %for rec = 1:numel(all_traces_per_rec)
 
         all_traces_in_rec       = all_traces_per_rec{rec};
+        
         representative_trace    = consensus_trace_func(all_traces_in_rec, 2);
 
         tp_range        = [(sum(tp(1:rec-1))+1),sum(tp(1:rec))];
@@ -216,8 +217,9 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
      
         best_ind_scal{rec}    = [];
         best_ind_offset{rec}  = [];
-
+        subset_for_demo = 1:size(all_traces_in_rec, 2);
         for trace_idx =  1:size(all_traces_in_rec, 2) 
+            demo_case = demo >= 2 && ismember(trace_idx, subset_for_demo);
 
             % Skip if trace is all NaNs
             if all(isnan(all_traces_in_rec(:,trace_idx)))
@@ -226,15 +228,15 @@ function [global_scaling, global_offset, best_ind_scal, best_ind_offset, N_pks, 
             else
                 % Find best percentile to subtstract baseline traces, then
                 % convert to baseline offset
-                best_ind_offset{rec}(trace_idx)     = fminbnd(@(f) find_traces_offset_func(f, bsl(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo == 2 && trace_idx == subset_for_demo, bsl_percentile), 0.01, 99.9999, options); 
+                best_ind_offset{rec}(trace_idx)     = fminbnd(@(f) find_traces_offset_func(f, bsl(bsl_tp_current), all_traces_in_rec(bsl_tp_current,trace_idx), demo_case, bsl_percentile), 0.01, 99.9999, options); 
                 best_ind_offset{rec}(trace_idx)     = prctile(all_traces_in_rec(bsl_tp_current,trace_idx), best_ind_offset{rec}(trace_idx));
-                all_traces_in_rec(bsl_tp_current,trace_idx) = all_traces_in_rec(bsl_tp_current,trace_idx) - best_ind_offset{rec}(trace_idx);
+                all_traces_in_rec(:,trace_idx) = all_traces_in_rec(:,trace_idx) - best_ind_offset{rec}(trace_idx);
 
                 if ~isempty(pk_tp_current)
                     try
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo_case, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
                     catch 
-                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo >= 2 && trace_idx == subset_for_demo, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
+                        best_ind_scal{rec}(trace_idx) = fminbnd(@(f) scale_trace_func(f, representative_trace, all_traces_in_rec(:,trace_idx), demo_case, pk_tp_current), 1e-3, 100, options); % scaling factor must be > 0
                     end
                     if demo >= 3
                         uiwait(figure(6663))
