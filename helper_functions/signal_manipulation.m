@@ -245,11 +245,11 @@ classdef signal_manipulation < handle
             end
         end
         
-        function rescale_traces(obj, method, smoothing)
+        function rescale_traces(obj, method, PRE_RESCALING_SMOOTHING)
             if nargin >= 2 && ~isempty(method)
                 obj.rescaling_method = method;
             end
-            smoothing = 0;
+            PRE_RESCALING_SMOOTHING = ceil(1/median(diff(obj.t))) % Smoothing forced to minimize noise
             
             if isempty(obj.event)
                 obj.disp_info('LD RESCALING REQUIRES DETECTED EVENTS. You must run obj.find_events() first',3);
@@ -295,7 +295,7 @@ classdef signal_manipulation < handle
 %             if ~obj.use_hd_data && contains(obj.rescaling_method, 'peaks')
                 %% Now rescale
                 if contains(obj.rescaling_method, 'global')
-                    [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), smoothing);
+                    [~, obj.rescaling_info.offset, obj.rescaling_info.scaling] = tweak_scaling(traces, unique(vertcat(obj.event.peak_time{:})), PRE_RESCALING_SMOOTHING);
                     obj.rescaling_info.individual_scaling = repmat({obj.rescaling_info.scaling}, 1, numel(obj.extracted_traces));
                     obj.rescaling_info.individual_offset = repmat({obj.rescaling_info.offset}, 1, numel(obj.extracted_traces));
                 elseif contains(obj.rescaling_method, 'trials')
@@ -304,7 +304,7 @@ classdef signal_manipulation < handle
                     if isempty(t_for_baseline)
                         [~, t_for_baseline] = nanmin(obj.global_median_raw);
                     end
-                    [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, smoothing); % qq consider checking and deleting "scale_across_recordings"
+                    [obj.rescaling_info.scaling, obj.rescaling_info.offset, obj.rescaling_info.individual_scaling, obj.rescaling_info.individual_offset, obj.rescaling_info.scaling_weights, obj.rescaling_info.offset_weights] = scale_every_recordings(traces, obj.demo, t_peak_all, t_for_baseline, PRE_RESCALING_SMOOTHING); % qq consider checking and deleting "scale_across_recordings"
                 end                
 %             else
 %                 warning('to finish')
