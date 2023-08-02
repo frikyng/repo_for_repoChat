@@ -8,47 +8,56 @@ classdef event_detection < handle
 
     methods
         function [bad_ROIs, mean_corr_with_others] = find_events(obj, idx_filter, thr_for_detection, method, thr_for_global)
+            %% Initialization of input variables
             if nargin < 2 || isempty(idx_filter)
-                idx_filter = 1:obj.n_ROIs;
+                idx_filter = 1:obj.n_ROIs;                           % If idx_filter is not defined, take all ROIs
             elseif ischar(idx_filter) && strcmp(idx_filter, 'soma')
-                idx_filter = obj.ref.indices.somatic_ROIs;
+                idx_filter = obj.ref.indices.somatic_ROIs;           % If idx_filter is 'soma', take somatic ROIs
             end
             if nargin < 3 || isempty(thr_for_detection)
-                thr_for_detection = obj.thr_for_detection;
+                thr_for_detection = obj.thr_for_detection;           % If thr_for_detection is not defined, use the object's default value
             else
-                obj.thr_for_detection = thr_for_detection;
+                obj.thr_for_detection = thr_for_detection;           % If thr_for_detection is defined, update the object's default value
             end
             if nargin < 4 || isempty(method)
-                method = 'corr';
+                method = 'corr';                                     % If method is not defined, use correlation
             end
             if nargin < 5 || isempty(thr_for_global)
-                thr_for_global = obj.thr_for_global;
+                thr_for_global = obj.thr_for_global;                 % If thr_for_global is not defined, use the object's default value
             else
-                obj.thr_for_global = thr_for_global;
+                obj.thr_for_global = thr_for_global;                 % If thr_for_global is defined, update the object's default value
             end            
 
-            obj.disp_info(['Now detecting events with tree-wide pairwise correlation at least > ',num2str(thr_for_detection),' %%'],1)
+            %% Displaying information about event detection
+            obj.disp_info(['Now detecting events with tree-wide pairwise correlation at least > ',num2str(thr_for_detection),' %%'],1);
 
-            %% Get original traces (unscaled)
-            raw_traces              = obj.extracted_traces_conc(:, idx_filter);
+            %% Extraction of raw traces for event detection
+            raw_traces = obj.extracted_traces_conc(:, idx_filter);   % Extract original traces (unscaled)
 
-            %% Get original traces
+            %% Detection of events
             [obj.event, correlation_res] = detect_events(raw_traces, obj.t, method, thr_for_detection, [], obj.rendering,'', thr_for_global);
-            
-%             sz = vertcat(obj.event.peak_value{:});
-%             thr1 = max(sz) * 0.8;
-%             thr2 = max(sz) * 0.2;
-%             mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
-%             for fn = fieldnames(obj.event)'                
-%                  if numel(obj.event.(fn{1})) == numel(mask)
-%                      obj.event.(fn{1}) = obj.event.(fn{1})(mask);
-%                  end
-%             end
+            % The function detect_events() identifies the events from the raw traces according to the specified method and thresholds
 
-            %% Identify and log poorly correlated ROIs
+            %% The block of commented-out code below is a post filter, for testing or future implementation
+            %  It filter the detected events based on their peak values
+            %  sz = vertcat(obj.event.peak_value{:});
+            %  thr1 = max(sz) * 0.8;
+            %  thr2 = max(sz) * 0.2;
+            %  mask = cellfun(@(x) mean(x) < thr1 & mean(x) > thr2, obj.event.peak_value);            
+            %  for fn = fieldnames(obj.event)'                
+            %       if numel(obj.event.(fn{1})) == numel(mask)
+            %           obj.event.(fn{1}) = obj.event.(fn{1})(mask);
+            %       end
+            %  end
+
+            %% Identification and logging of poorly correlated ROIs
             [bad_ROIs, mean_corr_with_others] = obj.find_bad_ROIs(correlation_res, idx_filter);
-            obj.disp_info('Events were detected and obj.event field has been populated.',1)
+            % The function find_bad_ROIs() identifies the ROIs that are poorly correlated with others
+
+            %% Final information display
+            obj.disp_info('Events were detected and obj.event field has been populated.',1);
         end
+
         
         function fit_data = fit_events(obj, tau_decay, event_win_size, tolerance)
             if nargin < 2 || isempty(tau_decay)
