@@ -111,7 +111,26 @@ classdef arboreal_scan_plotting < handle
             ax = gca;
             ax.YAxis(1).Color = 'r';
             ax.YAxis(2).Color = 'k';
+       end
+        
+       function ROI_data = show_ROI(obj, ROI, time_smoothing, spatial_smoothing)
+           if nargin < 3 || isempty(time_smoothing)
+               time_smoothing = 0;
+           end
+           if nargin < 4 || isempty(spatial_smoothing)
+               spatial_smoothing = 0;
+           end
+           ROI_data = cellfun(@(x) x.full_data{ROI},obj.arboreal_scans,'UniformOutput',false);
+           ROI_data = cat(4, ROI_data{:});
+           if any(time_smoothing)
+               ROI_data = time_smoothing_5D(ROI_data, time_smoothing, 'gaussian');
+           end
+           if any(spatial_smoothing)
+               ROI_data = spatial_smoothing_5D(ROI_data, spatial_smoothing, 'anisotropic');
+           end
+           show_stack(ROI_data);
         end
+       
         
         function plot_correlation_results(obj, cross_corr)
             if nargin < 2 || isempty(cross_corr)
